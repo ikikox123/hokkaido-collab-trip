@@ -5,7 +5,7 @@ import { LoginModal } from './components/LoginModal';
 import { TripList } from './components/TripList';
 import { MapView } from './components/MapView';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
-import type { PresenceUser, TripState, User } from './types/trip';
+import type { Leg, PresenceUser, TravelMode, TripState, User } from './types/trip';
 
 type MobileTab = 'list' | 'map';
 
@@ -22,6 +22,9 @@ export default function App() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>('list');
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
+  );
   const [socket, setSocket] = useState<Socket | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -59,10 +62,32 @@ export default function App() {
     socket.emit('room:join', { roomCode: roomCode || DEFAULT_ROOM, user });
   }, [socket, user, roomCode]);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   const dayStops = useMemo(() => {
     if (!trip) return [];
     return trip.stops.filter((s) => s.day === selectedDay);
   }, [trip, selectedDay]);
+
+  const dayLegs = useMemo(() => {
+    const all = trip?.legs ?? [];
+    const out: Leg[] = [];
+    for (let i = 0; i < dayStops.length - 1; i++) {
+      const from = dayStops[i];
+      const to = dayStops[i + 1];
+      const leg = all.find((l) => l.fromStopId === from.id && l.toStopId === to.id);
+      if (leg) out.push(leg);
+    }
+    return out;
+  }, [trip, dayStops]);
+
+  const mapActive = isDesktop || mobileTab === 'map';
 
   useEffect(() => {
     if (dayStops.length && !dayStops.find((s) => s.id === selectedId)) {
@@ -252,6 +277,7 @@ export default function App() {
         >
           <TripList
             stops={dayStops}
+            legs={dayLegs}
             selectedId={selectedId}
             canEdit={canEdit}
             onSelect={(id) => {
@@ -262,6 +288,9 @@ export default function App() {
             }}
             onReorder={(orderedIds) => emitAuth('trip:reorder', { day: selectedDay, orderedIds })}
             onDelete={(id) => emitAuth('trip:delete', { id })}
+            onSetMode={(fromStopId: string, toStopId: string, mode: TravelMode) =>
+              emitAuth('trip:setLegMode', { fromStopId, toStopId, mode })
+            }
             onAdd={() => {
               const dayMeta = trip.days.find((d) => d.day === selectedDay);
               const title = prompt('新站點名稱？', '新景點');
@@ -283,13 +312,18 @@ export default function App() {
         </section>
 
         <section
-          className={`flex-1 min-h-0 relative ${
-            mobileTab === 'map' ? 'block' : 'hidden md:block'
+          className={`relative min-h-0 min-w-0 ${
+            mobileTab === 'map'
+              ? 'flex h-full min-h-[55dvh] flex-1 flex-col'
+              : 'hidden md:flex md:h-full md:min-h-0 md:flex-1 md:flex-col'
           }`}
         >
           <MapView
             stops={dayStops}
+            legs={dayLegs}
             selectedId={selectedId}
+            active={mapActive}
+            lodging={trip.lodging}
             onSelect={setSelectedId}
           />
         </section>

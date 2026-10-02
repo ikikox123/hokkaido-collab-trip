@@ -1,5 +1,7 @@
 /** 瘋瘋火火北海道冒險記｜種子資料 */
 
+import { reconcileLegs } from './legs.js';
+
 export const ROOM_CODE = (process.env.ROOM_CODE || 'HOKKAIDO2027').toUpperCase();
 
 export const USERS = [
@@ -49,7 +51,7 @@ export function createSeedStops() {
   return stops;
 }
 
-export function createSeedState() {
+function createSeedStateWithoutLegs() {
   return {
     roomCode: ROOM_CODE,
     tripName: '瘋瘋火火北海道冒險記｜6 人｜2027-02-12～18',
@@ -75,4 +77,9 @@ export function createSeedState() {
     stops: createSeedStops(),
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function createSeedState() {
+  const state = createSeedStateWithoutLegs();
+  return { ...state, legs: reconcileLegs(state) };
 }

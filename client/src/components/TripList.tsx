@@ -16,11 +16,13 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState } from 'react';
-import type { Stop } from '../types/trip';
+import { Fragment, useState } from 'react';
+import type { Leg, Stop, TravelMode } from '../types/trip';
+import { isTravelMode, MODE_COLORS, MODE_LABELS, TRAVEL_MODES } from '../lib/travel';
 
 type Props = {
   stops: Stop[];
+  legs: Leg[];
   selectedId: string | null;
   canEdit: boolean;
   onSelect: (id: string) => void;
@@ -28,6 +30,7 @@ type Props = {
   onDelete: (id: string) => void;
   onAdd: () => void;
   onUpdateTime: (id: string, time: string) => void;
+  onSetMode: (fromStopId: string, toStopId: string, mode: TravelMode) => void;
 };
 
 function SortableItem({
@@ -128,8 +131,57 @@ function SortableItem({
   );
 }
 
+function LegConnector({
+  from,
+  to,
+  leg,
+  canEdit,
+  onSetMode,
+}: {
+  from: Stop;
+  to: Stop;
+  leg?: Leg;
+  canEdit: boolean;
+  onSetMode: (mode: TravelMode) => void;
+}) {
+  const mode: TravelMode = leg?.mode && isTravelMode(leg.mode) ? leg.mode : 'walk';
+  return (
+    <li className="ml-4 border-l-2 border-slate-200 py-1 pl-3">
+      <div className="flex items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ background: MODE_COLORS[mode] }}
+          aria-hidden
+        />
+        {canEdit ? (
+          <select
+            aria-label={`${from.title} 到 ${to.title} 的移動方式`}
+            className="min-h-touch w-full rounded-lg border border-slate-200 bg-white px-2 text-base text-slate-800"
+            value={mode}
+            onChange={(e) => {
+              if (isTravelMode(e.target.value)) onSetMode(e.target.value);
+            }}
+          >
+            {TRAVEL_MODES.map((m) => (
+              <option key={m} value={m}>
+                {MODE_LABELS[m]}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-sm font-medium text-slate-700">{MODE_LABELS[mode]}</span>
+        )}
+      </div>
+      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+        {leg?.summary || '路線估算中…'}
+      </p>
+    </li>
+  );
+}
+
 export function TripList({
   stops,
+  legs,
   selectedId,
   canEdit,
   onSelect,
@@ -137,6 +189,7 @@ export function TripList({
   onDelete,
   onAdd,
   onUpdateTime,
+  onSetMode,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -190,19 +243,35 @@ export function TripList({
             {stops.length === 0 && (
               <li className="text-center text-slate-400 py-8 text-sm">這天尚無站點</li>
             )}
-            {stops.map((stop, i) => (
-              <SortableItem
-                key={stop.id}
-                stop={stop}
-                index={i}
-                isNext={i === 0}
-                selected={selectedId === stop.id}
-                canEdit={canEdit}
-                onSelect={() => onSelect(stop.id)}
-                onDelete={() => onDelete(stop.id)}
-                onUpdateTime={(time) => onUpdateTime(stop.id, time)}
-              />
-            ))}
+            {stops.map((stop, i) => {
+              const next = stops[i + 1];
+              const leg = next
+                ? legs.find((l) => l.fromStopId === stop.id && l.toStopId === next.id)
+                : undefined;
+              return (
+                <Fragment key={stop.id}>
+                  <SortableItem
+                    stop={stop}
+                    index={i}
+                    isNext={i === 0}
+                    selected={selectedId === stop.id}
+                    canEdit={canEdit}
+                    onSelect={() => onSelect(stop.id)}
+                    onDelete={() => onDelete(stop.id)}
+                    onUpdateTime={(time) => onUpdateTime(stop.id, time)}
+                  />
+                  {next && (
+                    <LegConnector
+                      from={stop}
+                      to={next}
+                      leg={leg}
+                      canEdit={canEdit}
+                      onSetMode={(mode) => onSetMode(stop.id, next.id, mode)}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
           </ul>
         </SortableContext>
         <DragOverlay>
