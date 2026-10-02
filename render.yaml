@@ -1,0 +1,20 @@
+# Render Blueprint — Node + WebSocket friendly single service
+# Dashboard: New → Blueprint → connect this repo
+services:
+  - type: web
+    name: hokkaido-collab-trip
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: ROOM_CODE
+        value: HOKKAIDO2027
+      - key: JWT_SECRET
+        generateValue: true
