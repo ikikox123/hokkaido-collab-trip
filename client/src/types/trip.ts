@@ -27,8 +27,10 @@ export type Leg = {
   durationSec?: number;
   /** Traditional Chinese estimate, e.g. 約 25 分・3.2 km・建議地鐵（估算非時刻表） */
   summary?: string;
-  /** [lat, lng] polyline. Driving geometry for transit modes. */
+  /** [lat, lng] polyline. */
   geometry?: [number, number][];
+  /** Driving-path stand-in when transit directions were unavailable. */
+  approximate?: boolean;
 };
 
 export type TripState = {

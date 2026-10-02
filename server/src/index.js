@@ -1,3 +1,4 @@
+import './loadEnv.js';
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -11,12 +12,14 @@ import { createSeedState, ROOM_CODE } from './seed.js';
 import {
   TRAVEL_MODES,
   computeLegRoute,
-  estimateFields,
+  mergeLegEstimate,
   normalizeTripState,
   reconcileLegs,
   setLegMode,
   stripLegEstimates,
 } from './legs.js';
+import { lookupPlace, serverMapsKey } from './googleMaps.js';
+import { correctSeedState } from './seedGeocode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -105,7 +108,11 @@ function optionalAuth(req, _res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, room: ROOM_CODE });
+  res.json({
+    ok: true,
+    room: ROOM_CODE,
+    routing: serverMapsKey() ? 'google' : 'osrm',
+  });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -134,6 +141,22 @@ app.get('/api/me', authMiddleware, (req, res) => {
 
 app.get('/api/trip', optionalAuth, (_req, res) => {
   res.json(tripState);
+});
+
+app.get('/api/places', authMiddleware, async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: '請輸入地點' });
+  if (q.length > 160) return res.status(400).json({ error: '查詢過長' });
+  const key = serverMapsKey();
+  if (!key) return res.status(503).json({ error: '伺服器未設定 Google 金鑰' });
+  try {
+    const place = await lookupPlace(q, key, { bias: 'circle:120000@43.4,142.0' });
+    if (!place) return res.status(404).json({ error: '找不到地點' });
+    res.json({ name: place.name, address: place.address, lat: place.lat, lng: place.lng });
+  } catch (e) {
+    console.warn('[places]', e?.message || e);
+    res.status(502).json({ error: '地點查詢失敗' });
+  }
 });
 
 app.get('/api/route', async (req, res) => {
@@ -216,7 +239,7 @@ function scheduleEnrich(roomCode = ROOM_CODE) {
     if (!current || current.mode !== leg.mode || !legNeedsRoute(current)) return;
     tripState = {
       ...tripState,
-      legs: tripState.legs.map((l) => (l.id === leg.id ? { ...l, ...estimateFields(est) } : l)),
+      legs: tripState.legs.map((l) => (l.id === leg.id ? mergeLegEstimate(l, est) : l)),
       updatedAt: new Date().toISOString(),
     };
     broadcastTrip(room);
@@ -240,14 +263,14 @@ function scheduleEnrich(roomCode = ROOM_CODE) {
   });
 }
 
-function publish(roomCode = ROOM_CODE) {
+function publish(roomCode = ROOM_CODE, { enrich = true } = {}) {
   tripState = {
     ...tripState,
     legs: reconcileLegs(tripState),
     updatedAt: new Date().toISOString(),
   };
   broadcastTrip(roomCode);
-  scheduleEnrich(roomCode);
+  if (enrich) scheduleEnrich(roomCode);
 }
 
 function presenceList(roomCode) {
@@ -395,7 +418,8 @@ io.on('connection', (socket) => {
       return;
     }
     tripState = createSeedState();
-    publish(joinedRoom || ROOM_CODE);
+    publish(joinedRoom || ROOM_CODE, { enrich: false });
+    void applySeedCorrection(joinedRoom || ROOM_CODE);
   });
 
   socket.on('disconnect', () => {
@@ -421,6 +445,35 @@ function verifyToken(token) {
   }
 }
 
+function dropLegEstimates(state, movedIds) {
+  let legs = state.legs;
+  for (const id of movedIds) {
+    if (id === 'lodging') continue;
+    legs = stripLegEstimates(legs, id);
+  }
+  return { ...state, legs };
+}
+
+async function applySeedCorrection(roomCode = ROOM_CODE) {
+  try {
+    const result = await correctSeedState(tripState);
+    if (!result.changed) {
+      if (result.skipped === 'no-key') {
+        console.log('[geocode] GOOGLE_MAPS_SERVER_KEY unset; using committed seed coordinates');
+      }
+      return;
+    }
+    tripState = normalizeTripState(dropLegEstimates(result.state, result.movedIds));
+    tripState.updatedAt = new Date().toISOString();
+    console.log(`[geocode] updated ${result.movedIds.length} seed coordinates`);
+    broadcastTrip(roomCode);
+  } catch (err) {
+    console.warn('[geocode] seed correction failed', err?.message || err);
+  } finally {
+    scheduleEnrich(roomCode);
+  }
+}
+
 await initUsers();
 
 // Production: serve Vite build from client/dist (single-port deploy)
@@ -438,5 +491,6 @@ if (fs.existsSync(CLIENT_DIST)) {
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] listening on http://0.0.0.0:${PORT} (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
   console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
-  scheduleEnrich(ROOM_CODE);
+  console.log(`[server] routing ${serverMapsKey() ? 'google' : 'osrm'}`);
+  void applySeedCorrection(ROOM_CODE);
 });

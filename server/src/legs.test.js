@@ -36,6 +36,14 @@ test('walk summary uses the walking label without the transit disclaimer', () =>
   assert.equal(summary, '約 8 分・650 m・步行');
 });
 
+test('Google transit success drops the timetable disclaimer; driving fallback is labeled', () => {
+  const live = buildSummary('subway', 900, 3200, { liveTransit: true });
+  assert.equal(live.includes('估算'), false);
+  assert.match(live, /建議地鐵/);
+  const fallback = buildSummary('jr', 1200, 8000, { estimateNote: '開車路徑估算' });
+  assert.match(fallback, /建議 JR（開車路徑估算）/);
+});
+
 test('deleting a stop drops stale legs and bridges the new pair', () => {
   const state = createSeedState();
   state.stops = state.stops.filter((s) => s.id !== 's8');
@@ -59,6 +67,19 @@ test('custom mode and estimate survive when the same pair stays adjacent', () =>
   assert.equal(kept.mode, 'taxi');
   assert.equal(kept.distanceM, 420);
   assert.equal(kept.geometry.length, 2);
+});
+
+test('an approximate driving fallback survives while the same pair stays adjacent', () => {
+  const state = createSeedState();
+  const leg = state.legs.find((l) => l.fromStopId === 's9' && l.toStopId === 's10');
+  leg.approximate = true;
+  leg.distanceM = 5000;
+  leg.durationSec = 700;
+  leg.summary = '約 12 分・5.0 km・建議地鐵（開車路徑估算）';
+  leg.geometry = [[43.06, 141.35], [43.05, 141.31], [43.054, 141.308]];
+  const kept = reconcileLegs(state).find((l) => l.fromStopId === 's9' && l.toStopId === 's10');
+  assert.equal(kept.approximate, true);
+  assert.equal(kept.geometry.length, 3);
 });
 
 test('changing mode clears the previous estimate', () => {
