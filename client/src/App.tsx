@@ -368,7 +368,12 @@ export default function App() {
           if (placeDialog.mode === 'edit') {
             emitAuth('trip:updateStop', {
               id: placeDialog.stopId,
-              patch: { title: place.title, lat: place.lat, lng: place.lng },
+              patch: {
+                title: place.title,
+                lat: place.lat,
+                lng: place.lng,
+                ...(place.address ? { notes: place.address } : {}),
+              },
             });
           } else {
             const dayMeta = trip.days.find((d) => d.day === selectedDay);
