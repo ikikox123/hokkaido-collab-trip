@@ -1,6 +1,6 @@
 /**
- * Server-side Google Maps calls: Directions, Find Place, Geocoding.
- * The key is read from GOOGLE_MAPS_SERVER_KEY and is never logged.
+ * Server-side Google Maps calls: Directions, Geocoding, Places API (New),
+ * and legacy Find Place. The key is read from GOOGLE_MAPS_SERVER_KEY and is never logged.
  */
 
 const HOKKAIDO = { minLat: 41.2, maxLat: 45.7, minLng: 139.2, maxLng: 146.2 };
@@ -188,6 +188,9 @@ export async function fetchGoogleDirections(from, to, mode, key) {
   }
 }
 
+/** Legacy Find Place statuses that mean "no hit", not a hard failure. */
+const PLACE_MISS_STATUSES = new Set(['ZERO_RESULTS', 'REQUEST_DENIED']);
+
 function placeFromCandidate(candidate) {
   const lat = Number(candidate?.geometry?.location?.lat);
   const lng = Number(candidate?.geometry?.location?.lng);
@@ -200,6 +203,67 @@ function placeFromCandidate(candidate) {
   };
 }
 
+function firstHokkaidoCandidate(candidates, mapFn) {
+  for (const candidate of candidates || []) {
+    const place = mapFn(candidate);
+    if (place) return place;
+  }
+  return null;
+}
+
+function parseCircleBias(bias) {
+  const match = String(bias || '').match(/circle:(\d+(?:\.\d+)?)@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const radius = Number(match[1]);
+  const lat = Number(match[2]);
+  const lng = Number(match[3]);
+  if (![radius, lat, lng].every((n) => Number.isFinite(n)) || radius <= 0) return null;
+  return { radius, lat, lng };
+}
+
+/** Viewport bias for Geocoding. Falls back to the whole of Hokkaido. */
+function geocodeBoundsParam(bias) {
+  const circle = parseCircleBias(bias);
+  if (!circle) {
+    return `${HOKKAIDO.minLat},${HOKKAIDO.minLng}|${HOKKAIDO.maxLat},${HOKKAIDO.maxLng}`;
+  }
+  const dLat = circle.radius / 111320;
+  const cos = Math.cos((circle.lat * Math.PI) / 180);
+  const dLng = circle.radius / (111320 * Math.max(0.2, Math.abs(cos)));
+  const south = Math.max(HOKKAIDO.minLat, circle.lat - dLat);
+  const north = Math.min(HOKKAIDO.maxLat, circle.lat + dLat);
+  const west = Math.max(HOKKAIDO.minLng, circle.lng - dLng);
+  const east = Math.min(HOKKAIDO.maxLng, circle.lng + dLng);
+  if (!(south < north) || !(west < east)) {
+    return `${HOKKAIDO.minLat},${HOKKAIDO.minLng}|${HOKKAIDO.maxLat},${HOKKAIDO.maxLng}`;
+  }
+  return `${round6(south)},${round6(west)}|${round6(north)},${round6(east)}`;
+}
+
+function placesNewBias(bias) {
+  const circle = parseCircleBias(bias);
+  if (!circle) {
+    return {
+      rectangle: {
+        low: { latitude: HOKKAIDO.minLat, longitude: HOKKAIDO.minLng },
+        high: { latitude: HOKKAIDO.maxLat, longitude: HOKKAIDO.maxLng },
+      },
+    };
+  }
+  return {
+    circle: {
+      center: { latitude: circle.lat, longitude: circle.lng },
+      // Places API (New) circle bias rejects radii above 50km.
+      radius: Math.min(circle.radius, 50000),
+    },
+  };
+}
+
+/**
+ * Legacy Find Place From Text.
+ * ZERO_RESULTS and REQUEST_DENIED (legacy API not enabled) are misses, not errors,
+ * so callers can continue with Geocoding or Places API (New).
+ */
 export async function findPlace(query, key, { bias } = {}) {
   const input = String(query || '').trim().slice(0, 160);
   if (!input) return null;
@@ -211,12 +275,12 @@ export async function findPlace(query, key, { bias } = {}) {
   if (bias) url.searchParams.set('locationbias', bias);
   url.searchParams.set('key', key);
   const data = await googleGet(url, key);
-  if (data.status === 'ZERO_RESULTS') return null;
+  if (PLACE_MISS_STATUSES.has(data.status)) return null;
   if (data.status !== 'OK') throw new Error(safeStatus(data, key));
-  return placeFromCandidate(data.candidates?.[0]);
+  return firstHokkaidoCandidate(data.candidates, placeFromCandidate);
 }
 
-export async function geocodeAddress(query, key) {
+export async function geocodeAddress(query, key, { bias } = {}) {
   const address = String(query || '').trim().slice(0, 160);
   if (!address) return null;
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
@@ -224,24 +288,136 @@ export async function geocodeAddress(query, key) {
   url.searchParams.set('region', 'jp');
   url.searchParams.set('language', 'ja');
   url.searchParams.set('components', 'country:JP');
+  url.searchParams.set('bounds', geocodeBoundsParam(bias));
   url.searchParams.set('key', key);
   const data = await googleGet(url, key);
   if (data.status === 'ZERO_RESULTS') return null;
   if (data.status !== 'OK') throw new Error(safeStatus(data, key));
-  const result = data.results?.[0];
-  if (!result) return null;
-  return placeFromCandidate({
-    name: result.formatted_address,
-    formatted_address: result.formatted_address,
-    geometry: result.geometry,
-  });
+  return firstHokkaidoCandidate(data.results, (result) =>
+    placeFromCandidate({
+      name: result.formatted_address,
+      formatted_address: result.formatted_address,
+      geometry: result.geometry,
+    }),
+  );
 }
 
-/** Places Find Place, then Geocoding if Find Place misses. */
+function placeFromNew(place) {
+  const lat = Number(place?.location?.latitude);
+  const lng = Number(place?.location?.longitude);
+  if (!inHokkaido(lat, lng)) return null;
+  const name = place?.displayName?.text || place?.formattedAddress || '';
+  return {
+    name: String(name).slice(0, 120),
+    address: String(place?.formattedAddress || '').slice(0, 180),
+    lat: round6(lat),
+    lng: round6(lng),
+  };
+}
+
+function placesNewDenied(status, data) {
+  if (status === 401 || status === 403) return true;
+  const code = String(data?.error?.status || '');
+  if (code === 'PERMISSION_DENIED' || code === 'REQUEST_DENIED') return true;
+  const msg = String(data?.error?.message || '');
+  return /legacy API|not enabled|has not been used/i.test(msg);
+}
+
+/**
+ * Places API (New) Text Search. A disabled or unauthorized API is a miss
+ * (null), same as an empty result list.
+ */
+export async function searchPlaceText(query, key, { bias } = {}) {
+  const textQuery = String(query || '').trim().slice(0, 160);
+  if (!textQuery) return null;
+  let res;
+  let data;
+  try {
+    res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': key,
+        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location',
+      },
+      body: JSON.stringify({
+        textQuery,
+        languageCode: 'ja',
+        regionCode: 'JP',
+        locationBias: placesNewBias(bias),
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    data = await res.json().catch(() => ({}));
+  } catch (err) {
+    throw new Error(redactSecrets(err?.message || 'Google request failed', key));
+  }
+  if (placesNewDenied(res.status, data)) return null;
+  if (!res.ok) {
+    const status = data?.error?.status || `HTTP_${res.status}`;
+    throw new Error(redactSecrets(String(status), key));
+  }
+  return firstHokkaidoCandidate(data.places, placeFromNew);
+}
+
+/**
+ * Client-facing place lookup error. Never includes the API key or raw Google text.
+ */
+export function placeFailureMessage(err) {
+  const text = typeof err === 'string' ? err : err?.message || '';
+  const raw = redactSecrets(text);
+  const status = raw.split(':')[0].trim();
+  if (status === 'REQUEST_DENIED' || /PERMISSION_DENIED/.test(raw)) {
+    return '地點查詢被拒絕。請確認已啟用 Geocoding API（不必啟用舊版 Places）';
+  }
+  if (status === 'OVER_QUERY_LIMIT' || /RESOURCE_EXHAUSTED/.test(raw)) {
+    return '地點查詢額度已用完';
+  }
+  if (/timeout|timed out|abort/i.test(raw)) {
+    return '地點查詢逾時，請稍後再試';
+  }
+  if (status === 'INVALID_REQUEST' || /INVALID_ARGUMENT/.test(raw)) {
+    return '地點查詢格式無效';
+  }
+  if (/^Google HTTP /.test(raw) || /^HTTP_\d+/.test(status)) {
+    return '地點查詢暫時失敗，請稍後再試';
+  }
+  return '地點查詢失敗';
+}
+
+/**
+ * Resolve a place inside Hokkaido.
+ * Geocoding runs first: it works when the legacy Places API is not enabled.
+ * Places API (New), then legacy Find Place, run only when Geocoding misses.
+ * A legacy REQUEST_DENIED does not hide a Geocoding hit or a later miss.
+ */
 export async function lookupPlace(query, key, options = {}) {
-  const found = await findPlace(query, key, options);
-  if (found) return { ...found, source: 'places' };
-  const geo = await geocodeAddress(query, key);
-  if (geo) return { ...geo, source: 'geocode' };
+  const input = String(query || '').trim();
+  if (!input) return null;
+
+  let failure = null;
+  try {
+    const geo = await geocodeAddress(input, key, options);
+    if (geo) return { ...geo, source: 'geocode' };
+  } catch (err) {
+    failure = err;
+  }
+
+  try {
+    const modern = await searchPlaceText(input, key, options);
+    if (modern) return { ...modern, source: 'places' };
+  } catch (err) {
+    if (!failure) failure = err;
+  }
+
+  try {
+    const legacy = await findPlace(input, key, options);
+    if (legacy) return { ...legacy, source: 'places' };
+  } catch (err) {
+    if (!failure) failure = err;
+  }
+
+  if (failure) throw failure;
   return null;
 }

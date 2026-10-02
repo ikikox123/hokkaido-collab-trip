@@ -31,7 +31,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
   const [lng, setLng] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const [placesReady, setPlacesReady] = useState(false);
+  const [suggestState, setSuggestState] = useState<'loading' | 'ready' | 'off'>('loading');
 
   useEffect(() => {
     if (!open) return;
@@ -41,7 +41,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
     setLat(null);
     setLng(null);
     setError(null);
-    setPlacesReady(false);
+    setSuggestState('loading');
   }, [open, initialTitle]);
 
   useLayoutEffect(() => {
@@ -68,6 +68,11 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           { lat: 41.3, lng: 139.4 },
           { lat: 45.6, lng: 145.8 },
         );
+        if (!g.maps.places?.Autocomplete) {
+          setSuggestState('off');
+          inputRef.current.focus();
+          return;
+        }
         const autocomplete = new g.maps.places.Autocomplete(inputRef.current, {
           fields: ['geometry', 'name', 'formatted_address'],
           componentRestrictions: { country: 'jp' },
@@ -79,17 +84,19 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           const place = autocomplete.getPlace();
           const loc = place.geometry?.location;
           if (!loc) {
-            setError('請從建議清單選一個地點');
+            setError('請從建議清單選一個地點，或按「伺服器搜尋」');
             return;
           }
           applySelection(place.name, place.formatted_address, loc.lat(), loc.lng());
         });
         removeListenerRef.current = () => listener.remove();
-        setPlacesReady(true);
+        setSuggestState('ready');
         inputRef.current.focus();
       })
       .catch(() => {
-        if (!cancelled) setError('Places 建議暫時無法使用，可改按搜尋');
+        if (cancelled) return;
+        setSuggestState('off');
+        inputRef.current?.focus();
       });
     return () => {
       cancelled = true;
@@ -192,9 +199,11 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           {mode === 'add' ? '加入站點' : '更改地點'}
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          {placesReady
+          {suggestState === 'ready'
             ? '選取建議後，站點名稱用店名或地標，搜尋欄顯示地址。名稱和搜尋文字不必相同。'
-            : '正在準備地點建議…'}
+            : suggestState === 'off'
+              ? '瀏覽器地點建議無法使用。輸入店名或地址後按「伺服器搜尋」。'
+              : '正在準備地點建議…沒有建議時可按「伺服器搜尋」。'}
         </p>
         <label className="mt-3 block text-sm font-medium text-slate-700" htmlFor="place-query">
           搜尋地點

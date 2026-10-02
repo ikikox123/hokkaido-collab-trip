@@ -142,7 +142,7 @@ hokkaido-collab-trip/
     src/index.js        # Express + Socket.io + JWT + 靜態檔 + 天氣
     src/seed.js         # 種子行程與公開座標
     src/seedGeocode.js  # 啟動時／單次用 Google 修正種子座標
-    src/googleMaps.js   # Directions、Find Place、Geocoding
+    src/googleMaps.js   # Directions、Geocoding、Places API (New)、舊版 Find Place
   client/
     package.json
     vite.config.ts      # dev proxy → :3001
@@ -155,7 +155,7 @@ hokkaido-collab-trip/
 - `GET /api/trip` 目前行程
 - `GET /api/weather` 三城市天氣（伺服器轉打 Open-Meteo）
 - `GET /api/health`
-- `GET /api/places?q=`（需登入）Places Find Place，找不到再 Geocoding。沒有 `GOOGLE_MAPS_SERVER_KEY` 時回 503。回應只有名稱、地址、座標
+- `GET /api/places?q=`（需登入）先 Geocoding（北海道範圍），沒有結果再試 Places API (New)，最後才試舊版 Find Place。舊版回 `REQUEST_DENIED` 時視為沒找到，不會擋下 Geocoding。兩邊都失敗時回 502 與簡短原因（不含金鑰）。沒有 `GOOGLE_MAPS_SERVER_KEY` 時回 503。回應只有名稱、地址、座標
 - `GET /api/route?fromLat=&fromLng=&toLat=&toLng=&mode=`  
   有 `GOOGLE_MAPS_SERVER_KEY` 時轉打 Google Directions，否則 OSRM（記憶體快取約 10 分鐘）。
   - `walk` → walking／OSRM walking
@@ -175,7 +175,7 @@ Socket.io（需登入 JWT，成功後廣播 `trip:update`）：
 
 - 示範登入、非正式 OAuth；production 必須設 `JWT_SECRET`（未設會拒絕啟動）
 - 狀態以單一預設房間為主（房間碼主要用於 presence 分組）；`legs` 存在同一份行程狀態裡
-- 未啟用 Google 時，新增站點座標沿用當日第一站或住宿點。啟用後以 Places Autocomplete（或伺服器 Find Place）帶入 lat/lng，並可改既有站的地點
+- 未啟用 Google 時，新增站點座標沿用當日第一站或住宿點。啟用後以 Places Autocomplete（或「伺服器搜尋」的 Geocoding／Places API (New)）帶入 lat/lng，並可改既有站的地點。瀏覽器舊版 Autocomplete 載入失敗時，仍可用「伺服器搜尋」
 - Open-Meteo、圖磚、OSRM 或 Google 需外網。CARTO 公開 raster 需 key，否則是浮水印
 - 沒有 Google transit 結果時，地鐵／JR／巴士時間不是時刻表。Google transit 用查詢當下的 `departure_time`，不是 2027 年的班表
 - 種子座標先用公開資料（Wikipedia、OpenStreetMap、訂房頁）。伺服器若有 `GOOGLE_MAPS_SERVER_KEY`，啟動時會對每個種子站以「名稱＋札幌／小樽／旭川／美瑛／千歲等城市」做 Find Place，失敗再 Geocoding，並更新記憶體與 `data/state.json`。標題已被改過的站不會被蓋掉。也可執行 `node server/src/seedGeocode.js`（加 `--write` 會把座標寫回 `server/src/seed.js` 的 `SEED_COORDINATES`，過程不印出金鑰）
