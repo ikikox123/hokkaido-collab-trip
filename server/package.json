@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test src/legs.test.js"
+    "test": "node --test src/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

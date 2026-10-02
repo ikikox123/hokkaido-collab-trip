@@ -20,6 +20,7 @@ client/.env
 
 # runtime state
 data/state.json
+data/geocode-cache.json
 
 # logs
 *.log

@@ -1,6 +1,7 @@
 import type { Stop } from '../types/trip';
 
-export const SAPPORO_BASE = { lat: 43.0595, lng: 141.3355 };
+/** Minn 札幌大通 西14（南1条西14）. */
+export const SAPPORO_BASE = { lat: 43.057291, lng: 141.336603 };
 
 export type LodgingPoint = { lat: number; lng: number };
 

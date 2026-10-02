@@ -4,7 +4,9 @@ import { WeatherBar } from './components/WeatherBar';
 import { LoginModal } from './components/LoginModal';
 import { TripList } from './components/TripList';
 import { MapView } from './components/MapView';
+import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
+import { usesGoogleMaps } from './lib/mapProvider';
 import type { Leg, PresenceUser, TravelMode, TripState, User } from './types/trip';
 
 type MobileTab = 'list' | 'map';
@@ -27,6 +29,10 @@ export default function App() {
   );
   const [socket, setSocket] = useState<Socket | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [placeDialog, setPlaceDialog] = useState<
+    { mode: 'add' } | { mode: 'edit'; stopId: string } | null
+  >(null);
+  const googlePlaces = usesGoogleMaps();
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -292,6 +298,10 @@ export default function App() {
               emitAuth('trip:setLegMode', { fromStopId, toStopId, mode })
             }
             onAdd={() => {
+              if (googlePlaces) {
+                setPlaceDialog({ mode: 'add' });
+                return;
+              }
               const dayMeta = trip.days.find((d) => d.day === selectedDay);
               const title = prompt('新站點名稱？', '新景點');
               if (!title) return;
@@ -307,6 +317,9 @@ export default function App() {
                 },
               });
             }}
+            onEditPlace={
+              googlePlaces ? (id) => setPlaceDialog({ mode: 'edit', stopId: id }) : undefined
+            }
             onUpdateTime={(id, time) => emitAuth('trip:updateStop', { id, patch: { time } })}
           />
         </section>
@@ -333,6 +346,41 @@ export default function App() {
       <div className="h-[var(--safe-bottom)] bg-white shrink-0 md:hidden" />
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLogin={handleLogin} />
+
+      <PlaceStopDialog
+        open={Boolean(placeDialog)}
+        mode={placeDialog?.mode ?? 'add'}
+        initialTitle={
+          placeDialog?.mode === 'edit'
+            ? trip.stops.find((s) => s.id === placeDialog.stopId)?.title || ''
+            : ''
+        }
+        token={token}
+        onClose={() => setPlaceDialog(null)}
+        onConfirm={(place: PickedPlace) => {
+          if (!placeDialog) return;
+          if (placeDialog.mode === 'edit') {
+            emitAuth('trip:updateStop', {
+              id: placeDialog.stopId,
+              patch: { title: place.title, lat: place.lat, lng: place.lng },
+            });
+          } else {
+            const dayMeta = trip.days.find((d) => d.day === selectedDay);
+            emitAuth('trip:add', {
+              stop: {
+                day: selectedDay,
+                date: dayMeta?.date,
+                title: place.title,
+                time: '12:00',
+                lat: place.lat,
+                lng: place.lng,
+                notes: place.address,
+              },
+            });
+          }
+          setPlaceDialog(null);
+        }}
+      />
 
       {toast && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(1rem+var(--safe-bottom))] z-[60] rounded-full bg-slate-900/90 text-white text-sm px-4 py-2.5 shadow-lg max-w-[90vw]">

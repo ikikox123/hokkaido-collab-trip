@@ -31,6 +31,7 @@ type Props = {
   onAdd: () => void;
   onUpdateTime: (id: string, time: string) => void;
   onSetMode: (fromStopId: string, toStopId: string, mode: TravelMode) => void;
+  onEditPlace?: (id: string) => void;
 };
 
 function SortableItem({
@@ -42,6 +43,7 @@ function SortableItem({
   onSelect,
   onDelete,
   onUpdateTime,
+  onEditPlace,
 }: {
   stop: Stop;
   index: number;
@@ -51,6 +53,7 @@ function SortableItem({
   onSelect: () => void;
   onDelete: () => void;
   onUpdateTime: (time: string) => void;
+  onEditPlace?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: stop.id,
@@ -118,14 +121,25 @@ function SortableItem({
         </div>
       </button>
       {canEdit && (
-        <button
-          type="button"
-          className="shrink-0 min-w-touch min-h-touch text-red-500 text-sm font-medium"
-          aria-label="刪除"
-          onClick={onDelete}
-        >
-          刪
-        </button>
+        <div className="flex shrink-0 flex-col">
+          {onEditPlace && (
+            <button
+              type="button"
+              className="min-h-touch min-w-touch text-sm font-medium text-ice-700"
+              onClick={onEditPlace}
+            >
+              地點
+            </button>
+          )}
+          <button
+            type="button"
+            className="min-h-touch min-w-touch text-sm font-medium text-red-500"
+            aria-label="刪除"
+            onClick={onDelete}
+          >
+            刪
+          </button>
+        </div>
       )}
     </li>
   );
@@ -190,6 +204,7 @@ export function TripList({
   onAdd,
   onUpdateTime,
   onSetMode,
+  onEditPlace,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -259,6 +274,7 @@ export function TripList({
                     onSelect={() => onSelect(stop.id)}
                     onDelete={() => onDelete(stop.id)}
                     onUpdateTime={(time) => onUpdateTime(stop.id, time)}
+                    onEditPlace={onEditPlace ? () => onEditPlace(stop.id) : undefined}
                   />
                   {next && (
                     <LegConnector

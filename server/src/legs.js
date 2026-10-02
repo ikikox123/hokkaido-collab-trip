@@ -1,13 +1,17 @@
 /**
  * Travel legs between consecutive stops of the same day (list order).
  *
- * Transit modes (subway / jr / bus) use OSRM driving geometry for the path,
- * but duration is a speed estimate — 估算非時刻表, not a timetable:
+ * When GOOGLE_MAPS_SERVER_KEY is set, Directions is preferred:
+ *   walk → walking, taxi/car/charter → driving, subway/jr/bus → transit.
+ *   If transit fails, driving geometry is used and the summary is marked 估算.
+ * Otherwise OSRM is used. Transit durations on OSRM are speed estimates
+ * (估算非時刻表), not a timetable:
  *   地鐵 28 km/h + 3 分鐘進出站
  *   JR   50 km/h + 4 分鐘
  *   巴士 18 km/h + 3 分鐘
- * walk uses the OSRM walking profile; taxi / car / charter use driving duration.
  */
+
+import { fetchGoogleDirections, serverMapsKey } from './googleMaps.js';
 
 export const TRAVEL_MODES = ['walk', 'subway', 'jr', 'bus', 'taxi', 'car', 'charter'];
 
@@ -91,14 +95,26 @@ export function formatDistance(meters) {
   return `${km >= 10 ? km.toFixed(0) : km.toFixed(1)} km`;
 }
 
-export function buildSummary(mode, durationSec, distanceM, { straight = false } = {}) {
+export function buildSummary(
+  mode,
+  durationSec,
+  distanceM,
+  { straight = false, liveTransit = false, estimateNote } = {},
+) {
   const meta = MODE_META[mode] || MODE_META.walk;
   const time = formatDuration(durationSec);
   const dist = formatDistance(distanceM);
   const advice = meta.label === 'JR' ? '建議 JR' : `建議${meta.label}`;
-  const head = meta.transit
-    ? `約 ${time}・${dist}・${advice}（估算非時刻表）`
-    : `約 ${time}・${dist}・${meta.label}`;
+  let head;
+  if (meta.transit) {
+    head = liveTransit
+      ? `約 ${time}・${dist}・${advice}`
+      : `約 ${time}・${dist}・${advice}（${estimateNote || '估算非時刻表'}）`;
+  } else if (estimateNote) {
+    head = `約 ${time}・${dist}・${meta.label}（${estimateNote}）`;
+  } else {
+    head = `約 ${time}・${dist}・${meta.label}`;
+  }
   return straight ? `${head}（直線估算）` : head;
 }
 
@@ -163,6 +179,7 @@ export function reconcileLegs(state) {
               durationSec: prev.durationSec,
               summary: prev.summary,
               geometry: prev.geometry,
+              ...(prev.approximate ? { approximate: true } : {}),
             }
           : {}),
       });
@@ -270,6 +287,26 @@ function toLatLngGeometry(coordinates) {
 
 export async function computeLegRoute(from, to, mode) {
   const safeMode = MODE_META[mode] ? mode : 'walk';
+  const key = serverMapsKey();
+  if (key) {
+    try {
+      const g = await fetchGoogleDirections(from, to, safeMode, key);
+      return {
+        mode: safeMode,
+        distanceM: g.distanceM,
+        durationSec: g.durationSec,
+        geometry: g.geometry,
+        approximate: Boolean(g.approximate || g.drivingFallback),
+        summary: buildSummary(safeMode, g.durationSec, g.distanceM, {
+          liveTransit: g.liveTransit,
+          estimateNote: g.drivingFallback ? '開車路徑估算' : undefined,
+        }),
+        source: g.drivingFallback ? 'google-estimate' : 'google',
+      };
+    } catch (err) {
+      console.warn('[route] Google Directions unavailable:', err?.message || err);
+    }
+  }
   try {
     const osrm = await fetchOsrmRoute(MODE_META[safeMode].profile, from, to);
     const est = estimateFromRoute(safeMode, osrm.distance, osrm.duration);
@@ -302,12 +339,20 @@ export async function computeLegRoute(from, to, mode) {
 }
 
 export function estimateFields(result) {
-  return {
+  const fields = {
     distanceM: result.distanceM,
     durationSec: result.durationSec,
     summary: result.summary,
     geometry: result.geometry,
   };
+  if (result.approximate) fields.approximate = true;
+  return fields;
+}
+
+export function mergeLegEstimate(leg, result) {
+  const next = { ...leg, ...estimateFields(result) };
+  if (!result.approximate) delete next.approximate;
+  return next;
 }
 
 export function normalizeTripState(state) {
