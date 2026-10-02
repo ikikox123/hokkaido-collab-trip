@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
-import { loadGoogleMaps } from '../lib/googleLoader';
+import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { loadGoogleMaps, type GoogleAutocomplete, type GoogleMapsNS } from '../lib/googleLoader';
+import { holdPlaceSuggestions, releasePlaceSuggestions } from '../lib/placeSuggestions';
 
 export type PickedPlace = {
   title: string;
@@ -19,6 +20,8 @@ type Props = {
 
 export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onConfirm }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
+  const removeListenerRef = useRef<(() => void) | null>(null);
   const [query, setQuery] = useState(initialTitle);
   const [title, setTitle] = useState(initialTitle);
   const [address, setAddress] = useState('');
@@ -39,9 +42,22 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
     setPlacesReady(false);
   }, [open, initialTitle]);
 
+  useLayoutEffect(() => {
+    if (!open) return;
+    holdPlaceSuggestions();
+    return () => {
+      inputRef.current?.blur();
+      removeListenerRef.current?.();
+      removeListenerRef.current = null;
+      const autocomplete = autocompleteRef.current;
+      autocompleteRef.current = null;
+      const mapsEvent = (window as unknown as { google?: GoogleMapsNS }).google?.maps?.event;
+      releasePlaceSuggestions(autocomplete, mapsEvent);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    let removeListener: (() => void) | null = null;
     let cancelled = false;
     loadGoogleMaps()
       .then((g) => {
@@ -56,6 +72,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           bounds,
           strictBounds: false,
         });
+        autocompleteRef.current = autocomplete;
         const listener = autocomplete.addListener('place_changed', () => {
           const place = autocomplete.getPlace();
           const loc = place.geometry?.location;
@@ -71,7 +88,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           setLng(loc.lng());
           setError(null);
         });
-        removeListener = () => listener.remove();
+        removeListenerRef.current = () => listener.remove();
         setPlacesReady(true);
         inputRef.current.focus();
       })
@@ -80,7 +97,6 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
       });
     return () => {
       cancelled = true;
-      removeListener?.();
     };
   }, [open]);
 
