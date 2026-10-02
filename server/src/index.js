@@ -8,6 +8,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createSeedState, ROOM_CODE } from './seed.js';
+import {
+  TRAVEL_MODES,
+  computeLegRoute,
+  estimateFields,
+  normalizeTripState,
+  reconcileLegs,
+  setLegMode,
+  stripLegEstimates,
+} from './legs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -49,7 +58,8 @@ function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = fs.readFileSync(STATE_FILE, 'utf8');
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.stops)) return parsed;
     }
   } catch (e) {
     console.warn('loadState failed, using seed', e.message);
@@ -66,7 +76,7 @@ function saveState(state) {
   }
 }
 
-let tripState = loadState();
+let tripState = normalizeTripState(loadState());
 const roomPresence = new Map(); // roomCode -> Map(socketId -> {userId, displayName})
 
 function authMiddleware(req, res, next) {
@@ -126,6 +136,34 @@ app.get('/api/trip', optionalAuth, (_req, res) => {
   res.json(tripState);
 });
 
+app.get('/api/route', async (req, res) => {
+  const fromLat = Number(req.query.fromLat);
+  const fromLng = Number(req.query.fromLng);
+  const toLat = Number(req.query.toLat);
+  const toLng = Number(req.query.toLng);
+  const mode = String(req.query.mode || 'walk');
+  if (![fromLat, fromLng, toLat, toLng].every((n) => Number.isFinite(n))) {
+    return res.status(400).json({ error: '座標不完整' });
+  }
+  if (
+    Math.abs(fromLat) > 90 ||
+    Math.abs(toLat) > 90 ||
+    Math.abs(fromLng) > 180 ||
+    Math.abs(toLng) > 180
+  ) {
+    return res.status(400).json({ error: '座標超出範圍' });
+  }
+  if (!TRAVEL_MODES.includes(mode)) {
+    return res.status(400).json({ error: '交通方式不正確' });
+  }
+  const result = await computeLegRoute(
+    { lat: fromLat, lng: fromLng },
+    { lat: toLat, lng: toLng },
+    mode,
+  );
+  res.json(result);
+});
+
 app.get('/api/weather', async (_req, res) => {
   const cities = [
     { id: 'sapporo', name: '札幌', lat: 43.06, lng: 141.35 },
@@ -156,6 +194,60 @@ app.get('/api/weather', async (_req, res) => {
 function broadcastTrip(roomCode = ROOM_CODE) {
   io.to(roomCode).emit('trip:update', tripState);
   saveState(tripState);
+}
+
+let enrichGen = 0;
+
+function legNeedsRoute(leg) {
+  return leg.distanceM == null || !leg.summary || !Array.isArray(leg.geometry) || leg.geometry.length < 2;
+}
+
+function scheduleEnrich(roomCode = ROOM_CODE) {
+  const gen = ++enrichGen;
+  const room = roomCode || ROOM_CODE;
+  const pending = (tripState.legs || []).filter(legNeedsRoute);
+  if (!pending.length) return;
+
+  const workers = Math.min(4, pending.length);
+  let cursor = 0;
+
+  const apply = (leg, est) => {
+    const current = (tripState.legs || []).find((l) => l.id === leg.id);
+    if (!current || current.mode !== leg.mode || !legNeedsRoute(current)) return;
+    tripState = {
+      ...tripState,
+      legs: tripState.legs.map((l) => (l.id === leg.id ? { ...l, ...estimateFields(est) } : l)),
+      updatedAt: new Date().toISOString(),
+    };
+    broadcastTrip(room);
+  };
+
+  const worker = async () => {
+    while (cursor < pending.length) {
+      if (gen !== enrichGen) return;
+      const leg = pending[cursor++];
+      const from = tripState.stops.find((s) => s.id === leg.fromStopId);
+      const to = tripState.stops.find((s) => s.id === leg.toStopId);
+      if (!from || !to) continue;
+      const est = await computeLegRoute(from, to, leg.mode);
+      if (gen !== enrichGen) return;
+      apply(leg, est);
+    }
+  };
+
+  Promise.all(Array.from({ length: workers }, () => worker())).catch((err) => {
+    console.warn('[route] enrich failed', err?.message || err);
+  });
+}
+
+function publish(roomCode = ROOM_CODE) {
+  tripState = {
+    ...tripState,
+    legs: reconcileLegs(tripState),
+    updatedAt: new Date().toISOString(),
+  };
+  broadcastTrip(roomCode);
+  scheduleEnrich(roomCode);
 }
 
 function presenceList(roomCode) {
@@ -220,7 +312,7 @@ io.on('connection', (socket) => {
       byDay.push(...tripState.stops.filter((s) => s.day === d.day));
     }
     tripState.stops = byDay;
-    broadcastTrip(joinedRoom || ROOM_CODE);
+    publish(joinedRoom || ROOM_CODE);
   });
 
   socket.on('trip:add', ({ stop, token }) => {
@@ -251,8 +343,8 @@ io.on('connection', (socket) => {
       }
     }
     stops.splice(insertAt, 0, newStop);
-    tripState = { ...tripState, stops, updatedAt: new Date().toISOString() };
-    broadcastTrip(joinedRoom || ROOM_CODE);
+    tripState = { ...tripState, stops };
+    publish(joinedRoom || ROOM_CODE);
   });
 
   socket.on('trip:updateStop', ({ id, patch, token }) => {
@@ -260,12 +352,18 @@ io.on('connection', (socket) => {
       socket.emit('error:auth', { error: '請先登入才能編輯' });
       return;
     }
+    const safe = patch && typeof patch === 'object' ? { ...patch } : {};
+    delete safe.id;
+    let legs = tripState.legs;
+    if (safe.lat != null || safe.lng != null) {
+      legs = stripLegEstimates(legs, id);
+    }
     tripState = {
       ...tripState,
-      stops: tripState.stops.map((s) => (s.id === id ? { ...s, ...patch, id: s.id } : s)),
-      updatedAt: new Date().toISOString(),
+      legs,
+      stops: tripState.stops.map((s) => (s.id === id ? { ...s, ...safe, id: s.id } : s)),
     };
-    broadcastTrip(joinedRoom || ROOM_CODE);
+    publish(joinedRoom || ROOM_CODE);
   });
 
   socket.on('trip:delete', ({ id, token }) => {
@@ -276,9 +374,19 @@ io.on('connection', (socket) => {
     tripState = {
       ...tripState,
       stops: tripState.stops.filter((s) => s.id !== id),
-      updatedAt: new Date().toISOString(),
     };
-    broadcastTrip(joinedRoom || ROOM_CODE);
+    publish(joinedRoom || ROOM_CODE);
+  });
+
+  socket.on('trip:setLegMode', ({ fromStopId, toStopId, mode, token }) => {
+    if (!verifyToken(token)) {
+      socket.emit('error:auth', { error: '請先登入才能編輯' });
+      return;
+    }
+    const next = setLegMode(tripState, fromStopId, toStopId, mode);
+    if (!next.changed) return;
+    tripState = next.state;
+    publish(joinedRoom || ROOM_CODE);
   });
 
   socket.on('trip:reset', ({ token }) => {
@@ -287,7 +395,7 @@ io.on('connection', (socket) => {
       return;
     }
     tripState = createSeedState();
-    broadcastTrip(joinedRoom || ROOM_CODE);
+    publish(joinedRoom || ROOM_CODE);
   });
 
   socket.on('disconnect', () => {
@@ -330,4 +438,5 @@ if (fs.existsSync(CLIENT_DIST)) {
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] listening on http://0.0.0.0:${PORT} (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
   console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
+  scheduleEnrich(ROOM_CODE);
 });
