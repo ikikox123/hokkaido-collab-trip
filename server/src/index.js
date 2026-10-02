@@ -20,6 +20,7 @@ import {
 } from './legs.js';
 import { lookupPlace, serverMapsKey } from './googleMaps.js';
 import { correctSeedState } from './seedGeocode.js';
+import { applyStopPatch } from './stopEdit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -375,18 +376,15 @@ io.on('connection', (socket) => {
       socket.emit('error:auth', { error: '請先登入才能編輯' });
       return;
     }
-    const safe = patch && typeof patch === 'object' ? { ...patch } : {};
-    delete safe.id;
-    let legs = tripState.legs;
-    if (safe.lat != null || safe.lng != null) {
-      legs = stripLegEstimates(legs, id);
+    const result = applyStopPatch(tripState, id, patch);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error || '無法更新站點' });
+      return;
     }
-    tripState = {
-      ...tripState,
-      legs,
-      stops: tripState.stops.map((s) => (s.id === id ? { ...s, ...safe, id: s.id } : s)),
-    };
-    publish(joinedRoom || ROOM_CODE);
+    if (result.unchanged) return;
+    tripState = result.state;
+    // A title-only rename must not recompute routes. Coordinate edits still do.
+    publish(joinedRoom || ROOM_CODE, { enrich: !result.titleOnly });
   });
 
   socket.on('trip:delete', ({ id, token }) => {

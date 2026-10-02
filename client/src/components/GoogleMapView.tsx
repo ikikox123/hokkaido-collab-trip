@@ -11,7 +11,9 @@ type Props = {
   selectedId: string | null;
   active: boolean;
   lodging?: LodgingPoint | null;
+  canEdit?: boolean;
   onSelect: (id: string) => void;
+  onRename?: (id: string, title: string) => void;
   onUnavailable: () => void;
 };
 
@@ -34,13 +36,101 @@ function lineFor(leg: Leg, stops: Stop[]) {
   };
 }
 
-function popupNode(stop: Stop, isNext: boolean) {
+const STOP_TITLE_MAX = 80;
+
+function popupNode(
+  stop: Stop,
+  isNext: boolean,
+  edit?: { canEdit: boolean; onRename: (title: string) => void },
+) {
   const root = document.createElement('div');
   root.style.fontSize = '14px';
+  root.style.minWidth = '180px';
   const title = document.createElement('div');
   title.style.fontWeight = '700';
   title.textContent = stop.title;
   root.appendChild(title);
+
+  function showError(message: string) {
+    let alert = root.querySelector('[data-rename-error]');
+    if (!alert) {
+      alert = document.createElement('p');
+      alert.setAttribute('data-rename-error', '');
+      (alert as HTMLElement).style.margin = '4px 0 0';
+      (alert as HTMLElement).style.color = '#dc2626';
+      (alert as HTMLElement).style.fontSize = '12px';
+      title.insertAdjacentElement('afterend', alert);
+    }
+    alert.textContent = message;
+  }
+
+  if (edit?.canEdit) {
+    const renameBtn = document.createElement('button');
+    renameBtn.type = 'button';
+    renameBtn.textContent = '改名';
+    renameBtn.setAttribute('aria-label', `編輯地點名稱：${stop.title}`);
+    renameBtn.style.cssText =
+      'margin-top:6px;min-height:44px;padding:0 12px;border:0;border-radius:8px;background:#e8f1fa;color:#1e4f8a;font:inherit;font-size:14px;font-weight:600;';
+
+    const openEditor = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!renameBtn.isConnected) return;
+      const form = document.createElement('form');
+      form.style.marginTop = '6px';
+      const input = document.createElement('input');
+      input.setAttribute('aria-label', '地點名稱');
+      input.enterKeyHint = 'done';
+      input.autocomplete = 'off';
+      input.maxLength = STOP_TITLE_MAX;
+      input.value = stop.title;
+      input.style.cssText =
+        'box-sizing:border-box;width:100%;min-height:44px;padding:6px 8px;border:1px solid #2563a8;border-radius:8px;font:inherit;font-size:16px;font-weight:600;';
+      form.appendChild(input);
+      const save = (raw: string) => {
+        const next = raw.trim();
+        if (!next) {
+          showError('名稱不可空白');
+          input.value = stop.title;
+          return;
+        }
+        if (next.length > STOP_TITLE_MAX) {
+          showError('地點名稱過長');
+          return;
+        }
+        root.querySelector('[data-rename-error]')?.remove();
+        if (next !== stop.title) edit.onRename(next);
+        title.textContent = next;
+        form.replaceWith(renameBtn);
+      };
+      form.addEventListener('submit', (submitEvent) => {
+        submitEvent.preventDefault();
+        save(input.value);
+      });
+      input.addEventListener('keydown', (keyEvent) => {
+        if (keyEvent.key === 'Escape') {
+          keyEvent.preventDefault();
+          root.querySelector('[data-rename-error]')?.remove();
+          form.replaceWith(renameBtn);
+        }
+      });
+      renameBtn.replaceWith(form);
+      input.focus();
+      input.select();
+    };
+
+    renameBtn.addEventListener('click', openEditor);
+    title.style.cursor = 'pointer';
+    title.setAttribute('role', 'button');
+    title.tabIndex = 0;
+    title.setAttribute('aria-label', `編輯地點名稱：${stop.title}`);
+    title.addEventListener('click', openEditor);
+    title.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') openEditor(event);
+    });
+    title.insertAdjacentElement('afterend', renameBtn);
+  }
+
   if (stop.time) {
     const time = document.createElement('div');
     time.style.color = '#475569';
@@ -65,7 +155,17 @@ function popupNode(stop: Stop, isNext: boolean) {
   return root;
 }
 
-export function GoogleMapView({ stops, legs, selectedId, active, lodging, onSelect, onUnavailable }: Props) {
+export function GoogleMapView({
+  stops,
+  legs,
+  selectedId,
+  active,
+  lodging,
+  canEdit = false,
+  onSelect,
+  onRename,
+  onUnavailable,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMap | null>(null);
   const googleRef = useRef<GoogleMapsNS | null>(null);
@@ -74,6 +174,10 @@ export function GoogleMapView({ stops, legs, selectedId, active, lodging, onSele
   const fitKey = fitKeyFor(stops);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onRenameRef = useRef(onRename);
+  onRenameRef.current = onRename;
+  const canEditRef = useRef(canEdit);
+  canEditRef.current = canEdit;
   const onUnavailableRef = useRef(onUnavailable);
   onUnavailableRef.current = onUnavailable;
 
@@ -243,7 +347,12 @@ export function GoogleMapView({ stops, legs, selectedId, active, lodging, onSele
       });
       marker.addListener('click', () => {
         onSelectRef.current(stop.id);
-        info.setContent(popupNode(stop, isNext));
+        info.setContent(
+          popupNode(stop, isNext, {
+            canEdit: canEditRef.current,
+            onRename: (title) => onRenameRef.current?.(stop.id, title),
+          }),
+        );
         info.open({ map, anchor: marker });
       });
       overlaysRef.current.push(marker);

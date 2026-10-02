@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Fragment, useState } from 'react';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { isTravelMode, MODE_COLORS, MODE_LABELS, TRAVEL_MODES } from '../lib/travel';
+import { StopName } from './StopName';
 
 type Props = {
   stops: Stop[];
@@ -30,6 +31,7 @@ type Props = {
   onDelete: (id: string) => void;
   onAdd: () => void;
   onUpdateTime: (id: string, time: string) => void;
+  onRename: (id: string, title: string) => void;
   onSetMode: (fromStopId: string, toStopId: string, mode: TravelMode) => void;
   onEditPlace?: (id: string) => void;
 };
@@ -43,6 +45,7 @@ function SortableItem({
   onSelect,
   onDelete,
   onUpdateTime,
+  onRename,
   onEditPlace,
 }: {
   stop: Stop;
@@ -53,6 +56,7 @@ function SortableItem({
   onSelect: () => void;
   onDelete: () => void;
   onUpdateTime: (time: string) => void;
+  onRename: (title: string) => void;
   onEditPlace?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -91,25 +95,24 @@ function SortableItem({
           </svg>
         </button>
       )}
-      <button
-        type="button"
-        className="flex-1 text-left min-h-touch py-1"
-        onClick={onSelect}
-      >
+      <div className="min-w-0 flex-1 py-1" onClick={onSelect}>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-ice-600 w-5">{index + 1}</span>
-          <span className="font-semibold text-[15px] leading-snug">{stop.title}</span>
+          <span className="w-5 text-xs font-bold text-ice-600">{index + 1}</span>
+          <StopName title={stop.title} canEdit={canEdit} onRename={onRename} />
           {isNext && (
-            <span className="text-[10px] font-bold uppercase tracking-wide text-pink-600 bg-pink-100 px-1.5 py-0.5 rounded">
+            <span className="shrink-0 rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-pink-600">
               下一站
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 pl-7">
+        <div
+          className="mt-0.5 flex flex-wrap items-center gap-2 pl-7 text-xs text-slate-500"
+          onClick={(e) => e.stopPropagation()}
+        >
           {canEdit ? (
             <input
               type="time"
-              className="rounded border border-slate-200 px-1.5 py-1 min-h-[36px] text-sm"
+              className="min-h-[36px] rounded border border-slate-200 px-1.5 py-1 text-sm"
               value={stop.time || ''}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => onUpdateTime(e.target.value)}
@@ -117,16 +120,19 @@ function SortableItem({
           ) : (
             <span>{stop.time || '時間未定'}</span>
           )}
-          {stop.notes && <span className="truncate max-w-[180px]">{stop.notes}</span>}
+          {stop.notes && <span className="max-w-[180px] truncate">{stop.notes}</span>}
         </div>
-      </button>
+      </div>
       {canEdit && (
         <div className="flex shrink-0 flex-col">
           {onEditPlace && (
             <button
               type="button"
               className="min-h-touch min-w-touch text-sm font-medium text-ice-700"
-              onClick={onEditPlace}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditPlace();
+              }}
             >
               地點
             </button>
@@ -135,7 +141,10 @@ function SortableItem({
             type="button"
             className="min-h-touch min-w-touch text-sm font-medium text-red-500"
             aria-label="刪除"
-            onClick={onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
           >
             刪
           </button>
@@ -203,6 +212,7 @@ export function TripList({
   onDelete,
   onAdd,
   onUpdateTime,
+  onRename,
   onSetMode,
   onEditPlace,
 }: Props) {
@@ -274,6 +284,7 @@ export function TripList({
                     onSelect={() => onSelect(stop.id)}
                     onDelete={() => onDelete(stop.id)}
                     onUpdateTime={(time) => onUpdateTime(stop.id, time)}
+                    onRename={(title) => onRename(stop.id, title)}
                     onEditPlace={onEditPlace ? () => onEditPlace(stop.id) : undefined}
                   />
                   {next && (
