@@ -22,6 +22,9 @@ import { lookupPlace, placeFailureMessage, redactSecrets, serverMapsKey } from '
 import { correctSeedState } from './seedGeocode.js';
 import { applyStopPatch } from './stopEdit.js';
 import { getWeather } from './weather.js';
+import { getJmaWarnings } from './jmaWarnings.js';
+import { getJrStatus } from './jrStatus.js';
+import { getTripAlerts } from './tripAlerts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -194,6 +197,11 @@ app.get('/api/route', async (req, res) => {
 app.get('/api/weather', async (_req, res) => {
   const result = await getWeather();
   res.status(result.status).json(result.body);
+});
+
+app.get('/api/trip-alerts', async (_req, res) => {
+  const body = await getTripAlerts();
+  res.json(body);
 });
 
 function broadcastTrip(roomCode = ROOM_CODE) {
@@ -472,4 +480,6 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
   console.log(`[server] routing ${serverMapsKey() ? 'google' : 'osrm'}`);
   void applySeedCorrection(ROOM_CODE);
+  void getJmaWarnings().catch((err) => console.warn('[jma] warmup failed', err?.message || err));
+  void getJrStatus().catch((err) => console.warn('[jr] warmup failed', err?.message || err));
 });
