@@ -1,6 +1,6 @@
 /**
- * Correct seed-stop coordinates with Places Text Search (Find Place)
- * and Geocoding when GOOGLE_MAPS_SERVER_KEY is set.
+ * Correct seed-stop coordinates with Geocoding, then Places API (New)
+ * and legacy Find Place, when GOOGLE_MAPS_SERVER_KEY is set.
  *
  * Boot: index.js calls correctSeedState() and updates in-memory trip state.
  * One-shot: `node src/seedGeocode.js` prints corrections (no key).
