@@ -20,6 +20,7 @@ import {
 } from './legs.js';
 import { lookupPlace, serverMapsKey } from './googleMaps.js';
 import { correctSeedState } from './seedGeocode.js';
+import { getWeather } from './weather.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -188,30 +189,8 @@ app.get('/api/route', async (req, res) => {
 });
 
 app.get('/api/weather', async (_req, res) => {
-  const cities = [
-    { id: 'sapporo', name: '札幌', lat: 43.06, lng: 141.35 },
-    { id: 'otaru', name: '小樽', lat: 43.19, lng: 140.99 },
-    { id: 'asahikawa', name: '旭川', lat: 43.77, lng: 142.36 },
-  ];
-  try {
-    const results = await Promise.all(
-      cities.map(async (c) => {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lng}&current=temperature_2m,weather_code&timezone=Asia%2FTokyo`;
-        const r = await fetch(url);
-        if (!r.ok) throw new Error(`weather ${c.id} ${r.status}`);
-        const data = await r.json();
-        return {
-          ...c,
-          temperature: data.current?.temperature_2m ?? null,
-          weatherCode: data.current?.weather_code ?? null,
-          time: data.current?.time ?? null,
-        };
-      }),
-    );
-    res.json({ cities: results, fetchedAt: new Date().toISOString() });
-  } catch (e) {
-    res.status(502).json({ error: '天氣取得失敗', detail: String(e.message || e) });
-  }
+  const result = await getWeather();
+  res.status(result.status).json(result.body);
 });
 
 function broadcastTrip(roomCode = ROOM_CODE) {
