@@ -20,7 +20,6 @@ import { Fragment, useState } from 'react';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { isTravelMode, MODE_COLORS, MODE_LABELS, TRAVEL_MODES } from '../lib/travel';
 import { StopName } from './StopName';
-import { TripAlerts } from './TripAlerts';
 
 type Props = {
   stops: Stop[];
@@ -37,10 +36,39 @@ type Props = {
   onEditPlace?: (id: string) => void;
 };
 
+function TimelineDot({
+  index,
+  continued,
+  fromPrevious,
+  accent,
+}: {
+  index: number;
+  continued: boolean;
+  fromPrevious: boolean;
+  accent: 'next' | 'selected' | 'default';
+}) {
+  const dot =
+    accent === 'next'
+      ? 'bg-sakura-500 text-white'
+      : accent === 'selected'
+        ? 'bg-ice-600 text-white ring-2 ring-ice-300'
+        : 'bg-white text-ice-700 ring-2 ring-ice-500';
+  return (
+    <div className="relative flex w-8 shrink-0 flex-col items-center self-stretch" aria-hidden>
+      <span className={`w-0.5 shrink-0 ${fromPrevious ? 'h-2 bg-ice-300' : 'h-2'}`} />
+      <span className={`z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${dot}`}>
+        {index + 1}
+      </span>
+      <span className={`w-0.5 flex-1 ${continued ? 'bg-ice-300' : ''}`} />
+    </div>
+  );
+}
+
 function SortableItem({
   stop,
   index,
   isNext,
+  hasNext,
   selected,
   canEdit,
   onSelect,
@@ -52,6 +80,7 @@ function SortableItem({
   stop: Stop;
   index: number;
   isNext: boolean;
+  hasNext: boolean;
   selected: boolean;
   canEdit: boolean;
   onSelect: () => void;
@@ -70,87 +99,89 @@ function SortableItem({
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const accent = isNext ? 'next' : selected ? 'selected' : 'default';
+
   return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`flex gap-2 items-stretch rounded-xl border bg-white p-2 shadow-sm ${
-        selected ? 'border-ice-500 ring-2 ring-ice-500/30' : 'border-slate-200'
-      } ${isNext ? 'bg-pink-50/60' : ''}`}
-    >
-      {canEdit && (
-        <button
-          type="button"
-          className="shrink-0 flex items-center justify-center min-w-touch min-h-touch touch-none text-slate-400 active:text-ice-600 cursor-grab active:cursor-grabbing"
-          aria-label="拖曳排序"
-          {...attributes}
-          {...listeners}
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-            <circle cx="7" cy="5" r="1.5" />
-            <circle cx="13" cy="5" r="1.5" />
-            <circle cx="7" cy="10" r="1.5" />
-            <circle cx="13" cy="10" r="1.5" />
-            <circle cx="7" cy="15" r="1.5" />
-            <circle cx="13" cy="15" r="1.5" />
-          </svg>
-        </button>
-      )}
-      <div className="min-w-0 flex-1 py-1" onClick={onSelect}>
-        <div className="flex items-center gap-2">
-          <span className="w-5 text-xs font-bold text-ice-600">{index + 1}</span>
-          <StopName title={stop.title} canEdit={canEdit} onRename={onRename} />
-          {isNext && (
-            <span className="shrink-0 rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-pink-600">
-              下一站
-            </span>
-          )}
-        </div>
-        <div
-          className="mt-0.5 flex flex-wrap items-center gap-2 pl-7 text-xs text-slate-500"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {canEdit ? (
-            <input
-              type="time"
-              className="min-h-[36px] rounded border border-slate-200 px-1.5 py-1 text-sm"
-              value={stop.time || ''}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => onUpdateTime(e.target.value)}
-            />
-          ) : (
-            <span>{stop.time || '時間未定'}</span>
-          )}
-          {stop.notes && <span className="max-w-[180px] truncate">{stop.notes}</span>}
-        </div>
-      </div>
-      {canEdit && (
-        <div className="flex shrink-0 flex-col">
-          {onEditPlace && (
-            <button
-              type="button"
-              className="min-h-touch min-w-touch text-sm font-medium text-ice-700"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditPlace();
-              }}
-            >
-              地點
-            </button>
-          )}
+    <li ref={setNodeRef} style={style} className="flex items-stretch gap-1">
+      <TimelineDot index={index} continued={hasNext} fromPrevious={index > 0} accent={accent} />
+      <div
+        className={`mb-1 flex min-w-0 flex-1 items-stretch gap-1 rounded-xl border bg-white p-1.5 shadow-sm ${
+          selected ? 'border-ice-500 ring-2 ring-ice-500/30' : 'border-slate-200'
+        } ${isNext ? 'bg-pink-50/80' : ''}`}
+      >
+        {canEdit && (
           <button
             type="button"
-            className="min-h-touch min-w-touch text-sm font-medium text-red-500"
-            aria-label="刪除"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
+            className="flex min-h-touch min-w-touch shrink-0 touch-none cursor-grab items-center justify-center text-slate-400 active:cursor-grabbing active:text-ice-600"
+            aria-label="拖曳排序"
+            {...attributes}
+            {...listeners}
           >
-            刪
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+              <circle cx="7" cy="5" r="1.5" />
+              <circle cx="13" cy="5" r="1.5" />
+              <circle cx="7" cy="10" r="1.5" />
+              <circle cx="13" cy="10" r="1.5" />
+              <circle cx="7" cy="15" r="1.5" />
+              <circle cx="13" cy="15" r="1.5" />
+            </svg>
           </button>
+        )}
+        <div className="min-w-0 flex-1 py-1" onClick={onSelect}>
+          <div className="flex items-center gap-2">
+            <StopName title={stop.title} canEdit={canEdit} onRename={onRename} />
+            {isNext && (
+              <span className="shrink-0 rounded-md bg-pink-100 px-2 py-0.5 text-sm font-bold text-pink-700">
+                下一站
+              </span>
+            )}
+          </div>
+          <div
+            className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-slate-600"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {canEdit ? (
+              <input
+                type="time"
+                className="min-h-touch rounded-lg border border-slate-200 px-2 py-1 text-base"
+                value={stop.time || ''}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onUpdateTime(e.target.value)}
+              />
+            ) : (
+              <span className="font-medium text-slate-700">{stop.time || '時間未定'}</span>
+            )}
+            {stop.notes && <span className="min-w-0 flex-1 truncate">{stop.notes}</span>}
+          </div>
         </div>
-      )}
+        {canEdit && (
+          <div className="flex shrink-0 flex-col">
+            {onEditPlace && (
+              <button
+                type="button"
+                className="min-h-touch min-w-touch text-sm font-medium text-ice-700"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditPlace();
+                }}
+              >
+                地點
+              </button>
+            )}
+            <button
+              type="button"
+              className="min-h-touch min-w-touch text-sm font-medium text-red-500"
+              aria-label="刪除"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              刪
+            </button>
+          </div>
+        )}
+      </div>
     </li>
   );
 }
@@ -170,17 +201,20 @@ function LegConnector({
 }) {
   const mode: TravelMode = leg?.mode && isTravelMode(leg.mode) ? leg.mode : 'walk';
   return (
-    <li className="ml-4 border-l-2 border-slate-200 py-1 pl-3">
-      <div className="flex items-center gap-2">
+    <li className="flex items-stretch gap-1" aria-label={`前往下一站，${from.title} 到 ${to.title}`}>
+      <div className="relative flex w-8 shrink-0 items-center justify-center self-stretch" aria-hidden>
+        <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-ice-300" />
         <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          className="relative z-10 h-3.5 w-3.5 rounded-full ring-2 ring-snow-50"
           style={{ background: MODE_COLORS[mode] }}
-          aria-hidden
         />
+      </div>
+      <div className="min-w-0 flex-1 pb-2 pr-1">
+        <p className="text-sm font-bold text-ice-700">前往下一站</p>
         {canEdit ? (
           <select
-            aria-label={`${from.title} 到 ${to.title} 的移動方式`}
-            className="min-h-touch w-full rounded-lg border border-slate-200 bg-white px-2 text-base text-slate-800"
+            aria-label={`前往下一站，${from.title} 到 ${to.title} 的交通方式`}
+            className="mt-1 min-h-touch w-full rounded-lg border border-slate-200 bg-white px-2 text-base text-slate-800"
             value={mode}
             onChange={(e) => {
               if (isTravelMode(e.target.value)) onSetMode(e.target.value);
@@ -193,12 +227,10 @@ function LegConnector({
             ))}
           </select>
         ) : (
-          <span className="text-sm font-medium text-slate-700">{MODE_LABELS[mode]}</span>
+          <p className="mt-0.5 text-base font-medium text-slate-800">{MODE_LABELS[mode]}</p>
         )}
+        <p className="mt-1 text-sm leading-snug text-slate-600">{leg?.summary || '路線估算中…'}</p>
       </div>
-      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
-        {leg?.summary || '路線估算中…'}
-      </p>
     </li>
   );
 }
@@ -255,11 +287,10 @@ export function TripList({
             ＋ 加入
           </button>
         ) : (
-          <span className="text-xs text-slate-400">登入後可編輯</span>
+          <span className="text-sm text-slate-500">登入後可編輯</span>
         )}
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 pb-safe">
-      <TripAlerts />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -267,9 +298,9 @@ export function TripList({
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <ul className="space-y-2">
+          <ul>
             {stops.length === 0 && (
-              <li className="text-center text-slate-400 py-8 text-sm">這天尚無站點</li>
+              <li className="py-8 text-center text-base text-slate-500">這天尚無站點</li>
             )}
             {stops.map((stop, i) => {
               const next = stops[i + 1];
@@ -282,6 +313,7 @@ export function TripList({
                     stop={stop}
                     index={i}
                     isNext={i === 0}
+                    hasNext={Boolean(next)}
                     selected={selectedId === stop.id}
                     canEdit={canEdit}
                     onSelect={() => onSelect(stop.id)}

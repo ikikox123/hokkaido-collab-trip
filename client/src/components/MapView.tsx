@@ -27,7 +27,7 @@ export function MapView(props: Props) {
   return (
     <div className="relative flex h-full min-h-0 w-full flex-1 flex-col">
       {googleFailed && (
-        <div className="shrink-0 bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-900">
+        <div className="shrink-0 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">
           Google 地圖無法載入，已改用備援地圖
         </div>
       )}

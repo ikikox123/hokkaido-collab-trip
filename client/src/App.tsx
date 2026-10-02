@@ -1,15 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { WeatherBar } from './components/WeatherBar';
 import { LoginModal } from './components/LoginModal';
+import { TripAlerts } from './components/TripAlerts';
 import { TripList } from './components/TripList';
 import { MapView } from './components/MapView';
 import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { usesGoogleMaps } from './lib/mapProvider';
-import type { Leg, PresenceUser, TravelMode, TripState, User } from './types/trip';
+import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './types/trip';
 
 type MobileTab = 'list' | 'map';
+
+function CurrentStopBar({ stop }: { stop: Stop | null }) {
+  return (
+    <div className="z-20 shrink-0 border-b border-ice-100 bg-white px-3 py-2">
+      <div className="flex min-h-touch items-center gap-2">
+        <span className="shrink-0 rounded-md bg-ice-600 px-2 py-1 text-sm font-bold text-white">目前站點</span>
+        {stop ? (
+          <p className="min-w-0 truncate text-base font-bold text-slate-900">
+            <span className="mr-2 font-semibold text-ice-700">{stop.time || '時間未定'}</span>
+            {stop.title}
+          </p>
+        ) : (
+          <p className="truncate text-base text-slate-500">這天尚無站點</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const DEFAULT_ROOM = 'HOKKAIDO2027';
 
@@ -158,13 +176,13 @@ export default function App() {
             <h1 className="font-bold text-sm sm:text-base truncate leading-tight">
               {trip.tripName.split('｜')[0]}
             </h1>
-            <p className="text-[11px] text-white/75 truncate">
+            <p className="truncate text-sm text-white/80">
               {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : '多人協作'}
             </p>
           </div>
           <button
             type="button"
-            className="min-h-touch min-w-touch rounded-lg bg-white/15 px-2 text-xs font-medium"
+            className="min-h-touch min-w-touch rounded-lg bg-white/15 px-2 text-sm font-medium"
             onClick={() => setHeaderOpen((v) => !v)}
             aria-expanded={headerOpen}
           >
@@ -207,13 +225,13 @@ export default function App() {
                 加入
               </button>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-white/85 text-xs">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/85">
               <span>線上 {online.length} 人</span>
               <span className="truncate max-w-full">
                 {online.map((o) => o.displayName).join('、') || '尚無'}
               </span>
             </div>
-            <div className="text-white/70 text-xs space-y-0.5">
+            <div className="space-y-0.5 text-sm text-white/80">
               <div>住宿：{trip.lodging.name}</div>
               <div>去程 {trip.flights.outbound}</div>
               <div>回程 {trip.flights.inbound}</div>
@@ -231,51 +249,32 @@ export default function App() {
             )}
           </div>
         )}
-        <WeatherBar />
       </header>
 
-      {/* Day tabs — horizontal scroll */}
-      <nav className="shrink-0 bg-white border-b border-slate-200 z-10">
-        <div className="flex overflow-x-auto no-scrollbar gap-1 px-2 py-2">
+      {/* Day strip stays outside the list scroller */}
+      <nav aria-label="行程日期" className="z-20 shrink-0 border-b border-slate-200 bg-white">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar px-2 py-2">
           {trip.days.map((d) => (
             <button
               key={d.day}
               type="button"
               onClick={() => setSelectedDay(d.day)}
-              className={`shrink-0 min-h-touch px-3 rounded-xl text-sm font-semibold transition ${
+              className={`min-h-touch shrink-0 rounded-xl px-3 text-sm font-semibold transition ${
                 selectedDay === d.day
                   ? 'bg-ice-600 text-white shadow'
                   : 'bg-snow-100 text-slate-600 active:bg-snow-200'
               }`}
             >
               <span className="block leading-tight">{d.label}</span>
-              <span className="block text-[10px] font-normal opacity-80">{d.date.slice(5)}</span>
+              <span className="block text-sm font-medium opacity-90">{d.date.slice(5)}</span>
             </button>
           ))}
         </div>
       </nav>
 
-      {/* Mobile tab switcher */}
-      <div className="md:hidden shrink-0 flex bg-white border-b border-slate-100 px-2 py-1 gap-1">
-        <button
-          type="button"
-          className={`flex-1 min-h-touch rounded-xl text-sm font-semibold ${
-            mobileTab === 'list' ? 'bg-ice-600 text-white' : 'text-slate-600'
-          }`}
-          onClick={() => setMobileTab('list')}
-        >
-          列表
-        </button>
-        <button
-          type="button"
-          className={`flex-1 min-h-touch rounded-xl text-sm font-semibold ${
-            mobileTab === 'map' ? 'bg-ice-600 text-white' : 'text-slate-600'
-          }`}
-          onClick={() => setMobileTab('map')}
-        >
-          地圖
-        </button>
-      </div>
+      <CurrentStopBar stop={dayStops.find((s) => s.id === selectedId) ?? null} />
+
+      <TripAlerts />
 
       {/* Main: stacked on mobile via tabs; side-by-side on md+ */}
       <main className="flex-1 min-h-0 flex flex-col md:flex-row">
@@ -331,7 +330,7 @@ export default function App() {
         <section
           className={`relative min-h-0 min-w-0 ${
             mobileTab === 'map'
-              ? 'flex h-full min-h-[55dvh] flex-1 flex-col'
+              ? 'flex h-full min-h-0 flex-1 flex-col'
               : 'hidden md:flex md:h-full md:min-h-0 md:flex-1 md:flex-col'
           }`}
         >
@@ -348,8 +347,32 @@ export default function App() {
         </section>
       </main>
 
-      {/* Safe-area spacer for home indicator when on list */}
-      <div className="h-[var(--safe-bottom)] bg-white shrink-0 md:hidden" />
+      <nav
+        aria-label="切換行程列表與地圖"
+        className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-200 bg-white px-3 pt-2 md:hidden"
+        style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
+      >
+        <button
+          type="button"
+          aria-current={mobileTab === 'list' ? 'page' : undefined}
+          className={`min-h-touch rounded-xl px-2 text-base font-bold ${
+            mobileTab === 'list' ? 'bg-ice-600 text-white shadow' : 'bg-snow-100 text-slate-700'
+          }`}
+          onClick={() => setMobileTab('list')}
+        >
+          行程列表
+        </button>
+        <button
+          type="button"
+          aria-current={mobileTab === 'map' ? 'page' : undefined}
+          className={`min-h-touch rounded-xl px-2 text-base font-bold ${
+            mobileTab === 'map' ? 'bg-ice-600 text-white shadow' : 'bg-snow-100 text-slate-700'
+          }`}
+          onClick={() => setMobileTab('map')}
+        >
+          地圖
+        </button>
+      </nav>
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLogin={handleLogin} />
 

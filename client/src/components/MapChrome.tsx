@@ -17,7 +17,7 @@ export function MapChrome({
           這天還沒有站點
         </div>
       )}
-      <div className="pointer-events-none absolute bottom-2 left-2 z-[400] max-w-[70%] rounded-lg bg-white/95 px-2 py-1 text-[10px] leading-snug text-slate-600 shadow">
+      <div className="pointer-events-none absolute bottom-2 left-2 z-[400] max-w-[78%] rounded-lg bg-white/95 px-2.5 py-1.5 text-sm leading-snug text-slate-700 shadow">
         {providerLabel && <div className="font-medium text-slate-700">{providerLabel}</div>}
         <div>
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-sakura-500 align-middle" />

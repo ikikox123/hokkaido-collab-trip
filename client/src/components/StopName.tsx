@@ -88,7 +88,7 @@ export function StopName({ title, canEdit, onRename }: Props) {
           }}
         />
         {error && (
-          <p className="mt-0.5 text-xs text-red-600" role="alert">
+          <p className="mt-0.5 text-sm text-red-600" role="alert">
             {error}
           </p>
         )}
@@ -108,12 +108,12 @@ export function StopName({ title, canEdit, onRename }: Props) {
         }}
       >
         <span className="min-w-0 flex-1 font-semibold text-[15px] leading-snug">{title}</span>
-        <span className="shrink-0 rounded-md bg-ice-600/10 px-2 py-1 text-xs font-semibold text-ice-700">
+        <span className="shrink-0 rounded-md bg-ice-600/10 px-2 py-1 text-sm font-semibold text-ice-700">
           改名
         </span>
       </button>
       {error && (
-        <p className="mt-0.5 text-xs text-red-600" role="alert">
+        <p className="mt-0.5 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}

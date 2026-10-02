@@ -233,7 +233,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-ice-500 focus:ring-2 focus:ring-ice-500/30"
         />
         {lat != null && lng != null && (
-          <p className="mt-2 text-xs leading-snug text-slate-500">
+          <p className="mt-2 text-sm leading-snug text-slate-600">
             {address && <span className="block">{address}</span>}
             <span>
               {lat.toFixed(5)}, {lng.toFixed(5)}
