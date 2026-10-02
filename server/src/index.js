@@ -18,7 +18,7 @@ import {
   setLegMode,
   stripLegEstimates,
 } from './legs.js';
-import { lookupPlace, serverMapsKey } from './googleMaps.js';
+import { lookupPlace, placeFailureMessage, redactSecrets, serverMapsKey } from './googleMaps.js';
 import { correctSeedState } from './seedGeocode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -154,8 +154,10 @@ app.get('/api/places', authMiddleware, async (req, res) => {
     if (!place) return res.status(404).json({ error: '找不到地點' });
     res.json({ name: place.name, address: place.address, lat: place.lat, lng: place.lng });
   } catch (e) {
-    console.warn('[places]', e?.message || e);
-    res.status(502).json({ error: '地點查詢失敗' });
+    const detail = redactSecrets(e?.message || '');
+    const error = placeFailureMessage(detail);
+    console.warn('[places]', error, detail.slice(0, 180));
+    res.status(502).json({ error });
   }
 });
 
