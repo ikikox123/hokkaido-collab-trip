@@ -81,6 +81,13 @@ body {
   font-family: inherit;
 }
 
+/* The dropdown is portaled onto document.body. Keep it only while the dialog is open. */
+body:not(.place-dialog-open) .pac-container {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .leaflet-control-zoom a {
   width: 44px !important;
   height: 44px !important;

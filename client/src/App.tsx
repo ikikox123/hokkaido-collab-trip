@@ -51,6 +51,9 @@ export default function App() {
     s.on('error:auth', (e: { error: string }) => {
       showToast(e.error || '需要登入');
     });
+    s.on('error:edit', (e: { error: string }) => {
+      showToast(e.error || '無法更新');
+    });
     s.on('connect', () => {
       s.emit('room:join', {
         roomCode: roomCode || DEFAULT_ROOM,
@@ -321,6 +324,7 @@ export default function App() {
               googlePlaces ? (id) => setPlaceDialog({ mode: 'edit', stopId: id }) : undefined
             }
             onUpdateTime={(id, time) => emitAuth('trip:updateStop', { id, patch: { time } })}
+            onRename={(id, title) => emitAuth('trip:updateStop', { id, patch: { title } })}
           />
         </section>
 
@@ -337,7 +341,9 @@ export default function App() {
             selectedId={selectedId}
             active={mapActive}
             lodging={trip.lodging}
+            canEdit={canEdit}
             onSelect={setSelectedId}
+            onRename={(id, title) => emitAuth('trip:updateStop', { id, patch: { title } })}
           />
         </section>
       </main>
@@ -362,7 +368,12 @@ export default function App() {
           if (placeDialog.mode === 'edit') {
             emitAuth('trip:updateStop', {
               id: placeDialog.stopId,
-              patch: { title: place.title, lat: place.lat, lng: place.lng },
+              patch: {
+                title: place.title,
+                lat: place.lat,
+                lng: place.lng,
+                ...(place.address ? { notes: place.address } : {}),
+              },
             });
           } else {
             const dayMeta = trip.days.find((d) => d.day === selectedDay);

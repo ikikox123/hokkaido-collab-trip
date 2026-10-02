@@ -1,5 +1,7 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
-import { loadGoogleMaps } from '../lib/googleLoader';
+import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { loadGoogleMaps, type GoogleAutocomplete, type GoogleMapsNS } from '../lib/googleLoader';
+import { selectionFromPlace } from '../lib/placeLabel';
+import { holdPlaceSuggestions, releasePlaceSuggestions } from '../lib/placeSuggestions';
 
 export type PickedPlace = {
   title: string;
@@ -19,6 +21,9 @@ type Props = {
 
 export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onConfirm }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
+  const removeListenerRef = useRef<(() => void) | null>(null);
+  const selectionLock = useRef(false);
   const [query, setQuery] = useState(initialTitle);
   const [title, setTitle] = useState(initialTitle);
   const [address, setAddress] = useState('');
@@ -39,9 +44,22 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
     setSuggestState('loading');
   }, [open, initialTitle]);
 
+  useLayoutEffect(() => {
+    if (!open) return;
+    holdPlaceSuggestions();
+    return () => {
+      inputRef.current?.blur();
+      removeListenerRef.current?.();
+      removeListenerRef.current = null;
+      const autocomplete = autocompleteRef.current;
+      autocompleteRef.current = null;
+      const mapsEvent = (window as unknown as { google?: GoogleMapsNS }).google?.maps?.event;
+      releasePlaceSuggestions(autocomplete, mapsEvent);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    let removeListener: (() => void) | null = null;
     let cancelled = false;
     loadGoogleMaps()
       .then((g) => {
@@ -61,6 +79,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           bounds,
           strictBounds: false,
         });
+        autocompleteRef.current = autocomplete;
         const listener = autocomplete.addListener('place_changed', () => {
           const place = autocomplete.getPlace();
           const loc = place.geometry?.location;
@@ -68,15 +87,9 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
             setError('請從建議清單選一個地點，或按「伺服器搜尋」');
             return;
           }
-          const name = place.name || inputRef.current?.value || '新站點';
-          setTitle(name);
-          setQuery(name);
-          setAddress(place.formatted_address || '');
-          setLat(loc.lat());
-          setLng(loc.lng());
-          setError(null);
+          applySelection(place.name, place.formatted_address, loc.lat(), loc.lng());
         });
-        removeListener = () => listener.remove();
+        removeListenerRef.current = () => listener.remove();
         setSuggestState('ready');
         inputRef.current.focus();
       })
@@ -87,20 +100,40 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
       });
     return () => {
       cancelled = true;
-      removeListener?.();
     };
   }, [open]);
 
   if (!open) return null;
 
-  function applyPlace(place: { name?: string; address?: string; lat: number; lng: number }) {
-    const name = place.name || query || '新站點';
-    setTitle(name);
-    setQuery(name);
-    setAddress(place.address || '');
-    setLat(place.lat);
-    setLng(place.lng);
+  function applySelection(
+    name: string | undefined,
+    formattedAddress: string | undefined,
+    nextLat: number,
+    nextLng: number,
+  ) {
+    const picked = selectionFromPlace({ name, formattedAddress });
+    selectionLock.current = true;
+    const restoreSearch = () => {
+      const input = inputRef.current;
+      if (!input || !selectionLock.current || input.value === picked.search) return;
+      input.value = picked.search;
+    };
+    window.setTimeout(() => {
+      selectionLock.current = false;
+    }, 400);
+    setTitle(picked.title);
+    setQuery(picked.search);
+    setAddress(picked.address);
+    setLat(nextLat);
+    setLng(nextLng);
     setError(null);
+    restoreSearch();
+    window.setTimeout(restoreSearch, 0);
+    window.setTimeout(restoreSearch, 50);
+  }
+
+  function applyPlace(place: { name?: string; address?: string; lat: number; lng: number }) {
+    applySelection(place.name, place.address, place.lat, place.lng);
   }
 
   async function searchServer() {
@@ -138,8 +171,13 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
       void searchServer();
       return;
     }
+    const pickedTitle = title.trim();
+    if (!pickedTitle) {
+      setError('請填站點名稱');
+      return;
+    }
     onConfirm({
-      title: title.trim() || query.trim() || '新站點',
+      title: pickedTitle,
       lat,
       lng,
       address,
@@ -162,7 +200,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           {suggestState === 'ready'
-            ? '輸入後從 Google 建議選取，座標會跟著地點走。也可按「伺服器搜尋」。'
+            ? '選取建議後，站點名稱用店名或地標，搜尋欄顯示地址。名稱和搜尋文字不必相同。'
             : suggestState === 'off'
               ? '瀏覽器地點建議無法使用。輸入店名或地址後按「伺服器搜尋」。'
               : '正在準備地點建議…沒有建議時可按「伺服器搜尋」。'}
@@ -174,7 +212,13 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           id="place-query"
           ref={inputRef}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            if (selectionLock.current) return;
+            setQuery(e.target.value);
+            setLat(null);
+            setLng(null);
+            setAddress('');
+          }}
           className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-ice-500 focus:ring-2 focus:ring-ice-500/30"
           placeholder="例如 札幌市時計台"
           autoComplete="off"

@@ -11,7 +11,9 @@ type Props = {
   selectedId: string | null;
   active: boolean;
   lodging?: LodgingPoint | null;
+  canEdit?: boolean;
   onSelect: (id: string) => void;
+  onRename?: (id: string, title: string) => void;
 };
 
 export function MapView(props: Props) {

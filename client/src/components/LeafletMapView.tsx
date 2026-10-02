@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { dayCamera, fitKeyFor, SAPPORO_BASE, type LodgingPoint } from '../lib/dayView';
 import { MODE_COLORS, MODE_LABELS } from '../lib/travel';
+import { StopName } from './StopName';
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -226,10 +227,21 @@ type Props = {
   /** True when this pane is on screen (mobile map tab, or any desktop width). */
   active: boolean;
   lodging?: LodgingPoint | null;
+  canEdit?: boolean;
   onSelect: (id: string) => void;
+  onRename?: (id: string, title: string) => void;
 };
 
-export function LeafletMapView({ stops, legs, selectedId, active, lodging, onSelect }: Props) {
+export function LeafletMapView({
+  stops,
+  legs,
+  selectedId,
+  active,
+  lodging,
+  canEdit = false,
+  onSelect,
+  onRename,
+}: Props) {
   const nextId = stops[0]?.id ?? null;
   const fitKey = fitKeyFor(stops);
   const seed = useRef<{ center: [number, number]; zoom: number } | null>(null);
@@ -312,9 +324,13 @@ export function LeafletMapView({ stops, legs, selectedId, active, lodging, onSel
               icon={icon}
               eventHandlers={{ click: () => onSelect(s.id) }}
             >
-              <Popup>
+              <Popup minWidth={220}>
                 <div className="text-sm">
-                  <div className="font-bold">{s.title}</div>
+                  <StopName
+                    title={s.title}
+                    canEdit={canEdit}
+                    onRename={(title) => onRename?.(s.id, title)}
+                  />
                   {s.time && <div className="text-slate-600">{s.time}</div>}
                   {s.notes && <div className="mt-1 text-slate-500">{s.notes}</div>}
                   {isNext && <div className="mt-1 font-medium text-pink-600">下一站</div>}

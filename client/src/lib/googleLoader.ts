@@ -43,13 +43,15 @@ type GoogleInfoWindow = {
 
 type GoogleBounds = { extend: (point: LatLng) => void };
 
-type GoogleAutocomplete = {
+export type GoogleAutocomplete = {
   addListener: (eventName: string, handler: () => void) => { remove: () => void };
   getPlace: () => {
     name?: string;
     formatted_address?: string;
     geometry?: { location?: { lat: () => number; lng: () => number } };
   };
+  /** MVCObject method. Present on the live widget; used to detach it. */
+  unbindAll?: () => void;
 };
 
 let loading: Promise<GoogleMapsNS> | null = null;
