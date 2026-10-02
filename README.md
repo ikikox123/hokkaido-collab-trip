@@ -9,7 +9,8 @@
 - 地圖：`VITE_MAP_PROVIDER=google` 且有瀏覽器金鑰時用 Google Maps JavaScript（標記、路線、手機手勢）。否則 Leaflet + Esri World Street Map（免 API key）。CARTO 公開圖磚現在會回「API KEY REQUIRED」浮水印，所以不當預設；OSM 只在主圖磚載入失敗時備援
 - 路線：有 `GOOGLE_MAPS_SERVER_KEY` 時優先 Google Directions（步行／開車／大眾運輸）。沒有金鑰或 Google 失敗時用 OSRM 公開服務，經伺服器 `/api/route` 轉打
 - 拖曳：@dnd-kit（含觸控感測器）
-- 天氣：Open-Meteo
+- 天氣：Open-Meteo 預報（札幌／小樽／旭川）。警報用氣象廳防災資訊 XML（PULL）。tenki.jp 沒有免費公開 API，不抓取
+- JR：官方運行頁面使用的公開 JSON（`top_tc.json`）做摘要，並附官方連結。不抓 HTML
 - 登入：JWT + localStorage（示範帳號）
 - 後端：Express（port 3001），Vite 代理 `/api` 與 `/socket.io`
 
@@ -48,8 +49,9 @@ npm run dev
 2. **地圖**：`VITE_MAP_PROVIDER=google` 且建置時有 `VITE_GOOGLE_MAPS_API_KEY` 才畫 Google 地圖（標記、折線、`gestureHandling=greedy`、44px 縮放鈕）。否則維持 Leaflet + Esri。切換日期、從列表切到地圖、或當天站點變更時，視野會貼到**當天全部站點**。只有 1 站時用 zoom 15，沒有站點時回到住宿 Minn（約 43.0573, 141.3366）zoom 13。手機地圖面板最少約 `55dvh`。Google 腳本載入失敗時改回 Leaflet。Leaflet 主圖磚若連線失敗才改打 OpenStreetMap。
 3. **交通方式**：同一天相鄰站（列表順序）可設 `步行 / 地鐵 / JR / 巴士 / 計程車 / 自駕 / 包車`。估時與路徑寫進共用 `legs`，經 Socket.io `trip:setLegMode` 同步（與其他編輯一樣廣播 `trip:update`）。訪客只讀。地圖依路段畫路徑，顏色依交通方式。有伺服器金鑰時：步行→walking、計程車／自駕／包車→driving、地鐵／JR／巴士→transit；transit 失敗則改 driving，摘要標成開車路徑估算。
 4. **拖曳排序**：長按（約 0.2 秒）拖動手把可排序，避免誤觸捲動。排序、新增、刪除會重算受影響路段。
-5. **天氣**：頂部顯示札幌／小樽／旭川氣溫與圖示，約每 10 分鐘刷新
-6. **種子行程**：2027-02-12～18，基地 Minn 札幌大通西14。D2 札幌市區預設以地鐵與短程步行為主。
+5. **天氣**：頂部顯示札幌／小樽／旭川氣溫與圖示，約每 10 分鐘刷新。行程列表另有「天氣＋交通告警」：同一組預報、氣象廳警報／注意報（札幌、小樽、千歲、旭川、美瑛、富良野、中富良野），以及 JR 北海道運行摘要
+6. **警報與 JR**：預報仍走 Open-Meteo。警報只讀氣象廳公開的 Atom／XML（`extra.xml` 與必要時 `extra_l.xml`），同一份電文不重複下載，結果快取約 5 分鐘。JR 讀官方頁面本身在用的 `top_tc.json`（快取約 5 分鐘）；`robots.txt` 未禁止 `/webunkou/`。JSON 讀不到時仍顯示「查看 JR北海道官方運行資訊」。不抓 tenki.jp，也不抓 JR 的 HTML
+7. **種子行程**：2027-02-12～18，基地 Minn 札幌大通西14。D2 札幌市區預設以地鐵與短程步行為主。
 
 ## 手機操作（mobile-first）
 
@@ -154,6 +156,7 @@ hokkaido-collab-trip/
 - `POST /api/login` `{ username, password }` → `{ token, user }`
 - `GET /api/trip` 目前行程
 - `GET /api/weather` 三城市天氣（伺服器轉打 Open-Meteo）
+- `GET /api/trip-alerts` 預報＋氣象廳警報＋JR 運行摘要（伺服器抓取並短快取；不含 tenki.jp）
 - `GET /api/health`
 - `GET /api/places?q=`（需登入）先 Geocoding（北海道範圍），沒有結果再試 Places API (New)，最後才試舊版 Find Place。舊版回 `REQUEST_DENIED` 時視為沒找到，不會擋下 Geocoding。兩邊都失敗時回 502 與簡短原因（不含金鑰）。沒有 `GOOGLE_MAPS_SERVER_KEY` 時回 503。回應只有名稱、地址、座標
 - `GET /api/route?fromLat=&fromLng=&toLat=&toLng=&mode=`  
@@ -176,6 +179,9 @@ Socket.io（需登入 JWT，成功後廣播 `trip:update`）：
 - 示範登入、非正式 OAuth；production 必須設 `JWT_SECRET`（未設會拒絕啟動）
 - 狀態以單一預設房間為主（房間碼主要用於 presence 分組）；`legs` 存在同一份行程狀態裡
 - 未啟用 Google 時，新增站點座標沿用當日第一站或住宿點。啟用後以 Places Autocomplete（或「伺服器搜尋」的 Geocoding／Places API (New)）帶入 lat/lng，並可改既有站的地點。瀏覽器舊版 Autocomplete 載入失敗時，仍可用「伺服器搜尋」
-- Open-Meteo、圖磚、OSRM 或 Google 需外網。CARTO 公開 raster 需 key，否則是浮水印
+- Open-Meteo、氣象廳 XML、JR 公開 JSON、圖磚、OSRM 或 Google 需外網。CARTO 公開 raster 需 key，否則是浮水印
+- 氣象廳電文若整份下載超過注意事項的每日上限，來源 IP 可能被擋。本服務快取結果，且同一電文網址不下載第二次
+- JR 摘要是官方狀態碼（0 無停駛／延遲訊息、1 停駛或延誤 30 分以上、2 服務時間外），不是時刻表。異常時才另外讀該區 JSON 的原文。詳情以官方頁為準
+- tenki.jp 沒有可串接的免費 API，服務條款也不允許自動抓取，所以沒有接 tenki.jp
 - 沒有 Google transit 結果時，地鐵／JR／巴士時間不是時刻表。Google transit 用查詢當下的 `departure_time`，不是 2027 年的班表
 - 種子座標先用公開資料（Wikipedia、OpenStreetMap、訂房頁）。伺服器若有 `GOOGLE_MAPS_SERVER_KEY`，啟動時會對每個種子站以「名稱＋札幌／小樽／旭川／美瑛／千歲等城市」做 Find Place，失敗再 Geocoding，並更新記憶體與 `data/state.json`。標題已被改過的站不會被蓋掉。也可執行 `node server/src/seedGeocode.js`（加 `--write` 會把座標寫回 `server/src/seed.js` 的 `SEED_COORDINATES`，過程不印出金鑰）

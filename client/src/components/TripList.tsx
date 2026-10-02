@@ -20,6 +20,7 @@ import { Fragment, useState } from 'react';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { isTravelMode, MODE_COLORS, MODE_LABELS, TRAVEL_MODES } from '../lib/travel';
 import { StopName } from './StopName';
+import { TripAlerts } from './TripAlerts';
 
 type Props = {
   stops: Stop[];
@@ -257,6 +258,8 @@ export function TripList({
           <span className="text-xs text-slate-400">登入後可編輯</span>
         )}
       </div>
+      <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 pb-safe">
+      <TripAlerts />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -264,7 +267,7 @@ export function TripList({
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <ul className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 space-y-2 pb-safe">
+          <ul className="space-y-2">
             {stops.length === 0 && (
               <li className="text-center text-slate-400 py-8 text-sm">這天尚無站點</li>
             )}
@@ -309,6 +312,7 @@ export function TripList({
           ) : null}
         </DragOverlay>
       </DndContext>
+      </div>
     </div>
   );
 }
