@@ -43,6 +43,7 @@ test('an existing state.json is kept and only empty split fields are added', () 
   assert.deepEqual(loaded.state.flights, saved.flights);
   assert.deepEqual(loaded.state.members, []);
   assert.deepEqual(loaded.state.expenses, []);
+  assert.deepEqual(loaded.state.settlements, []);
   assert.equal(loaded.state.fx.quote, null);
   assert.equal(loaded.state.fx.override, null);
   assert.equal(fs.readFileSync(file, 'utf8'), JSON.stringify(saved));
@@ -54,6 +55,7 @@ test('saved members, expenses, and fx are not replaced with defaults', () => {
     ...saved,
     members: [{ id: 'friend', displayName: '旅伴' }],
     expenses: [{ id: 'e1' }],
+    settlements: [{ id: 'st1', payerId: 'u1', payeeId: 'u2', amount: 500 }],
     fx: { quote: { twdPerJpy: 0.2 }, override: { twdPerJpy: 0.21 }, stale: false, error: null },
   };
   fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(state));
@@ -66,6 +68,7 @@ test('saved members, expenses, and fx are not replaced with defaults', () => {
   });
   assert.deepEqual(loaded.state.members, state.members);
   assert.deepEqual(loaded.state.expenses, state.expenses);
+  assert.deepEqual(loaded.state.settlements, state.settlements);
   assert.equal(loaded.state.fx.quote.twdPerJpy, 0.2);
   assert.equal(loaded.state.fx.override.twdPerJpy, 0.21);
 });

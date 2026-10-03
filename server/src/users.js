@@ -179,5 +179,11 @@ export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 
     }
   }
 
-  return { init, authenticate, register, findByUsername };
+  function publicById(id) {
+    if (typeof id !== 'string' || !id) return null;
+    const user = users.find((item) => item.id === id);
+    return user ? publicUser(user) : null;
+  }
+
+  return { init, authenticate, register, findByUsername, publicById };
 }

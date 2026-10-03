@@ -2,11 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addMember,
+  addSettlement,
   billToCsv,
   deleteExpense,
+  deleteSettlement,
   ensureBill,
   formatMinor,
   fromMinor,
+  isTripMember,
   minTransfers,
   prepareExpense,
   removeMember,
@@ -414,6 +417,7 @@ test('a saved trip without bill fields keeps its stops and starts from an empty 
   const state = ensureBill({ stops: [{ id: 's1' }], roomCode: 'HOKKAIDO2027' });
   assert.deepEqual(state.members, []);
   assert.deepEqual(state.expenses, []);
+  assert.deepEqual(state.settlements, []);
   assert.equal(state.stops[0].id, 's1');
   assert.equal(state.roomCode, 'HOKKAIDO2027');
   assert.equal(formatMinor(1500, 'JPY').replace(/,/g, ''), '¥1500');
@@ -421,9 +425,17 @@ test('a saved trip without bill fields keeps its stops and starts from an empty 
 });
 
 test('member removal is blocked while an expense still names them', () => {
+  const accounts = [
+    { id: 'a', username: 'alice', displayName: 'Alice' },
+    { id: 'u9', username: 'cara', displayName: 'Cara' },
+  ];
   let state = trip();
-  state = addMember(state, '小明').state;
-  const added = state.members.find((member) => member.displayName === '小明');
+  const addedResult = addMember(state, { username: 'cara' }, accounts);
+  assert.equal(addedResult.ok, true, addedResult.error);
+  state = addedResult.state;
+  const added = state.members.find((member) => member.id === 'u9');
+  assert.ok(added);
+  assert.equal(added.displayName, undefined);
   const saved = upsertExpense(state, {
     payerId: 'a',
     currency: 'JPY',
@@ -442,4 +454,93 @@ test('member removal is blocked while an expense still names them', () => {
     removed.state.members.some((member) => member.id === added.id),
     false,
   );
+});
+
+test('a companion is an existing account and the member id is that account id', () => {
+  const registeredId = 'u_0123456789abcdef';
+  const accounts = [
+    { id: 'u1', username: 'alice', displayName: 'Alice' },
+    { id: 'u2', username: 'bob', displayName: 'Bob' },
+    { id: registeredId, username: 'mika', displayName: 'Mika' },
+  ];
+  const state = ensureBill({
+    stops: [],
+    members: [{ id: 'm-local', displayName: '別的名字', userId: 'u1' }],
+  });
+  assert.deepEqual(state.members, [{ id: 'u1' }]);
+  assert.equal(state.members[0].userId, undefined);
+  assert.equal(state.members[0].displayName, undefined);
+  assert.equal(isTripMember(state, 'u1'), true);
+  assert.equal(isTripMember(state, 'u2'), false);
+
+  const added = addMember(state, { username: ' Bob ' }, accounts);
+  assert.equal(added.ok, true, added.error);
+  assert.deepEqual(
+    added.state.members.map((member) => member.id),
+    ['u1', 'u2'],
+  );
+  assert.equal(added.state.members[1].displayName, undefined);
+
+  const registered = addMember(added.state, { username: 'mika' }, accounts);
+  assert.equal(registered.ok, true, registered.error);
+  assert.equal(registered.state.members.at(-1).id, registeredId);
+  assert.match(registered.state.members.at(-1).id, /^u_[0-9a-f]{16}$/);
+
+  const named = addMember(state, { displayName: '小明' }, accounts);
+  assert.equal(named.ok, false);
+  const missing = addMember(state, { username: 'new@example.com' }, accounts);
+  assert.equal(missing.ok, false);
+  assert.match(missing.error, /找不到這個帳號/);
+  const duplicate = addMember(added.state, { username: 'Alice' }, accounts);
+  assert.equal(duplicate.ok, false);
+});
+
+test('a directed settlement stores payer id, payee id, and amount', () => {
+  const mika = 'u_0123456789abcdef';
+  let state = ensureBill({
+    stops: [],
+    members: [
+      { id: 'u1', displayName: 'Alice' },
+      { id: 'u2', displayName: 'Bob' },
+      { id: mika, displayName: 'Mika' },
+    ],
+  });
+  const saved = addSettlement(state, {
+    payerId: 'u1',
+    payeeId: mika,
+    amount: '1200',
+    currency: 'JPY',
+  });
+  assert.equal(saved.ok, true, saved.error);
+  const row = saved.state.settlements[0];
+  assert.equal(row.payerId, 'u1');
+  assert.equal(row.payeeId, mika);
+  assert.equal(row.amount, 1200);
+  assert.equal(row.currency, 'JPY');
+  state = saved.state;
+
+  const outsider = addSettlement(state, { payerId: 'u1', payeeId: 'u9', amount: 10, currency: 'JPY' });
+  assert.equal(outsider.ok, false);
+  const same = addSettlement(state, { payerId: 'u1', payeeId: 'u1', amount: 10, currency: 'JPY' });
+  assert.equal(same.ok, false);
+
+  const twd = addSettlement(state, { payerId: 'u2', payeeId: 'u1', amount: '5.25', currency: 'TWD' });
+  assert.equal(twd.ok, true, twd.error);
+  assert.equal(twd.state.settlements[1].payerId, 'u2');
+  assert.equal(twd.state.settlements[1].payeeId, 'u1');
+  assert.equal(twd.state.settlements[1].amount, 5.25);
+
+  const csv = billToCsv(twd.state);
+  assert.match(csv, /記下的結算,付款人,收款人,金額/);
+  assert.match(csv, /JPY,Alice,Mika,1200/);
+  assert.match(csv, /TWD,Bob,Alice,5\.25/);
+
+  const blocked = removeMember(twd.state, 'u2');
+  assert.equal(blocked.ok, false);
+  const cleared = deleteSettlement(twd.state, twd.state.settlements[1].id);
+  assert.equal(cleared.ok, true);
+  assert.equal(cleared.state.settlements.length, 1);
+  assert.equal(cleared.state.settlements[0].payerId, 'u1');
+  assert.equal(cleared.state.settlements[0].payeeId, mika);
+  assert.equal(cleared.state.settlements[0].amount, 1200);
 });

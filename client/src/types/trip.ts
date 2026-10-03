@@ -1,5 +1,5 @@
 import type { FxView } from '../../../server/src/fx.js';
-import type { BillMember, Expense } from '../../../server/src/split.js';
+import type { BillMember, Expense, Settlement } from '../../../server/src/split.js';
 
 export type {
   BillMember,
@@ -7,6 +7,7 @@ export type {
   Expense,
   ExpensePart,
   ExpenseShare,
+  Settlement,
   SplitMode,
 } from '../../../server/src/split.js';
 
@@ -55,6 +56,7 @@ export type TripState = {
   legs?: Leg[];
   members?: BillMember[];
   expenses?: Expense[];
+  settlements?: Settlement[];
   fx?: FxView;
   updatedAt: string;
 };
