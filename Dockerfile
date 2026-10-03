@@ -4,6 +4,11 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
+# Bill-split math lives with the server and is bundled into the client.
+COPY server/src/split.js /app/server/src/split.js
+COPY server/src/split.d.ts /app/server/src/split.d.ts
+COPY server/src/fx.js /app/server/src/fx.js
+COPY server/src/fx.d.ts /app/server/src/fx.d.ts
 # Vite inlines VITE_* at build time. Leave the key empty to keep Leaflet.
 # Railway/Render should pass the same variable names as build args — never bake a key into the repo.
 ARG VITE_MAP_PROVIDER=leaflet
@@ -27,6 +32,8 @@ RUN npm ci --omit=dev --prefix server
 COPY server/src ./server/src
 COPY --from=client-build /app/client/dist ./client/dist
 
+# Empty data dir only. state.json is not copied into the image.
+# Production exits if /app/data/state.json is missing; it does not seed.
 RUN mkdir -p /app/data
 
 ENV NODE_ENV=production

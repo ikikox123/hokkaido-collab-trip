@@ -1,6 +1,7 @@
 /** 瘋瘋火火北海道冒險記｜種子資料 */
 
 import { reconcileLegs } from './legs.js';
+import { defaultMembers } from './split.js';
 
 export const ROOM_CODE = (process.env.ROOM_CODE || 'HOKKAIDO2027').toUpperCase();
 
@@ -121,6 +122,8 @@ function createSeedStateWithoutLegs() {
       { day: 7, date: '2027-02-18', label: 'D7 起飛' },
     ],
     stops: createSeedStops(),
+    members: defaultMembers(),
+    expenses: [],
     updatedAt: new Date().toISOString(),
   };
 }
