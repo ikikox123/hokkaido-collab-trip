@@ -112,6 +112,11 @@ export const MODE_LABELS: Record<SplitMode, string>;
 export function defaultMembers(): BillMember[];
 export function ensureBill<T extends object>(state: T): T & BillFields;
 export function isTripMember(state: object, accountId: string | null | undefined): boolean;
+export function memberAddAllowed(
+  state: object,
+  callerId: string | null | undefined,
+  accountId: string | null | undefined,
+): { ok: true } | { ok: false; error: string };
 export function fromMinor(minor: number, currency: Currency): number;
 export function toMinor(amount: number | string, currency: Currency): number;
 export function formatMinor(minor: number, currency: Currency): string;

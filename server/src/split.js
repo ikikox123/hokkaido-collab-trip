@@ -50,6 +50,18 @@ export function isTripMember(state, accountId) {
   return ensureBill(state).members.some((member) => member.id === id);
 }
 
+/**
+ * A logged-in account may add their own account id even when the trip has no members.
+ * Adding a different account requires the caller to already be a member.
+ */
+export function memberAddAllowed(state, callerId, accountId) {
+  if (typeof callerId !== 'string' || !callerId.trim()) return fail('請先登入才能編輯');
+  if (typeof accountId !== 'string' || !accountId.trim()) return fail('找不到這個帳號');
+  if (callerId.trim() === accountId.trim()) return { ok: true };
+  if (!isTripMember(state, callerId)) return fail('只有這趟行程的旅伴可以加入別人');
+  return { ok: true };
+}
+
 export function fromMinor(minor, currency) {
   const value = Number(minor);
   if (!Number.isFinite(value)) return NaN;

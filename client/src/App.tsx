@@ -354,6 +354,7 @@ export default function App() {
               trip={trip}
               canEdit={canEdit}
               userId={user?.id ?? null}
+              username={user?.username ?? null}
               socket={socket}
               token={token}
               fx={fx}

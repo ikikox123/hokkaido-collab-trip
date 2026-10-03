@@ -10,6 +10,7 @@ import {
   formatMinor,
   fromMinor,
   isTripMember,
+  memberAddAllowed,
   minTransfers,
   prepareExpense,
   removeMember,
@@ -472,6 +473,15 @@ test('a companion is an existing account and the member id is that account id', 
   assert.equal(state.members[0].displayName, undefined);
   assert.equal(isTripMember(state, 'u1'), true);
   assert.equal(isTripMember(state, 'u2'), false);
+  const empty = ensureBill({ stops: [], members: [] });
+  assert.equal(memberAddAllowed(empty, 'u1', 'u1').ok, true);
+  const blocked = memberAddAllowed(empty, 'u1', 'u2');
+  assert.equal(blocked.ok, false);
+  const self = addMember(empty, { username: 'alice' }, accounts);
+  assert.equal(self.ok, true, self.error);
+  assert.deepEqual(self.state.members, [{ id: 'u1' }]);
+  assert.equal(memberAddAllowed(self.state, 'u1', 'u2').ok, true);
+  assert.equal(memberAddAllowed(self.state, 'u2', registeredId).ok, false);
 
   const added = addMember(state, { username: ' Bob ' }, accounts);
   assert.equal(added.ok, true, added.error);

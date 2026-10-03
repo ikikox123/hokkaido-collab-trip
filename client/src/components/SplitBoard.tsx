@@ -23,6 +23,7 @@ type Props = {
   trip: TripState;
   canEdit: boolean;
   userId: string | null;
+  username: string | null;
   socket: Socket | null;
   token: string | null;
   fx: FxView | null;
@@ -47,6 +48,7 @@ export function SplitBoard({
   trip,
   canEdit,
   userId,
+  username,
   socket,
   token,
   fx,
@@ -185,12 +187,12 @@ export function SplitBoard({
         <p className="text-sm text-slate-500">支出用原幣別記。換算只用目前匯率，讓大家看該給多少台幣或日圓。</p>
         {!canEdit && (
           <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            還沒登入也可以看帳。要記支出，按下面的新增支出。加入旅伴和記下結算，要由已登入的旅伴來做。
+            還沒登入也可以看帳。登入後可以把自己加入這趟。加入別人、記下結算，要先是旅伴。
           </p>
         )}
         {canEdit && !isMember && (
           <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            你已登入，但還不是這趟的旅伴，所以不能加入旅伴或記下結算。
+            你已登入，但還不是這趟的旅伴。先把自己加入，才能加入別人或記下結算。
           </p>
         )}
         {shareFallback && (
@@ -456,6 +458,21 @@ export function SplitBoard({
                 </li>
               ))}
             </ul>
+          )}
+          {canEdit && !isMember && (
+            <button
+              type="button"
+              className="mt-2 min-h-touch w-full rounded-xl bg-ice-600 text-base font-bold text-white"
+              onClick={() => {
+                if (!username) {
+                  onNeedLogin();
+                  return;
+                }
+                void send('member:add', { username });
+              }}
+            >
+              把我加入這趟
+            </button>
           )}
           {canSettle && (
             <form

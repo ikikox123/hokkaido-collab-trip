@@ -181,7 +181,7 @@ Socket.io（需登入 JWT，成功後廣播 `trip:update`）：
 
 - `trip:reorder` / `trip:add` / `trip:updateStop` / `trip:delete` / `trip:reset`
 - `trip:setLegMode` `{ fromStopId, toStopId, mode }` 改相鄰站交通方式並重新估算
-- `expense:upsert` / `expense:delete`、`member:add` / `member:remove`、`settlement:add` / `settlement:delete` 改分帳，同樣廣播整份行程（含 `expenses` 與 `settlements`）。不重算路線。旅伴 id 就是登入帳號 id（`alice` 是 `u1`，`bob` 是 `u2`，新註冊是 `u_` 加 16 個十六進位字）。`member:add` 傳已註冊的 `username`，把那個帳號加進這趟，不會為沒註冊的人發邀請，也不改註冊。一筆結算直接存 `payerId`、`payeeId` 與 `amount`（外加這筆金額的 `currency`）。訪客只讀。只有已登入、而且本人是這趟旅伴的人，可以加入旅伴和記下結算
+- `expense:upsert` / `expense:delete`、`member:add` / `member:remove`、`settlement:add` / `settlement:delete` 改分帳，同樣廣播整份行程（含 `expenses` 與 `settlements`）。不重算路線。旅伴 id 就是登入帳號 id（`alice` 是 `u1`，`bob` 是 `u2`，新註冊是 `u_` 加 16 個十六進位字）。`member:add` 傳已註冊的 `username`，把那個帳號加進這趟，不會為沒註冊的人發邀請，也不改註冊。一筆結算直接存 `payerId`、`payeeId` 與 `amount`（外加這筆金額的 `currency`）。訪客只讀。已登入的帳號可以把自己加入這趟，即使旅伴名單還是空的。加入別人仍要對方是已註冊帳號，而且操作者已經是旅伴。記下結算的付款人與收款人仍必須是旅伴 id
 - `fx:override` `{ basis: 'twdPerJpy' | 'jpyPerTwd', value, token }` 設定手動匯率；`fx:clearOverride` `{ token }` 改回即時。成功後廣播 `fx:update`
 
 ## 已知限制

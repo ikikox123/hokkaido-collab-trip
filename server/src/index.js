@@ -31,6 +31,7 @@ import {
   deleteSettlement,
   ensureBill,
   isTripMember,
+  memberAddAllowed,
   removeMember,
   upsertExpense,
 } from './split.js';
@@ -526,12 +527,35 @@ io.on('connection', (socket) => {
   });
 
   socket.on('member:add', ({ username, token }, ack) => {
-    if (!requireTripMember(socket, token, ack)) return;
-    const account = userStore.findByUsername(username);
-    const roster = account
-      ? [{ id: account.id, username: account.username, displayName: account.displayName }]
-      : [];
-    const result = addMember(tripState, { username: typeof username === 'string' ? username : '' }, roster);
+    const caller = verifyToken(token);
+    if (!caller) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const requested = typeof username === 'string' ? username : '';
+    if (!requested.trim()) {
+      const error = '請輸入已註冊的帳號';
+      socket.emit('error:edit', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const account = userStore.findByUsername(requested);
+    if (!account) {
+      const error = '找不到這個帳號';
+      socket.emit('error:edit', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const allowed = memberAddAllowed(tripState, caller.id, account.id);
+    if (!allowed.ok) {
+      socket.emit('error:auth', { error: allowed.error });
+      ackResult(ack, allowed);
+      return;
+    }
+    const roster = [{ id: account.id, username: account.username, displayName: account.displayName }];
+    const result = addMember(tripState, { username: requested }, roster);
     if (!result.ok) {
       socket.emit('error:edit', { error: result.error });
       ackResult(ack, result);
