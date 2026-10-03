@@ -8,6 +8,7 @@
  * Members and login accounts are the same people. A member id is the account id
  * (alice u1, bob u2, or u_ plus 16 hex for a registered account).
  * A directed settlement stores payerId, payeeId, and amount on that record.
+ * currencyBooks keeps that record separate from expense settlement.
  */
 
 export const CURRENCIES = ['JPY', 'TWD'];
@@ -315,6 +316,84 @@ export function settlementOf(state) {
     JPY: settleCurrency(base, 'JPY'),
     TWD: settleCurrency(base, 'TWD'),
   };
+}
+
+/**
+ * One book per currency.
+ * Expense nets and suggested transfers come only from expenses.
+ * Recorded rows sum payer → payee in that currency.
+ * When both exist, remaining transfers are the expense balances after those payments.
+ * Recorded payments alone do not become debts, and they do not count as settled.
+ */
+export function currencyBooks(state) {
+  const base = ensureBill(state);
+  const native = settlementOf(base);
+  const books = {};
+  for (const currency of CURRENCIES) {
+    const settled = native[currency];
+    const hasExpenses = base.expenses.some((expense) => expense.currency === currency);
+    const recorded = sumRecordedTransfers(base.settlements, currency);
+    const hasRecorded = recorded.length > 0;
+    const spentMinor = base.expenses
+      .filter((expense) => expense.currency === currency)
+      .reduce((sum, expense) => sum + expenseAmountMinor(expense), 0);
+    let remaining = null;
+    let remainingSettled = false;
+    if (hasExpenses && hasRecorded) {
+      const minor = new Map(settled.nets.map((net) => [net.memberId, net.netMinor]));
+      for (const row of recorded) {
+        minor.set(row.payerId, (minor.get(row.payerId) || 0) + row.amountMinor);
+        minor.set(row.payeeId, (minor.get(row.payeeId) || 0) - row.amountMinor);
+      }
+      remaining = transfersFromMinorMap(minor, currency);
+      remainingSettled = remaining.length === 0;
+    }
+    books[currency] = {
+      currency,
+      spentMinor,
+      hasExpenses,
+      hasRecorded,
+      recordedOnly: hasRecorded && !hasExpenses,
+      nets: hasExpenses ? settled.nets : null,
+      suggested: hasExpenses && !hasRecorded ? settled.transfers : null,
+      expenseBalanced: hasExpenses && !hasRecorded && settled.transfers.length === 0,
+      remaining,
+      remainingSettled,
+      recorded,
+    };
+  }
+  return books;
+}
+
+function sumRecordedTransfers(settlements, currency) {
+  const order = [];
+  const totals = new Map();
+  for (const row of settlements) {
+    if (row.currency !== currency) continue;
+    const minor = Number.isInteger(row.amountMinor) ? row.amountMinor : toMinor(row.amount, currency);
+    if (!Number.isInteger(minor) || minor <= 0) continue;
+    const key = `${row.payerId}\0${row.payeeId}`;
+    if (!totals.has(key)) {
+      totals.set(key, { payerId: row.payerId, payeeId: row.payeeId, amountMinor: 0 });
+      order.push(key);
+    }
+    totals.get(key).amountMinor += minor;
+  }
+  return order.map((key) => {
+    const row = totals.get(key);
+    return { ...row, amount: fromMinor(row.amountMinor, currency) };
+  });
+}
+
+function transfersFromMinorMap(minor, currency) {
+  return minTransfers(
+    [...minor.entries()].filter(([, amount]) => amount !== 0).map(([id, amount]) => ({ id, amount })),
+  ).map((transfer) => ({
+    fromId: transfer.fromId,
+    toId: transfer.toId,
+    amountMinor: transfer.amount,
+    amount: fromMinor(transfer.amount, currency),
+  }));
 }
 
 const RATE_SCALE = 100_000_000n;
