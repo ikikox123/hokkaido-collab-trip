@@ -4,7 +4,6 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -28,12 +27,14 @@ import { getTripAlerts } from './tripAlerts.js';
 import { addMember, deleteExpense, ensureBill, removeMember, renameMember, upsertExpense } from './split.js';
 import { createFxBook, parseOverride, presentFx } from './fx.js';
 import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
+import { createUserStore } from './users.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const FX_POLL_MS = 3 * 60 * 1000;
-const FX_MIN_INTERVAL_MS = 90 * 1000;
+const FX_MIN_INTERVAL_MS = 90 * 1000
 const CLIENT_DIST = path.resolve(__dirname, '../../client/dist');
 const isProd = process.env.NODE_ENV === 'production';
 const JWT_SECRET = (() => {
@@ -56,15 +57,16 @@ const io = new Server(httpServer, {
   cors: { origin: true, credentials: true },
 });
 
-/** Demo users with password demo1234 — hash computed at boot */
-let users = [];
+/** Demo users (alice/bob) plus accounts registered into data/users.json. */
+const userStore = createUserStore({ dataFile: USERS_FILE });
 
-async function initUsers() {
-  const hash = await bcrypt.hash('demo1234', 10);
-  users = [
-    { id: 'u1', username: 'alice', displayName: 'Alice', passwordHash: hash },
-    { id: 'u2', username: 'bob', displayName: 'Bob', passwordHash: hash },
-  ];
+function signUser(user) {
+  const token = jwt.sign(
+    { id: user.id, username: user.username, displayName: user.displayName },
+    JWT_SECRET,
+    { expiresIn: '7d' },
+  );
+  return { token, user };
 }
 
 function saveState(state) {
@@ -127,23 +129,17 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) {
-    return res.status(400).json({ error: '請輸入帳號與密碼' });
-  }
-  const user = users.find((u) => u.username === String(username).toLowerCase());
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    return res.status(401).json({ error: '帳號或密碼錯誤' });
-  }
-  const token = jwt.sign(
-    { id: user.id, username: user.username, displayName: user.displayName },
-    JWT_SECRET,
-    { expiresIn: '7d' },
-  );
-  res.json({
-    token,
-    user: { id: user.id, username: user.username, displayName: user.displayName },
-  });
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const result = await userStore.authenticate(body.username, body.password);
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.json(signUser(result.user));
+});
+
+app.post('/api/register', async (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const result = await userStore.register({ username: body.username, password: body.password });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json(signUser(result.user));
 });
 
 app.get('/api/fx', async (_req, res) => {
@@ -637,7 +633,7 @@ async function applySeedCorrection(roomCode = ROOM_CODE) {
   }
 }
 
-await initUsers();
+await userStore.init();
 
 // Production: serve Vite build from client/dist (single-port deploy)
 if (fs.existsSync(CLIENT_DIST)) {

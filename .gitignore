@@ -22,6 +22,7 @@ client/.env
 data/state.json
 data/geocode-cache.json
 hokkaido-trip-snapshot.json
+data/users.json
 
 # logs
 *.log
