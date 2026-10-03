@@ -137,7 +137,6 @@ export const catalog = {
   approxAmount: { 'zh-Hant': '約 {amount}', ja: '約 {amount}', en: 'about {amount}' },
   stopDeleted: { 'zh-Hant': '站點已刪除', ja: '地点は削除済み', en: 'Stop was deleted' },
   itineraryWord: { 'zh-Hant': '行程', ja: '行程', en: 'Itinerary' },
-  listSep: { 'zh-Hant': '、', ja: '、', en: ', ' },
   companions: { 'zh-Hant': '旅伴', ja: '同行者', en: 'Travelers' },
   companionsHint: {
     'zh-Hant': '旅伴就是已經註冊的帳號。加入時輸入那個帳號。',

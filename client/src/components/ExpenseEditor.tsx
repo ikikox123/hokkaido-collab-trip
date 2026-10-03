@@ -303,7 +303,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                     {on && draft.mode === 'custom' && (
                       <input
                         inputMode="decimal"
-                        aria-label={t('amountOf', { name: member.displayName })}
+                        aria-label={t('amountOf', { name: member.displayName || member.username || member.id })}
                         className="mt-1 w-full min-h-touch rounded-lg border border-slate-200 px-3 text-base"
                         placeholder={t('amountPlaceholder')}
                         value={draft.values[member.id] ?? ''}
@@ -318,7 +318,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                     {on && draft.mode === 'ratio' && (
                       <input
                         inputMode="decimal"
-                        aria-label={t('ratioOf', { name: member.displayName })}
+                        aria-label={t('ratioOf', { name: member.displayName || member.username || member.id })}
                         className="mt-1 w-full min-h-touch rounded-lg border border-slate-200 px-3 text-base"
                         placeholder={t('weightPlaceholder')}
                         value={draft.values[member.id] ?? ''}
