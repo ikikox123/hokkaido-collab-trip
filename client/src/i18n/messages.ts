@@ -9,9 +9,9 @@ type Entry = Record<Locale, string>;
 export const catalog = {
   language: { 'zh-Hant': '語言', ja: '言語', en: 'Language' },
   pageTitle: {
-    'zh-Hant': '北海道協作行程｜瘋瘋火火',
-    ja: '北海道の共同行程｜瘋瘋火火',
-    en: 'Hokkaido trip together',
+    'zh-Hant': '瘋瘋火火北海道冒險記',
+    ja: '北海道アドベンチャー（瘋瘋火火）',
+    en: 'Hokkaido Adventure (Fengfeng Huohuo)',
   },
   listSep: { 'zh-Hant': '、', ja: '、', en: ', ' },
   metaSep: { 'zh-Hant': '，', ja: '、', en: ', ' },
