@@ -18,7 +18,9 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Fragment, useState } from 'react';
 import type { Leg, Stop, TravelMode } from '../types/trip';
-import { isTravelMode, MODE_COLORS, MODE_LABELS, TRAVEL_MODES } from '../lib/travel';
+import { useI18n } from '../i18n/I18nProvider';
+import { travelLabel } from '../i18n/labels';
+import { isTravelMode, MODE_COLORS, TRAVEL_MODES } from '../lib/travel';
 import { StopName } from './StopName';
 
 type Props = {
@@ -99,6 +101,7 @@ function SortableItem({
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const { t } = useI18n();
   const accent = isNext ? 'next' : selected ? 'selected' : 'default';
 
   return (
@@ -113,7 +116,7 @@ function SortableItem({
           <button
             type="button"
             className="flex min-h-touch min-w-touch shrink-0 touch-none cursor-grab items-center justify-center text-slate-400 active:cursor-grabbing active:text-ice-600"
-            aria-label="拖曳排序"
+            aria-label={t('dragSort')}
             {...attributes}
             {...listeners}
           >
@@ -132,7 +135,7 @@ function SortableItem({
             <StopName title={stop.title} canEdit={canEdit} onRename={onRename} />
             {isNext && (
               <span className="shrink-0 rounded-md bg-pink-100 px-2 py-0.5 text-sm font-bold text-pink-700">
-                下一站
+                {t('nextStop')}
               </span>
             )}
           </div>
@@ -149,7 +152,7 @@ function SortableItem({
                 onChange={(e) => onUpdateTime(e.target.value)}
               />
             ) : (
-              <span className="font-medium text-slate-700">{stop.time || '時間未定'}</span>
+              <span className="font-medium text-slate-700">{stop.time || t('timeUnset')}</span>
             )}
             {stop.notes && <span className="min-w-0 flex-1 truncate">{stop.notes}</span>}
           </div>
@@ -165,19 +168,19 @@ function SortableItem({
                   onEditPlace();
                 }}
               >
-                地點
+                {t('placeButton')}
               </button>
             )}
             <button
               type="button"
               className="min-h-touch min-w-touch text-sm font-medium text-red-500"
-              aria-label="刪除"
+              aria-label={t('delete')}
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
             >
-              刪
+              {t('deleteShort')}
             </button>
           </div>
         )}
@@ -199,9 +202,10 @@ function LegConnector({
   canEdit: boolean;
   onSetMode: (mode: TravelMode) => void;
 }) {
+  const { t } = useI18n();
   const mode: TravelMode = leg?.mode && isTravelMode(leg.mode) ? leg.mode : 'walk';
   return (
-    <li className="flex items-stretch gap-1" aria-label={`前往下一站，${from.title} 到 ${to.title}`}>
+    <li className="flex items-stretch gap-1" aria-label={t('toNextAria', { from: from.title, to: to.title })}>
       <div className="relative flex w-8 shrink-0 items-center justify-center self-stretch" aria-hidden>
         <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-ice-300" />
         <span
@@ -210,10 +214,10 @@ function LegConnector({
         />
       </div>
       <div className="min-w-0 flex-1 pb-2 pr-1">
-        <p className="text-sm font-bold text-ice-700">前往下一站</p>
+        <p className="text-sm font-bold text-ice-700">{t('toNext')}</p>
         {canEdit ? (
           <select
-            aria-label={`前往下一站，${from.title} 到 ${to.title} 的交通方式`}
+            aria-label={t('toNextModeAria', { from: from.title, to: to.title })}
             className="mt-1 min-h-touch w-full rounded-lg border border-slate-200 bg-white px-2 text-base text-slate-800"
             value={mode}
             onChange={(e) => {
@@ -222,14 +226,14 @@ function LegConnector({
           >
             {TRAVEL_MODES.map((m) => (
               <option key={m} value={m}>
-                {MODE_LABELS[m]}
+                {travelLabel(t, m)}
               </option>
             ))}
           </select>
         ) : (
-          <p className="mt-0.5 text-base font-medium text-slate-800">{MODE_LABELS[mode]}</p>
+          <p className="mt-0.5 text-base font-medium text-slate-800">{travelLabel(t, mode)}</p>
         )}
-        <p className="mt-1 text-sm leading-snug text-slate-600">{leg?.summary || '路線估算中…'}</p>
+        <p className="mt-1 text-sm leading-snug text-slate-600">{leg?.summary || t('estimating')}</p>
       </div>
     </li>
   );
@@ -250,6 +254,7 @@ export function TripList({
   onEditPlace,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const { t } = useI18n();
 
   // Touch: delay so vertical scroll still works; Pointer for mouse/stylus
   const sensors = useSensors(
@@ -277,17 +282,17 @@ export function TripList({
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
-        <h2 className="font-bold text-ice-700">行程站點</h2>
+        <h2 className="font-bold text-ice-700">{t('stopsTitle')}</h2>
         {canEdit ? (
           <button
             type="button"
             onClick={onAdd}
             className="min-h-touch min-w-touch px-3 rounded-xl bg-ice-600 text-white text-sm font-semibold active:bg-ice-700"
           >
-            ＋ 加入
+            {t('addStopButton')}
           </button>
         ) : (
-          <span className="text-sm text-slate-500">登入後可編輯</span>
+          <span className="text-sm text-slate-500">{t('loginToEditHint')}</span>
         )}
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 pb-safe">
@@ -300,7 +305,7 @@ export function TripList({
         <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           <ul>
             {stops.length === 0 && (
-              <li className="py-8 text-center text-base text-slate-500">這天尚無站點</li>
+              <li className="py-8 text-center text-base text-slate-500">{t('noStopsToday')}</li>
             )}
             {stops.map((stop, i) => {
               const next = stops[i + 1];

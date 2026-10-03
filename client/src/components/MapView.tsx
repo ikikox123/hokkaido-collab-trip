@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Leg, Stop } from '../types/trip';
 import type { LodgingPoint } from '../lib/dayView';
+import { useI18n } from '../i18n/I18nProvider';
 import { usesGoogleMaps } from '../lib/mapProvider';
 import { LeafletMapView } from './LeafletMapView';
 import { GoogleMapView } from './GoogleMapView';
@@ -19,6 +20,7 @@ type Props = {
 export function MapView(props: Props) {
   const wantGoogle = usesGoogleMaps();
   const [googleFailed, setGoogleFailed] = useState(false);
+  const { t } = useI18n();
 
   if (wantGoogle && !googleFailed) {
     return <GoogleMapView {...props} onUnavailable={() => setGoogleFailed(true)} />;
@@ -28,7 +30,7 @@ export function MapView(props: Props) {
     <div className="relative flex h-full min-h-0 w-full flex-1 flex-col">
       {googleFailed && (
         <div className="shrink-0 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">
-          Google 地圖無法載入，已改用備援地圖
+          {t('googleFallback')}
         </div>
       )}
       <LeafletMapView {...props} />

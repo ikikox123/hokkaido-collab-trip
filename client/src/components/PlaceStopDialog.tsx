@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { localizeError } from '../i18n/errors';
+import { useI18n } from '../i18n/I18nProvider';
 import { loadGoogleMaps, type GoogleAutocomplete, type GoogleMapsNS } from '../lib/googleLoader';
 import { selectionFromPlace } from '../lib/placeLabel';
 import { holdPlaceSuggestions, releasePlaceSuggestions } from '../lib/placeSuggestions';
@@ -32,6 +34,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [suggestState, setSuggestState] = useState<'loading' | 'ready' | 'off'>('loading');
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!open) return;
@@ -196,17 +199,17 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
         className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl"
       >
         <h2 id="place-dialog-title" className="text-lg font-bold text-ice-800">
-          {mode === 'add' ? '加入站點' : '更改地點'}
+          {mode === 'add' ? t('addStopTitle') : t('changePlaceTitle')}
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           {suggestState === 'ready'
-            ? '選取建議後，站點名稱用店名或地標，搜尋欄顯示地址。名稱和搜尋文字不必相同。'
+            ? t('suggestReady')
             : suggestState === 'off'
-              ? '瀏覽器地點建議無法使用。輸入店名或地址後按「伺服器搜尋」。'
-              : '正在準備地點建議…沒有建議時可按「伺服器搜尋」。'}
+              ? t('suggestOff')
+              : t('suggestLoading')}
         </p>
         <label className="mt-3 block text-sm font-medium text-slate-700" htmlFor="place-query">
-          搜尋地點
+          {t('searchPlace')}
         </label>
         <input
           id="place-query"
@@ -220,11 +223,11 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
             setAddress('');
           }}
           className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-ice-500 focus:ring-2 focus:ring-ice-500/30"
-          placeholder="例如 札幌市時計台"
+          placeholder={t('placeExample')}
           autoComplete="off"
         />
         <label className="mt-3 block text-sm font-medium text-slate-700" htmlFor="place-title">
-          站點名稱
+          {t('stopName')}
         </label>
         <input
           id="place-title"
@@ -240,7 +243,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
             </span>
           </p>
         )}
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-2 text-sm text-red-600">{localizeError(error, t)}</p>}
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
@@ -248,18 +251,18 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
             onClick={() => void searchServer()}
             disabled={searching}
           >
-            {searching ? '搜尋中…' : '伺服器搜尋'}
+            {searching ? t('searching') : t('serverSearch')}
           </button>
           <button
             type="submit"
             className="min-h-touch flex-1 rounded-xl bg-ice-600 font-semibold text-white disabled:opacity-50"
             disabled={searching || (lat == null && !query.trim())}
           >
-            {lat == null ? '搜尋並使用' : mode === 'add' ? '加入' : '更新'}
+            {lat == null ? t('searchAndUse') : mode === 'add' ? t('join') : t('updatePlace')}
           </button>
         </div>
         <button type="button" className="mt-2 min-h-touch w-full rounded-xl text-slate-600" onClick={onClose}>
-          取消
+          {t('cancel')}
         </button>
       </form>
     </div>

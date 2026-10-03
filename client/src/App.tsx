@@ -177,9 +177,9 @@ export default function App() {
 
   const canEdit = Boolean(user && token);
 
-  function handleLogin(u: User, t: string) {
+  function handleLogin(u: User, nextToken: string) {
     setUser(u);
-    setToken(t);
+    setToken(nextToken);
     showToast(t('welcome', { name: u.displayName }));
   }
 

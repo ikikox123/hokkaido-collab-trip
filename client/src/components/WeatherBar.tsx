@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { WeatherCity } from '../types/trip';
+import { localizeError } from '../i18n/errors';
+import { useI18n } from '../i18n/I18nProvider';
+import { weatherNames } from '../i18n/labels';
 import { weatherLabel } from '../lib/weather';
 
 const SUCCESS_MS = 10 * 60 * 1000;
@@ -12,6 +15,7 @@ export function WeatherBar() {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const { t } = useI18n();
 
   useEffect(() => {
     let cancelled = false;
@@ -67,11 +71,11 @@ export function WeatherBar() {
 
   return (
     <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 py-2 bg-ice-700/95 text-white text-sm">
-      {error && <span className="opacity-80 shrink-0">天氣暫時無法更新</span>}
-      {!error && warning && <span className="opacity-80 shrink-0">{warning}</span>}
-      {!error && !warning && cities.length === 0 && <span className="opacity-70 shrink-0">載入天氣…</span>}
+      {error && <span className="opacity-80 shrink-0">{localizeError(error, t)}</span>}
+      {!error && warning && <span className="opacity-80 shrink-0">{localizeError(warning, t)}</span>}
+      {!error && !warning && cities.length === 0 && <span className="opacity-70 shrink-0">{t('weatherLoadingDetail')}</span>}
       {cities.map((c) => {
-        const w = weatherLabel(c.weatherCode);
+        const w = weatherLabel(c.weatherCode, weatherNames(t));
         return (
           <div
             key={c.id}
@@ -93,7 +97,7 @@ export function WeatherBar() {
           onClick={() => setReloadKey((key) => key + 1)}
           className="shrink-0 rounded-full bg-white/15 px-3 min-h-touch text-xs font-medium"
         >
-          重新整理
+          {t('refresh')}
         </button>
       )}
     </div>

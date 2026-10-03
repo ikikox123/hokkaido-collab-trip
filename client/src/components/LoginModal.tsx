@@ -12,16 +12,12 @@ type Props = {
 
 type Mode = 'login' | 'register';
 
-function blankCredentialMessage(
-  username: string,
-  password: string,
-  copy: { both: string; username: string; password: string },
-): string | null {
+function blankCredentialMessage(username: string, password: string): string | null {
   const name = username.trim();
   const passBlank = password.trim() === '';
-  if (!name && passBlank) return copy.both;
-  if (!name) return copy.username;
-  if (passBlank) return copy.password;
+  if (!name && passBlank) return '請輸入帳號與密碼';
+  if (!name) return '請輸入帳號';
+  if (passBlank) return '請輸入密碼';
   return null;
 }
 
@@ -51,18 +47,14 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const blank = blankCredentialMessage(username, password, {
-      both: t('enterBoth'),
-      username: t('enterUsername'),
-      password: t('enterPassword'),
-    });
+    const blank = blankCredentialMessage(username, password);
     if (blank) {
       setError(blank);
       return;
     }
     setLoading(true);
     setError(null);
-    const fallback = isRegister ? t('registerFailed') : t('loginFailed');
+    const fallback = isRegister ? '註冊失敗，請稍後再試' : '登入失敗，請稍後再試';
     try {
       const submit = isRegister ? registerRequest : loginRequest;
       const data = await submit(username.trim(), password);
@@ -70,8 +62,7 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
       onLogin(data.user, data.token);
       onClose();
     } catch (err) {
-      const message = err instanceof Error ? err.message : fallback;
-      setError(localizeError(message, t));
+      setError(err instanceof Error ? err.message : fallback);
     } finally {
       setLoading(false);
     }
@@ -130,7 +121,7 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
           </label>
           {error && (
             <p className="text-sm text-red-600" role="alert">
-              {error}
+              {localizeError(error, t)}
             </p>
           )}
           <button

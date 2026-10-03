@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { dayCamera, fitKeyFor, SAPPORO_BASE, type LodgingPoint } from '../lib/dayView';
+import { useI18n } from '../i18n/I18nProvider';
 import { MODE_COLORS } from '../lib/travel';
 import { loadGoogleMaps, markerIconUrl, type GoogleMap, type GoogleMapsNS } from '../lib/googleLoader';
 import { MapChrome } from './MapChrome';
@@ -38,9 +39,19 @@ function lineFor(leg: Leg, stops: Stop[]) {
 
 const STOP_TITLE_MAX = 80;
 
+type PopupCopy = {
+  rename: string;
+  editName: (title: string) => string;
+  placeName: string;
+  nameBlank: string;
+  nameTooLong: string;
+  nextStop: string;
+};
+
 function popupNode(
   stop: Stop,
   isNext: boolean,
+  copy: PopupCopy,
   edit?: { canEdit: boolean; onRename: (title: string) => void },
 ) {
   const root = document.createElement('div');
@@ -67,8 +78,8 @@ function popupNode(
   if (edit?.canEdit) {
     const renameBtn = document.createElement('button');
     renameBtn.type = 'button';
-    renameBtn.textContent = '改名';
-    renameBtn.setAttribute('aria-label', `編輯地點名稱：${stop.title}`);
+    renameBtn.textContent = copy.rename;
+    renameBtn.setAttribute('aria-label', copy.editName(stop.title));
     renameBtn.style.cssText =
       'margin-top:6px;min-height:44px;padding:0 12px;border:0;border-radius:8px;background:#e8f1fa;color:#1e4f8a;font:inherit;font-size:14px;font-weight:600;';
 
@@ -79,7 +90,7 @@ function popupNode(
       const form = document.createElement('form');
       form.style.marginTop = '6px';
       const input = document.createElement('input');
-      input.setAttribute('aria-label', '地點名稱');
+      input.setAttribute('aria-label', copy.placeName);
       input.enterKeyHint = 'done';
       input.autocomplete = 'off';
       input.maxLength = STOP_TITLE_MAX;
@@ -90,12 +101,12 @@ function popupNode(
       const save = (raw: string) => {
         const next = raw.trim();
         if (!next) {
-          showError('名稱不可空白');
+          showError(copy.nameBlank);
           input.value = stop.title;
           return;
         }
         if (next.length > STOP_TITLE_MAX) {
-          showError('地點名稱過長');
+          showError(copy.nameTooLong);
           return;
         }
         root.querySelector('[data-rename-error]')?.remove();
@@ -123,7 +134,7 @@ function popupNode(
     title.style.cursor = 'pointer';
     title.setAttribute('role', 'button');
     title.tabIndex = 0;
-    title.setAttribute('aria-label', `編輯地點名稱：${stop.title}`);
+    title.setAttribute('aria-label', copy.editName(stop.title));
     title.addEventListener('click', openEditor);
     title.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') openEditor(event);
@@ -149,7 +160,7 @@ function popupNode(
     next.style.marginTop = '4px';
     next.style.fontWeight = '600';
     next.style.color = '#db2777';
-    next.textContent = '下一站';
+    next.textContent = copy.nextStop;
     root.appendChild(next);
   }
   return root;
@@ -178,6 +189,23 @@ export function GoogleMapView({
   onRenameRef.current = onRename;
   const canEditRef = useRef(canEdit);
   canEditRef.current = canEdit;
+  const { t } = useI18n();
+  const copyRef = useRef<PopupCopy>({
+    rename: '',
+    editName: (title) => title,
+    placeName: '',
+    nameBlank: '',
+    nameTooLong: '',
+    nextStop: '',
+  });
+  copyRef.current = {
+    rename: t('rename'),
+    editName: (title) => t('editPlaceName', { title }),
+    placeName: t('placeName'),
+    nameBlank: t('nameBlank'),
+    nameTooLong: t('nameTooLong'),
+    nextStop: t('nextStop'),
+  };
   const onUnavailableRef = useRef(onUnavailable);
   onUnavailableRef.current = onUnavailable;
 
@@ -348,7 +376,7 @@ export function GoogleMapView({
       marker.addListener('click', () => {
         onSelectRef.current(stop.id);
         info.setContent(
-          popupNode(stop, isNext, {
+          popupNode(stop, isNext, copyRef.current, {
             canEdit: canEditRef.current,
             onRename: (title) => onRenameRef.current?.(stop.id, title),
           }),
@@ -379,7 +407,7 @@ export function GoogleMapView({
         <button
           type="button"
           className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-xl font-bold text-slate-800 shadow"
-          aria-label="放大"
+          aria-label={t('zoomIn')}
           onClick={() => zoomBy(1)}
         >
           +
@@ -387,7 +415,7 @@ export function GoogleMapView({
         <button
           type="button"
           className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-xl font-bold text-slate-800 shadow"
-          aria-label="縮小"
+          aria-label={t('zoomOut')}
           onClick={() => zoomBy(-1)}
         >
           −
@@ -395,10 +423,10 @@ export function GoogleMapView({
       </div>
       {status === 'loading' && (
         <div className="absolute inset-0 z-[300] flex items-center justify-center bg-snow-100/80 text-sm text-ice-700">
-          載入 Google 地圖…
+          {t('loadingGoogle')}
         </div>
       )}
-      <MapChrome empty={stops.length === 0} modes={modesInView} providerLabel="Google 地圖" />
+      <MapChrome empty={stops.length === 0} modes={modesInView} providerLabel={t('googleMaps')} />
     </div>
   );
 }
