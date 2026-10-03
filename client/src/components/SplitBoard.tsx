@@ -23,6 +23,7 @@ type Props = {
   trip: TripState;
   canEdit: boolean;
   userId: string | null;
+  username: string | null;
   socket: Socket | null;
   token: string | null;
   fx: FxView | null;
@@ -47,6 +48,7 @@ export function SplitBoard({
   trip,
   canEdit,
   userId,
+  username,
   socket,
   token,
   fx,
@@ -56,16 +58,22 @@ export function SplitBoard({
 }: Props) {
   const members = trip.members ?? [];
   const expenses = trip.expenses ?? [];
+  const settlements = trip.settlements ?? [];
   const [filter, setFilter] = useState<Filter>('all');
   const [editor, setEditor] = useState<Expense | null | 'new'>(null);
   const [pending, setPending] = useState(false);
-  const [rename, setRename] = useState<{ id: string; value: string } | null>(null);
-  const [memberName, setMemberName] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [payerId, setPayerId] = useState('');
+  const [payeeId, setPayeeId] = useState('');
+  const [settleAmount, setSettleAmount] = useState('');
+  const [settleCurrency, setSettleCurrency] = useState<Currency>('JPY');
   const [formError, setFormError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shareFallback, setShareFallback] = useState<string | null>(null);
   const [settleIn, setSettleIn] = useState<Currency>('TWD');
-  const selfId = members.find((member) => member.userId && member.userId === userId)?.id ?? null;
+  const isMember = Boolean(userId && members.some((member) => member.id === userId));
+  const canSettle = Boolean(canEdit && isMember);
+  const selfId = isMember ? userId : null;
   const settlement = useMemo(() => settlementOf({ ...trip, members, expenses }), [trip, members, expenses]);
   const rate = fx?.effective?.twdPerJpy;
   const cross = useMemo(
@@ -104,6 +112,15 @@ export function SplitBoard({
     } finally {
       setPending(false);
     }
+  }
+
+  async function sendAsMember(event: string, payload: Record<string, unknown>) {
+    if (!canSettle) {
+      if (!canEdit || !token) onNeedLogin();
+      else setFormError('只有這趟行程的旅伴可以這樣做');
+      return { ok: false, error: '只有這趟行程的旅伴可以這樣做' };
+    }
+    return send(event, payload);
   }
 
   function startAdd() {
@@ -170,7 +187,12 @@ export function SplitBoard({
         <p className="text-sm text-slate-500">支出用原幣別記。換算只用目前匯率，讓大家看該給多少台幣或日圓。</p>
         {!canEdit && (
           <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            還沒登入也可以看帳。要記一筆，按下面的新增支出。
+            還沒登入也可以看帳。登入後可以把自己加入這趟。加入別人、記下結算，要先是旅伴。
+          </p>
+        )}
+        {canEdit && !isMember && (
+          <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+            你已登入，但還不是這趟的旅伴。先把自己加入，才能加入別人或記下結算。
           </p>
         )}
         {shareFallback && (
@@ -405,87 +427,188 @@ export function SplitBoard({
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3">
           <h3 className="text-base font-bold text-ice-700">旅伴</h3>
-          <ul className="mt-2">
-            {members.map((member) => (
-              <li key={member.id} className="border-t border-slate-100 py-2">
-                {rename?.id === member.id ? (
-                  <form
-                    className="flex gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void send('member:rename', { id: member.id, displayName: rename.value }).then((result) => {
-                        if (result.ok) setRename(null);
-                      });
-                    }}
-                  >
-                    <input
-                      className="min-w-0 flex-1 min-h-touch rounded-xl border border-slate-200 px-3 text-base"
-                      value={rename.value}
-                      maxLength={20}
-                      onChange={(event) => setRename({ id: member.id, value: event.target.value })}
-                    />
-                    <button type="submit" className="min-h-touch shrink-0 rounded-xl bg-ice-600 px-3 text-sm font-bold text-white">
-                      儲存
-                    </button>
-                    <button
-                      type="button"
-                      className="min-h-touch shrink-0 rounded-xl bg-snow-100 px-3 text-sm font-bold"
-                      onClick={() => setRename(null)}
-                    >
-                      取消
-                    </button>
-                  </form>
-                ) : (
+          <p className="mt-1 text-sm text-slate-500">旅伴就是已經註冊的帳號。加入時輸入那個帳號。</p>
+          {members.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-600">還沒有旅伴</p>
+          ) : (
+            <ul className="mt-2">
+              {members.map((member) => (
+                <li key={member.id} className="border-t border-slate-100 py-2">
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-base font-semibold">{member.displayName}</p>
-                      {member.userId && <p className="text-sm text-slate-500">可登入</p>}
+                      <p className="truncate text-base font-semibold">
+                        {member.displayName || '（未知帳號）'}
+                        {member.id === selfId ? '（你）' : ''}
+                      </p>
+                      {member.username && <p className="text-sm text-slate-500">帳號 {member.username}</p>}
                     </div>
-                    {canEdit && (
-                      <>
-                        <button
-                          type="button"
-                          className="min-h-touch shrink-0 rounded-xl bg-snow-100 px-3 text-sm font-bold"
-                          onClick={() => setRename({ id: member.id, value: member.displayName })}
-                        >
-                          改名
-                        </button>
-                        <button
-                          type="button"
-                          className="min-h-touch shrink-0 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600"
-                          onClick={() => {
-                            if (!confirm(`確定移除「${member.displayName}」？`)) return;
-                            void send('member:remove', { id: member.id });
-                          }}
-                        >
-                          移除
-                        </button>
-                      </>
+                    {canSettle && (
+                      <button
+                        type="button"
+                        className="min-h-touch shrink-0 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600"
+                        onClick={() => {
+                          if (!confirm(`確定移除「${member.displayName || member.username || '這位旅伴'}」？`)) return;
+                          void sendAsMember('member:remove', { id: member.id });
+                        }}
+                      >
+                        移除
+                      </button>
                     )}
                   </div>
-                )}
-              </li>
-            ))}
-          </ul>
-          {canEdit && (
+                </li>
+              ))}
+            </ul>
+          )}
+          {canEdit && !isMember && (
+            <button
+              type="button"
+              className="mt-2 min-h-touch w-full rounded-xl bg-ice-600 text-base font-bold text-white"
+              onClick={() => {
+                if (!username) {
+                  onNeedLogin();
+                  return;
+                }
+                void send('member:add', { username });
+              }}
+            >
+              把我加入這趟
+            </button>
+          )}
+          {canSettle && (
             <form
               className="mt-2 flex gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                void send('member:add', { displayName: memberName }).then((result) => {
-                  if (result.ok) setMemberName('');
+                void sendAsMember('member:add', { username: accountName }).then((result) => {
+                  if (result.ok) setAccountName('');
                 });
               }}
             >
               <input
-                className="min-w-0 flex-1 min-h-touch rounded-xl border border-slate-200 px-3 text-base"
-                value={memberName}
-                maxLength={20}
-                placeholder="加入旅伴"
-                onChange={(event) => setMemberName(event.target.value)}
+                className="min-h-touch min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-base"
+                value={accountName}
+                maxLength={32}
+                placeholder="已註冊的帳號"
+                aria-label="旅伴帳號"
+                autoCapitalize="none"
+                autoCorrect="off"
+                onChange={(event) => setAccountName(event.target.value)}
               />
               <button type="submit" className="min-h-touch shrink-0 rounded-xl bg-ice-600 px-4 text-sm font-bold text-white">
                 加入
+              </button>
+            </form>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <h3 className="text-base font-bold text-ice-700">記下的結算</h3>
+          <p className="mt-1 text-sm text-slate-500">直接記下誰要付給誰。付款人和收款人都是這趟的旅伴。</p>
+          {settlements.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-600">還沒有記下結算</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {settlements.map((row) => (
+                <li key={row.id} className="rounded-xl bg-snow-50 px-3 py-2">
+                  <p className="text-base font-semibold text-slate-800">
+                    {nameOf(row.payerId)} 付給 {nameOf(row.payeeId)}
+                  </p>
+                  <p className="text-lg font-bold text-ice-700">
+                    {formatMinor(
+                      Number.isInteger(row.amountMinor) ? row.amountMinor : toMinor(row.amount, row.currency),
+                      row.currency,
+                    )}
+                  </p>
+                  {canSettle && (
+                    <button
+                      type="button"
+                      className="mt-2 min-h-touch rounded-xl border border-red-200 px-3 text-sm font-bold text-red-700"
+                      onClick={() => {
+                        if (!confirm('確定刪除這筆結算？')) return;
+                        void sendAsMember('settlement:delete', { id: row.id });
+                      }}
+                    >
+                      刪除
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {canSettle && members.length < 2 && (
+            <p className="mt-2 text-sm text-slate-600">要有兩位旅伴才能記下誰付給誰。</p>
+          )}
+          {canSettle && members.length >= 2 && (
+            <form
+              className="mt-3 space-y-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const payer = payerId || selfId || members[0]?.id || '';
+                const payee = payeeId || members.find((member) => member.id !== payer)?.id || '';
+                void sendAsMember('settlement:add', {
+                  settlement: { payerId: payer, payeeId: payee, amount: settleAmount, currency: settleCurrency },
+                }).then((result) => {
+                  if (result.ok) setSettleAmount('');
+                });
+              }}
+            >
+              <label className="block text-sm font-bold text-slate-600">
+                付款人
+                <select
+                  className="mt-1 min-h-touch w-full rounded-xl border border-slate-200 bg-white px-3 text-base"
+                  value={payerId || selfId || members[0]?.id || ''}
+                  onChange={(event) => setPayerId(event.target.value)}
+                >
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.displayName || member.username || member.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-bold text-slate-600">
+                收款人
+                <select
+                  className="mt-1 min-h-touch w-full rounded-xl border border-slate-200 bg-white px-3 text-base"
+                  value={payeeId || members.find((member) => member.id !== (payerId || selfId || members[0]?.id))?.id || ''}
+                  onChange={(event) => setPayeeId(event.target.value)}
+                >
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.displayName || member.username || member.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ['JPY', '日圓'],
+                    ['TWD', '新台幣'],
+                  ] as [Currency, string][]
+                ).map(([currency, label]) => (
+                  <button
+                    key={currency}
+                    type="button"
+                    className={`min-h-touch rounded-xl text-base font-bold ${
+                      settleCurrency === currency ? 'bg-ice-600 text-white' : 'bg-snow-100 text-slate-700'
+                    }`}
+                    onClick={() => setSettleCurrency(currency)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <input
+                className="min-h-touch w-full rounded-xl border border-slate-200 px-3 text-base"
+                inputMode="decimal"
+                placeholder="金額"
+                aria-label="結算金額"
+                value={settleAmount}
+                onChange={(event) => setSettleAmount(event.target.value)}
+              />
+              <button type="submit" className="min-h-touch w-full rounded-xl bg-ice-600 text-base font-bold text-white">
+                記下這筆結算
               </button>
             </form>
           )}

@@ -212,6 +212,29 @@ test('account store refuses to open the trip state file', async () => {
   }
 });
 
+test('publicById returns the account id without a password hash', async () => {
+  const { dir, dataFile, store } = tempStore();
+  try {
+    await store.init();
+    const created = await store.register({ username: 'mika', password: 'trip2027' });
+    assert.equal(created.ok, true);
+    const raw = fs.readFileSync(dataFile, 'utf8');
+    const alice = store.publicById('u1');
+    const bob = store.publicById('u2');
+    const mika = store.publicById(created.user.id);
+    assert.deepEqual(alice, { id: 'u1', username: 'alice', displayName: 'Alice' });
+    assert.deepEqual(bob, { id: 'u2', username: 'bob', displayName: 'Bob' });
+    assert.equal(mika.id, created.user.id);
+    assert.match(mika.id, /^u_[0-9a-f]{16}$/);
+    assert.equal(mika.username, 'mika');
+    assert.equal(mika.passwordHash, undefined);
+    assert.equal(store.publicById('nobody'), null);
+    assert.equal(fs.readFileSync(dataFile, 'utf8'), raw);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('failed save does not leave a half-registered account', async () => {
   const { dir, dataFile, store } = tempStore();
   try {

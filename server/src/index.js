@@ -24,7 +24,17 @@ import { getWeather } from './weather.js';
 import { getJmaWarnings } from './jmaWarnings.js';
 import { getJrStatus } from './jrStatus.js';
 import { getTripAlerts } from './tripAlerts.js';
-import { addMember, deleteExpense, ensureBill, removeMember, renameMember, upsertExpense } from './split.js';
+import {
+  addMember,
+  addSettlement,
+  deleteExpense,
+  deleteSettlement,
+  ensureBill,
+  isTripMember,
+  memberAddAllowed,
+  removeMember,
+  upsertExpense,
+} from './split.js';
 import { createFxBook, parseOverride, presentFx } from './fx.js';
 import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
 import { createUserStore } from './users.js';
@@ -210,8 +220,35 @@ app.get('/api/trip-alerts', async (_req, res) => {
   res.json(body);
 });
 
+function presentMembers(members) {
+  return (Array.isArray(members) ? members : []).flatMap((member) => {
+    if (!member || typeof member !== 'object' || typeof member.id !== 'string') return [];
+    const account = userStore.publicById(member.id);
+    if (account) return [account];
+    const displayName = String(member.displayName || '').trim();
+    return [{ id: member.id, displayName: displayName || '（未知帳號）' }];
+  });
+}
+
 function tripForClient() {
-  return { ...tripState, fx: presentFx(tripState.fx) };
+  return { ...tripState, members: presentMembers(tripState.members), fx: presentFx(tripState.fx) };
+}
+
+function requireTripMember(socket, token, ack) {
+  const user = verifyToken(token);
+  if (!user) {
+    const error = '請先登入才能編輯';
+    socket.emit('error:auth', { error });
+    ackResult(ack, { ok: false, error });
+    return false;
+  }
+  if (!isTripMember(tripState, user.id)) {
+    const error = '只有這趟行程的旅伴可以這樣做';
+    socket.emit('error:auth', { error });
+    ackResult(ack, { ok: false, error });
+    return false;
+  }
+  return true;
 }
 
 function broadcastTrip(roomCode = ROOM_CODE) {
@@ -446,8 +483,9 @@ io.on('connection', (socket) => {
     }
     const members = tripState.members;
     const expenses = tripState.expenses;
+    const settlements = tripState.settlements;
     const fx = tripState.fx;
-    tripState = { ...createSeedState(), members, expenses, fx };
+    tripState = { ...createSeedState(), members, expenses, settlements, fx };
     publish(joinedRoom || ROOM_CODE, { enrich: false });
     void applySeedCorrection(joinedRoom || ROOM_CODE);
   });
@@ -488,14 +526,36 @@ io.on('connection', (socket) => {
     ackResult(ack, { ok: true });
   });
 
-  socket.on('member:add', ({ displayName, token }, ack) => {
-    if (!verifyToken(token)) {
+  socket.on('member:add', ({ username, token }, ack) => {
+    const caller = verifyToken(token);
+    if (!caller) {
       const error = '請先登入才能編輯';
       socket.emit('error:auth', { error });
       ackResult(ack, { ok: false, error });
       return;
     }
-    const result = addMember(tripState, displayName);
+    const requested = typeof username === 'string' ? username : '';
+    if (!requested.trim()) {
+      const error = '請輸入已註冊的帳號';
+      socket.emit('error:edit', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const account = userStore.findByUsername(requested);
+    if (!account) {
+      const error = '找不到這個帳號';
+      socket.emit('error:edit', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const allowed = memberAddAllowed(tripState, caller.id, account.id);
+    if (!allowed.ok) {
+      socket.emit('error:auth', { error: allowed.error });
+      ackResult(ack, allowed);
+      return;
+    }
+    const roster = [{ id: account.id, username: account.username, displayName: account.displayName }];
+    const result = addMember(tripState, { username: requested }, roster);
     if (!result.ok) {
       socket.emit('error:edit', { error: result.error });
       ackResult(ack, result);
@@ -506,32 +566,41 @@ io.on('connection', (socket) => {
     ackResult(ack, { ok: true });
   });
 
-  socket.on('member:rename', ({ id, displayName, token }, ack) => {
-    if (!verifyToken(token)) {
-      const error = '請先登入才能編輯';
-      socket.emit('error:auth', { error });
-      ackResult(ack, { ok: false, error });
-      return;
-    }
-    const result = renameMember(tripState, id, displayName);
-    if (!result.ok) {
-      socket.emit('error:edit', { error: result.error });
-      ackResult(ack, result);
-      return;
-    }
-    tripState = result.state;
-    saveBill(joinedRoom || ROOM_CODE);
-    ackResult(ack, { ok: true });
+  socket.on('member:rename', (_payload, ack) => {
+    const error = '旅伴就是登入帳號，不能另外取名';
+    socket.emit('error:edit', { error });
+    ackResult(ack, { ok: false, error });
   });
 
   socket.on('member:remove', ({ id, token }, ack) => {
-    if (!verifyToken(token)) {
-      const error = '請先登入才能編輯';
-      socket.emit('error:auth', { error });
-      ackResult(ack, { ok: false, error });
+    if (!requireTripMember(socket, token, ack)) return;
+    const result = removeMember(tripState, id);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
       return;
     }
-    const result = removeMember(tripState, id);
+    tripState = result.state;
+    saveBill(joinedRoom || ROOM_CODE);
+    ackResult(ack, { ok: true });
+  });
+
+  socket.on('settlement:add', ({ settlement, token }, ack) => {
+    if (!requireTripMember(socket, token, ack)) return;
+    const result = addSettlement(tripState, settlement);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    tripState = result.state;
+    saveBill(joinedRoom || ROOM_CODE);
+    ackResult(ack, { ok: true });
+  });
+
+  socket.on('settlement:delete', ({ id, token }, ack) => {
+    if (!requireTripMember(socket, token, ack)) return;
+    const result = deleteSettlement(tripState, id);
     if (!result.ok) {
       socket.emit('error:edit', { error: result.error });
       ackResult(ack, result);

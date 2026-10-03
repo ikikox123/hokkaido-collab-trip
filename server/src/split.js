@@ -4,6 +4,10 @@
  * crossSettlement only change the display and the unified settlement.
  * Minor units: 1 yen, or 0.01 TWD. Shares are adjusted so they sum to the total
  * (custom input may be off by one minor unit: 1 yen or 0.01 TWD).
+ *
+ * Members and login accounts are the same people. A member id is the account id
+ * (alice u1, bob u2, or u_ plus 16 hex for a registered account).
+ * A directed settlement stores payerId, payeeId, and amount on that record.
  */
 
 export const CURRENCIES = ['JPY', 'TWD'];
@@ -18,23 +22,44 @@ export const MODE_LABELS = {
 
 const MEMBER_CAP = 20;
 const EXPENSE_CAP = 500;
+const SETTLEMENT_CAP = 500;
 const NOTE_CAP = 200;
 const NAME_CAP = 20;
 /** Exact minimum-transfer search is fine through this many non-zero balances. */
 const EXACT_SETTLE_LIMIT = 12;
 
+/** Demo room starts with alice (u1) and bob (u2). Names come from those accounts. */
 export function defaultMembers() {
-  return [
-    { id: 'u1', displayName: 'Alice', userId: 'u1' },
-    { id: 'u2', displayName: 'Bob', userId: 'u2' },
-  ];
+  return [{ id: 'u1' }, { id: 'u2' }];
 }
 
 export function ensureBill(state) {
   if (!state || typeof state !== 'object') return state;
   const members = normalizeMembers(state.members);
   const expenses = Array.isArray(state.expenses) ? state.expenses.filter(isPlausibleExpense) : [];
-  return { ...state, members, expenses };
+  const settlements = Array.isArray(state.settlements)
+    ? state.settlements.filter(isPlausibleSettlement)
+    : [];
+  return { ...state, members, expenses, settlements };
+}
+
+/** True when this login account id is already a member of the trip. */
+export function isTripMember(state, accountId) {
+  if (typeof accountId !== 'string' || !accountId.trim()) return false;
+  const id = accountId.trim();
+  return ensureBill(state).members.some((member) => member.id === id);
+}
+
+/**
+ * A logged-in account may add their own account id even when the trip has no members.
+ * Adding a different account requires the caller to already be a member.
+ */
+export function memberAddAllowed(state, callerId, accountId) {
+  if (typeof callerId !== 'string' || !callerId.trim()) return fail('請先登入才能編輯');
+  if (typeof accountId !== 'string' || !accountId.trim()) return fail('找不到這個帳號');
+  if (callerId.trim() === accountId.trim()) return { ok: true };
+  if (!isTripMember(state, callerId)) return fail('只有這趟行程的旅伴可以加入別人');
+  return { ok: true };
 }
 
 export function fromMinor(minor, currency) {
@@ -200,34 +225,23 @@ export function deleteExpense(state, id) {
   return { ok: true, state: { ...base, expenses: base.expenses.filter((expense) => expense.id !== id) } };
 }
 
-export function addMember(state, displayName) {
+/**
+ * Add an existing login account to this trip.
+ * `accounts` is the login roster (id, username, displayName). Only the account id is stored.
+ */
+export function addMember(state, input, accounts) {
   const base = ensureBill(state);
-  const cleaned = cleanName(displayName);
-  if (!cleaned.ok) return cleaned;
+  const account = resolveAccount(input, accounts);
+  if (!account.ok) return account;
   if (base.members.length >= MEMBER_CAP) return fail('旅伴最多 20 人');
-  if (base.members.some((member) => member.displayName === cleaned.name)) return fail('已經有這位旅伴');
+  if (base.members.some((member) => member.id === account.id)) return fail('這位旅伴已經在行程裡');
   return {
     ok: true,
     state: {
       ...base,
-      members: [...base.members, { id: newId('m'), displayName: cleaned.name }],
+      members: [...base.members, { id: account.id }],
     },
   };
-}
-
-export function renameMember(state, id, displayName) {
-  const base = ensureBill(state);
-  const cleaned = cleanName(displayName);
-  if (!cleaned.ok) return cleaned;
-  const idx = base.members.findIndex((member) => member.id === id);
-  if (idx < 0) return fail('找不到這位旅伴');
-  if (base.members.some((member) => member.id !== id && member.displayName === cleaned.name)) {
-    return fail('已經有這位旅伴');
-  }
-  const members = base.members.map((member) =>
-    member.id === id ? { ...member, displayName: cleaned.name } : member,
-  );
-  return { ok: true, state: { ...base, members } };
 }
 
 export function removeMember(state, id) {
@@ -242,7 +256,57 @@ export function removeMember(state, id) {
       (expense.shares || []).some((share) => share.memberId === id),
   );
   if (used) return fail('這位旅伴已經出現在支出裡，請先修改那些支出');
+  const settled = base.settlements.some((row) => row.payerId === id || row.payeeId === id);
+  if (settled) return fail('這位旅伴已經出現在結算裡，請先刪除那些結算');
   return { ok: true, state: { ...base, members: base.members.filter((item) => item.id !== id) } };
+}
+
+/** Record who pays whom. payerId, payeeId, and amount live on this settlement. */
+export function addSettlement(state, input) {
+  const base = ensureBill(state);
+  if (!input || typeof input !== 'object') return fail('結算格式不正確');
+  if (base.settlements.length >= SETTLEMENT_CAP) return fail('結算太多了');
+
+  const payerId = typeof input.payerId === 'string' ? input.payerId.trim() : '';
+  const payeeId = typeof input.payeeId === 'string' ? input.payeeId.trim() : '';
+  if (!payerId) return fail('請選擇付款人');
+  if (!payeeId) return fail('請選擇收款人');
+  if (!base.members.some((member) => member.id === payerId)) return fail('付款人要是這趟的旅伴');
+  if (!base.members.some((member) => member.id === payeeId)) return fail('收款人要是這趟的旅伴');
+  if (payerId === payeeId) return fail('付款人和收款人要是不同的旅伴');
+
+  const currency = input.currency === 'TWD' ? 'TWD' : input.currency === 'JPY' ? 'JPY' : null;
+  if (!currency) return fail('請選擇日圓或新台幣');
+  const amountMinor = readPositiveMinor(input.amount, currency);
+  if (!amountMinor.ok) return amountMinor;
+
+  return {
+    ok: true,
+    state: {
+      ...base,
+      settlements: [
+        ...base.settlements,
+        {
+          id: newId('st'),
+          payerId,
+          payeeId,
+          amount: fromMinor(amountMinor.minor, currency),
+          amountMinor: amountMinor.minor,
+          currency,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    },
+  };
+}
+
+export function deleteSettlement(state, id) {
+  const base = ensureBill(state);
+  if (!id || !base.settlements.some((row) => row.id === id)) return fail('找不到這筆結算');
+  return {
+    ok: true,
+    state: { ...base, settlements: base.settlements.filter((row) => row.id !== id) },
+  };
 }
 
 export function settlementOf(state) {
@@ -384,6 +448,14 @@ export function billToCsv(state, twdPerJpy) {
           .map(csvCell)
           .join(','),
       );
+    }
+  }
+  lines.push('', '記下的結算,付款人,收款人,金額');
+  if (!base.settlements.length) {
+    lines.push(['', '', '', ''].join(','));
+  } else {
+    for (const row of base.settlements) {
+      lines.push([row.currency, nameOf(row.payerId), nameOf(row.payeeId), row.amount].map(csvCell).join(','));
     }
   }
   lines.push('', '幣別,付款人,收款人,金額');
@@ -695,17 +767,42 @@ function normalizeMembers(list) {
   const seen = new Set();
   const members = [];
   for (const raw of list) {
-    if (!raw || typeof raw.id !== 'string') continue;
-    const id = raw.id.trim();
+    if (!raw || typeof raw !== 'object') continue;
+    const rawId = typeof raw.id === 'string' ? raw.id.trim() : '';
+    const linked = typeof raw.userId === 'string' ? raw.userId.trim() : '';
+    // A linked login id is the member id. There is no second person id.
+    const id = linked || rawId;
     if (!id || seen.has(id)) continue;
-    const displayName = String(raw.displayName || '').trim().replace(/\s+/g, ' ');
-    if (!displayName) continue;
-    const member = { id, displayName: displayName.slice(0, NAME_CAP) };
-    if (raw.userId) member.userId = String(raw.userId);
     seen.add(id);
+    if (linked) {
+      members.push({ id });
+      continue;
+    }
+    const displayName = String(raw.displayName || '').trim().replace(/\s+/g, ' ');
+    const member = { id };
+    if (displayName) member.displayName = displayName.slice(0, NAME_CAP);
     members.push(member);
   }
   return members;
+}
+
+function resolveAccount(input, accounts) {
+  const username = String(input?.username ?? '').trim().toLowerCase();
+  const accountId = String(
+    input?.accountId ?? (input && typeof input === 'object' ? input.id : '') ?? '',
+  ).trim();
+  if (!username && !accountId) return fail('請輸入已註冊的帳號');
+  const roster = Array.isArray(accounts) ? accounts : [];
+  const usable = (user) => user && typeof user.id === 'string' && user.id.trim();
+  let account = null;
+  if (accountId) {
+    account = roster.find((user) => usable(user) && user.id === accountId) || null;
+  } else {
+    account =
+      roster.find((user) => usable(user) && String(user.username || '').trim().toLowerCase() === username) || null;
+  }
+  if (!account) return fail('找不到這個帳號');
+  return { ok: true, id: account.id.trim() };
 }
 
 function isPlausibleExpense(expense) {
@@ -719,11 +816,17 @@ function isPlausibleExpense(expense) {
   );
 }
 
-function cleanName(value) {
-  const name = String(value || '').trim().replace(/\s+/g, ' ');
-  if (!name) return fail('請輸入旅伴名字');
-  if (name.length > NAME_CAP) return fail('名字請在 20 字以內');
-  return { ok: true, name };
+function isPlausibleSettlement(row) {
+  return Boolean(
+    row &&
+      typeof row.id === 'string' &&
+      typeof row.payerId === 'string' &&
+      typeof row.payeeId === 'string' &&
+      row.payerId !== row.payeeId &&
+      (row.currency === 'JPY' || row.currency === 'TWD') &&
+      Number.isFinite(Number(row.amount)) &&
+      Number(row.amount) > 0,
+  );
 }
 
 function csvCell(value) {

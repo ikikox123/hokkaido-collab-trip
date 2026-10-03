@@ -18,6 +18,7 @@ export function migrateSplitFields(state) {
   const next = { ...state };
   if (!Array.isArray(next.members)) next.members = [];
   if (!Array.isArray(next.expenses)) next.expenses = [];
+  if (!Array.isArray(next.settlements)) next.settlements = [];
   if (!next.fx || typeof next.fx !== 'object' || Array.isArray(next.fx)) {
     next.fx = { quote: null, override: null, stale: false, error: null };
   }

@@ -2,9 +2,21 @@ export type Currency = 'JPY' | 'TWD';
 export type SplitMode = 'equal' | 'custom' | 'ratio' | 'exclude';
 
 export interface BillMember {
+  /** Login account id. Members are accounts, not a separate name list. */
   id: string;
-  displayName: string;
-  userId?: string;
+  /** Filled from the login account when the trip is shown. */
+  displayName?: string;
+  username?: string;
+}
+
+export interface Settlement {
+  id: string;
+  payerId: string;
+  payeeId: string;
+  amount: number;
+  amountMinor: number;
+  currency: Currency;
+  createdAt: string;
 }
 
 export interface ExpenseShare {
@@ -81,9 +93,16 @@ export interface CurrencySettlement {
   transfers: Transfer[];
 }
 
+export interface AccountRef {
+  id: string;
+  username?: string;
+  displayName?: string;
+}
+
 export interface BillFields {
   members: BillMember[];
   expenses: Expense[];
+  settlements: Settlement[];
 }
 
 export const CURRENCIES: Currency[];
@@ -92,6 +111,12 @@ export const MODE_LABELS: Record<SplitMode, string>;
 
 export function defaultMembers(): BillMember[];
 export function ensureBill<T extends object>(state: T): T & BillFields;
+export function isTripMember(state: object, accountId: string | null | undefined): boolean;
+export function memberAddAllowed(
+  state: object,
+  callerId: string | null | undefined,
+  accountId: string | null | undefined,
+): { ok: true } | { ok: false; error: string };
 export function fromMinor(minor: number, currency: Currency): number;
 export function toMinor(amount: number | string, currency: Currency): number;
 export function formatMinor(minor: number, currency: Currency): string;
@@ -110,14 +135,18 @@ export function deleteExpense<T extends object>(
 ): { ok: true; state: T & BillFields } | { ok: false; error: string };
 export function addMember<T extends object>(
   state: T,
-  displayName: string,
-): { ok: true; state: T & BillFields } | { ok: false; error: string };
-export function renameMember<T extends object>(
-  state: T,
-  id: string,
-  displayName: string,
+  input: { username?: string; accountId?: string; id?: string },
+  accounts: AccountRef[],
 ): { ok: true; state: T & BillFields } | { ok: false; error: string };
 export function removeMember<T extends object>(
+  state: T,
+  id: string,
+): { ok: true; state: T & BillFields } | { ok: false; error: string };
+export function addSettlement<T extends object>(
+  state: T,
+  input: { payerId?: string; payeeId?: string; amount?: number | string; currency?: string },
+): { ok: true; state: T & BillFields } | { ok: false; error: string };
+export function deleteSettlement<T extends object>(
   state: T,
   id: string,
 ): { ok: true; state: T & BillFields } | { ok: false; error: string };
