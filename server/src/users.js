@@ -117,6 +117,9 @@ async function passwordMatches(password, passwordHash) {
  * In-memory accounts plus a gitignored JSON file of bcrypt hashes.
  * Demo users are never written to disk.
  * This store does not load, migrate, or replace trip state.
+ *
+ * The account id is the split-member id. It is chosen once at registration and
+ * reloaded from users.json. Startup does not mint a new id. alice and bob stay u1 and u2.
  */
 export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 10 } = {}) {
   let users = [];

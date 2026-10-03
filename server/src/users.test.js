@@ -143,6 +143,38 @@ test('a saved demo username cannot replace alice or bob', async () => {
   }
 });
 
+test('registered id stays the same across restart and demo ids stay u1 and u2', async () => {
+  const { dir, dataFile, store } = tempStore();
+  try {
+    await store.init();
+    const created = await store.register({ username: ' Mika ', password: 'trip2027' });
+    assert.equal(created.ok, true);
+    assert.match(created.user.id, /^u_[0-9a-f]{16}$/);
+    assert.notEqual(created.user.id, 'u1');
+    assert.notEqual(created.user.id, 'u2');
+    assert.equal(created.user.username, 'mika');
+    assert.equal(created.user.displayName, 'Mika');
+    const rawBefore = fs.readFileSync(dataFile, 'utf8');
+
+    const reloaded = createUserStore({ dataFile, rounds: 4 });
+    await reloaded.init();
+    assert.equal(fs.readFileSync(dataFile, 'utf8'), rawBefore);
+    const login = await reloaded.authenticate('mika', 'trip2027');
+    assert.equal(login.ok, true);
+    assert.equal(login.user.id, created.user.id);
+    assert.equal(login.user.username, 'mika');
+    assert.equal(login.user.displayName, 'Mika');
+    const alice = await reloaded.authenticate('alice', 'demo1234');
+    const bob = await reloaded.authenticate('bob', 'demo1234');
+    assert.equal(alice.user.id, 'u1');
+    assert.equal(alice.user.displayName, 'Alice');
+    assert.equal(bob.user.id, 'u2');
+    assert.equal(bob.user.displayName, 'Bob');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('registration leaves an existing HOKKAIDO2027 state file unchanged', async () => {
   const { dir, dataFile, store } = tempStore();
   const stateFile = path.join(dir, 'state.json');
