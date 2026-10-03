@@ -9,6 +9,7 @@ import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog'
 import { SplitBoard } from './components/SplitBoard';
 import { LanguageMenu } from './i18n/LanguageMenu';
 import { useI18n } from './i18n/I18nProvider';
+import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { localizeError } from './i18n/errors';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { usesGoogleMaps } from './lib/mapProvider';
@@ -61,7 +62,7 @@ export default function App() {
     { mode: 'add' } | { mode: 'edit'; stopId: string } | null
   >(null);
   const googlePlaces = usesGoogleMaps();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const tRef = useRef(t);
   tRef.current = t;
 
@@ -229,7 +230,7 @@ export default function App() {
         <div className="flex items-center gap-2 px-3 min-h-touch py-2">
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sm sm:text-base truncate leading-tight">
-              {trip.tripName.split('｜')[0]}
+              {pageHeading(locale)}
             </h1>
             <p className="truncate text-sm text-white/80">
               {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
@@ -322,7 +323,7 @@ export default function App() {
                   : 'bg-snow-100 text-slate-600 active:bg-snow-200'
               }`}
             >
-              <span className="block leading-tight">{d.label}</span>
+              <span className="block leading-tight">{displayDayLabel(locale, d.label)}</span>
               <span className="block text-sm font-medium opacity-90">{d.date.slice(5)}</span>
             </button>
           ))}

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { applyDocumentTitle } from './screen.ts';
 import { htmlLang, text, type Locale, type MessageKey, type Vars } from './messages.ts';
 import { readLocale, writeLocale } from './storage.ts';
 
@@ -24,7 +25,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = htmlLang(locale);
-    document.title = text(locale, 'pageTitle');
+    applyDocumentTitle(locale, document);
   }, [locale]);
 
   const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
