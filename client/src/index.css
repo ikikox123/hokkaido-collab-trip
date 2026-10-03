@@ -17,7 +17,7 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  font-family: 'Noto Sans TC', 'Noto Sans JP', 'PingFang TC', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Microsoft JhengHei', system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 

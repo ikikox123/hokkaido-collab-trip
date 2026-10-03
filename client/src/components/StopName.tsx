@@ -1,4 +1,6 @@
 import { FormEvent, useRef, useState } from 'react';
+import { localizeError } from '../i18n/errors';
+import { useI18n } from '../i18n/I18nProvider';
 
 const STOP_TITLE_MAX = 80;
 
@@ -13,6 +15,7 @@ export function StopName({ title, canEdit, onRename }: Props) {
   const [draft, setDraft] = useState(title);
   const [error, setError] = useState<string | null>(null);
   const skipCommit = useRef(false);
+  const { t } = useI18n();
 
   function begin() {
     skipCommit.current = false;
@@ -67,7 +70,7 @@ export function StopName({ title, canEdit, onRename }: Props) {
         <input
           autoFocus
           name="stop-title"
-          aria-label="地點名稱"
+          aria-label={t('placeName')}
           aria-invalid={error ? true : undefined}
           enterKeyHint="done"
           autoComplete="off"
@@ -89,7 +92,7 @@ export function StopName({ title, canEdit, onRename }: Props) {
         />
         {error && (
           <p className="mt-0.5 text-sm text-red-600" role="alert">
-            {error}
+            {localizeError(error, t)}
           </p>
         )}
       </form>
@@ -101,7 +104,7 @@ export function StopName({ title, canEdit, onRename }: Props) {
       <button
         type="button"
         className="flex min-h-touch w-full items-center gap-2 rounded-lg px-0.5 text-left active:bg-snow-100"
-        aria-label={`編輯地點名稱：${title}`}
+        aria-label={t('editPlaceName', { title })}
         onClick={(e) => {
           e.stopPropagation();
           begin();
@@ -109,12 +112,12 @@ export function StopName({ title, canEdit, onRename }: Props) {
       >
         <span className="min-w-0 flex-1 font-semibold text-[15px] leading-snug">{title}</span>
         <span className="shrink-0 rounded-md bg-ice-600/10 px-2 py-1 text-sm font-semibold text-ice-700">
-          改名
+          {t('rename')}
         </span>
       </button>
       {error && (
         <p className="mt-0.5 text-sm text-red-600" role="alert">
-          {error}
+          {localizeError(error, t)}
         </p>
       )}
     </div>

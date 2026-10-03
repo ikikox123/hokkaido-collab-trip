@@ -1,5 +1,23 @@
 /** Compact copy for the collapsed weather / warning / JR card. */
 
+export type AlertPhrases = {
+  listSep: string;
+  more: (shown: string, rest: number) => string;
+  jrUnavailable: string;
+  jrLoading: string;
+  jrImpact: (names: string) => string;
+  jrUnknown: string;
+};
+
+const TRADITIONAL_CHINESE: AlertPhrases = {
+  listSep: '、',
+  more: (shown, rest) => `${shown}等 ${rest} 項`,
+  jrUnavailable: 'JR 暫時無法更新',
+  jrLoading: 'JR 運行資訊載入中',
+  jrImpact: (names) => `JR 有影響：${names}`,
+  jrUnknown: '狀態不明',
+};
+
 export type SummaryCity = {
   name: string;
   temperature: number | null;
@@ -26,7 +44,10 @@ export function weatherTempLine(cities: SummaryCity[]): string {
 }
 
 /** Area + official warning name, capped so the collapsed row stays one or two lines. */
-export function activeWarningSummary(areas: SummaryWarningArea[]): { count: number; label: string } {
+export function activeWarningSummary(
+  areas: SummaryWarningArea[],
+  phrases: AlertPhrases = TRADITIONAL_CHINESE,
+): { count: number; label: string } {
   const names: string[] = [];
   let count = 0;
   for (const area of areas) {
@@ -38,18 +59,23 @@ export function activeWarningSummary(areas: SummaryWarningArea[]): { count: numb
   }
   const shown = names.slice(0, 3);
   const rest = names.length - shown.length;
-  const label = rest > 0 ? `${shown.join('、')}等 ${rest} 項` : shown.join('、');
+  const joined = shown.join(phrases.listSep);
+  const label = rest > 0 ? phrases.more(joined, rest) : joined;
   return { count, label };
 }
 
-export function jrOneLiner(areas: SummaryJrArea[], ok: boolean | undefined): string {
-  if (ok === false) return 'JR 暫時無法更新';
-  if (!areas.length) return 'JR 運行資訊載入中';
+export function jrOneLiner(
+  areas: SummaryJrArea[],
+  ok: boolean | undefined,
+  phrases: AlertPhrases = TRADITIONAL_CHINESE,
+): string {
+  if (ok === false) return phrases.jrUnavailable;
+  if (!areas.length) return phrases.jrLoading;
   const disrupted = areas.filter((area) => area.status === 1);
   if (disrupted.length > 0) {
-    return `JR 有影響：${disrupted.map((area) => area.name).join('、')}`;
+    return phrases.jrImpact(disrupted.map((area) => area.name).join(phrases.listSep));
   }
   const labels = [...new Set(areas.map((area) => area.label).filter(Boolean))];
   if (labels.length === 1) return `JR ${labels[0]}`;
-  return areas.map((area) => `${area.name} ${area.label || '狀態不明'}`).join(' · ');
+  return areas.map((area) => `${area.name} ${area.label || phrases.jrUnknown}`).join(' · ');
 }

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  MODE_LABELS,
   formatMinor,
   prepareExpense,
   type BillInput,
@@ -8,6 +7,9 @@ import {
   type Expense,
   type SplitMode,
 } from '../../../server/src/split.js';
+import { localizeError } from '../i18n/errors';
+import { useI18n } from '../i18n/I18nProvider';
+import { splitModeLabel } from '../i18n/labels';
 import type { TripState } from '../types/trip';
 
 const MODES: SplitMode[] = ['equal', 'custom', 'ratio', 'exclude'];
@@ -105,17 +107,18 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
     return !samePeople || expense.day != null || Boolean(expense.stopId);
   });
   const members = trip.members ?? [];
+  const { t } = useI18n();
   const preview = useMemo(() => prepareExpense(trip, toInput(draft, expense?.id)), [trip, draft, expense?.id]);
 
   const stops = trip.stops.filter((stop) => !draft.day || String(stop.day) === draft.day);
   const modeHint =
     draft.mode === 'equal'
-      ? '勾選的人均分。除不盡的 1 圓或 0.01 元會算在前面的人。'
+      ? t('equalHint')
       : draft.mode === 'custom'
-        ? '每人自填金額。加總要等於總額，日圓可差 1 圓、新台幣可差 0.01。'
+        ? t('customHint')
         : draft.mode === 'ratio'
-          ? '依權重分攤，例如 1、1、2。'
-          : '勾選的人不參加，其餘的人均分。';
+          ? t('ratioHint')
+          : t('excludeHint');
 
   function setMode(mode: SplitMode) {
     setDraft((current) => {
@@ -151,7 +154,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" role="presentation">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="關閉" onClick={onClose} />
+      <button type="button" className="absolute inset-0 cursor-default" aria-label={t('close')} onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
@@ -161,7 +164,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
         <div className="shrink-0 px-4 pt-3">
           <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
           <h2 id="expense-editor-title" className="text-lg font-bold text-ice-700">
-            {expense ? '編輯支出' : '新增支出'}
+            {expense ? t('editExpense') : t('addExpense')}
           </h2>
         </div>
         <form
@@ -173,7 +176,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
           }}
         >
           <label className="block">
-            <span className="text-sm font-medium">金額</span>
+            <span className="text-sm font-medium">{t('amount')}</span>
             <input
               autoFocus
               inputMode="decimal"
@@ -185,7 +188,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium">付款人</span>
+            <span className="text-sm font-medium">{t('payer')}</span>
             <select
               className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 bg-white px-3 text-base"
               value={draft.payerId}
@@ -200,7 +203,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
           </label>
 
           <div>
-            <span className="text-sm font-medium">幣別</span>
+            <span className="text-sm font-medium">{t('currency')}</span>
             <div className="mt-1 grid grid-cols-2 gap-2">
               {(['JPY', 'TWD'] as Currency[]).map((currency) => (
                 <button
@@ -211,25 +214,25 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                   }`}
                   onClick={() => setDraft((current) => ({ ...current, currency }))}
                 >
-                  {currency === 'JPY' ? '日圓' : '新台幣'}
+                  {currency === 'JPY' ? t('yen') : t('twd')}
                 </button>
               ))}
             </div>
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium">備註</span>
+            <span className="text-sm font-medium">{t('note')}</span>
             <input
               className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-ice-500 focus:ring-2 focus:ring-ice-500/30"
               value={draft.note}
               maxLength={200}
-              placeholder="例如：薄野拉麵"
+              placeholder={t('notePlaceholder')}
               onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
             />
           </label>
 
           {!showAdvanced && draft.mode === 'equal' && (
-            <p className="text-sm text-slate-500">這筆先跟房間裡的人都均分。</p>
+            <p className="text-sm text-slate-500">{t('equalEveryone')}</p>
           )}
 
           <button
@@ -238,14 +241,14 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
             aria-expanded={showAdvanced}
             onClick={() => setShowAdvanced((current) => !current)}
           >
-            {showAdvanced ? '收合進階分攤' : '進階分攤'}
-            <span className="mt-0.5 block text-sm font-medium text-slate-500">自訂金額、比例、排除某人，或連到某一天</span>
+            {showAdvanced ? t('collapseAdvanced') : t('advancedSplit')}
+            <span className="mt-0.5 block text-sm font-medium text-slate-500">{t('advancedHint')}</span>
           </button>
 
           {showAdvanced && (
           <>
           <div>
-            <span className="text-sm font-medium">分攤方式</span>
+            <span className="text-sm font-medium">{t('splitMethod')}</span>
             <div className="mt-1 grid grid-cols-2 gap-2">
               {MODES.map((mode) => (
                 <button
@@ -256,7 +259,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                   }`}
                   onClick={() => setMode(mode)}
                 >
-                  {MODE_LABELS[mode]}
+                  {splitModeLabel(t, mode)}
                 </button>
               ))}
             </div>
@@ -265,7 +268,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
 
           <div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{draft.mode === 'exclude' ? '不參加的人' : '誰要分'}</span>
+              <span className="text-sm font-medium">{draft.mode === 'exclude' ? t('excludedPeople') : t('whoShares')}</span>
               <button
                 type="button"
                 className="min-h-touch px-2 text-sm font-semibold text-ice-700"
@@ -280,7 +283,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                   }))
                 }
               >
-                {draft.selected.length === members.length ? '全不選' : '全選'}
+                {draft.selected.length === members.length ? t('selectNone') : t('selectAll')}
               </button>
             </div>
             <ul className="mt-1 space-y-2">
@@ -300,9 +303,9 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                     {on && draft.mode === 'custom' && (
                       <input
                         inputMode="decimal"
-                        aria-label={`${member.displayName}的金額`}
+                        aria-label={t('amountOf', { name: member.displayName || member.username || member.id })}
                         className="mt-1 w-full min-h-touch rounded-lg border border-slate-200 px-3 text-base"
-                        placeholder="金額"
+                        placeholder={t('amountPlaceholder')}
                         value={draft.values[member.id] ?? ''}
                         onChange={(event) =>
                           setDraft((current) => ({
@@ -315,9 +318,9 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                     {on && draft.mode === 'ratio' && (
                       <input
                         inputMode="decimal"
-                        aria-label={`${member.displayName}的比例`}
+                        aria-label={t('ratioOf', { name: member.displayName || member.username || member.id })}
                         className="mt-1 w-full min-h-touch rounded-lg border border-slate-200 px-3 text-base"
-                        placeholder="權重"
+                        placeholder={t('weightPlaceholder')}
                         value={draft.values[member.id] ?? ''}
                         onChange={(event) =>
                           setDraft((current) => ({
@@ -334,7 +337,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
           </div>
 
           <label className="block">
-            <span className="text-sm font-medium">行程日（選填）</span>
+            <span className="text-sm font-medium">{t('dayOptional')}</span>
             <select
               className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 bg-white px-3 text-base"
               value={draft.day}
@@ -347,7 +350,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                 });
               }}
             >
-              <option value="">不指定日期</option>
+              <option value="">{t('noDay')}</option>
               {trip.days.map((day) => (
                 <option key={day.day} value={day.day}>
                   {day.label} {day.date.slice(5)}
@@ -357,7 +360,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium">站點（選填）</span>
+            <span className="text-sm font-medium">{t('stopOptional')}</span>
             <select
               className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 bg-white px-3 text-base"
               value={draft.stopId}
@@ -371,7 +374,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                 }));
               }}
             >
-              <option value="">不連結站點</option>
+              <option value="">{t('noStopLink')}</option>
               {stops.map((stop) => (
                 <option key={stop.id} value={stop.id}>
                   {trip.days.find((day) => day.day === stop.day)?.label || `D${stop.day}`} · {stop.title}
@@ -389,7 +392,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
           >
             {preview.ok ? (
               <>
-                <p className="font-bold">預覽</p>
+                <p className="font-bold">{t('preview')}</p>
                 <ul className="mt-1 space-y-1">
                   {preview.expense.shares.map((share) => (
                     <li key={share.memberId} className="flex justify-between gap-3">
@@ -403,11 +406,11 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                   ))}
                 </ul>
                 <p className="mt-1 font-semibold">
-                  合計 {formatMinor(preview.expense.amountMinor, preview.expense.currency)}
+                  {t('totalLine', { amount: formatMinor(preview.expense.amountMinor, preview.expense.currency) })}
                 </p>
               </>
             ) : (
-              <p>{preview.error}</p>
+              <p>{localizeError(preview.error, t)}</p>
             )}
           </div>
 
@@ -417,14 +420,14 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
               className="min-h-touch rounded-xl bg-snow-100 text-base font-bold text-slate-700"
               onClick={onClose}
             >
-              取消
+              {t('cancel')}
             </button>
             <button
               type="submit"
               disabled={!preview.ok || pending}
               className="min-h-touch rounded-xl bg-ice-600 text-base font-bold text-white disabled:opacity-50"
             >
-              儲存
+              {t('save')}
             </button>
           </div>
           {expense && (
@@ -434,7 +437,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
               onClick={onDelete}
               disabled={pending}
             >
-              刪除這筆
+              {t('deleteThis')}
             </button>
           )}
         </form>

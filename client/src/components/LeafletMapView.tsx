@@ -4,7 +4,9 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { dayCamera, fitKeyFor, SAPPORO_BASE, type LodgingPoint } from '../lib/dayView';
-import { MODE_COLORS, MODE_LABELS } from '../lib/travel';
+import { useI18n } from '../i18n/I18nProvider';
+import { travelLabel } from '../i18n/labels';
+import { MODE_COLORS } from '../lib/travel';
 import { StopName } from './StopName';
 
 L.Icon.Default.mergeOptions({
@@ -243,6 +245,7 @@ export function LeafletMapView({
   onRename,
 }: Props) {
   const nextId = stops[0]?.id ?? null;
+  const { t } = useI18n();
   const fitKey = fitKeyFor(stops);
   const seed = useRef<{ center: [number, number]; zoom: number } | null>(null);
   if (!seed.current) {
@@ -333,7 +336,7 @@ export function LeafletMapView({
                   />
                   {s.time && <div className="text-slate-600">{s.time}</div>}
                   {s.notes && <div className="mt-1 text-slate-500">{s.notes}</div>}
-                  {isNext && <div className="mt-1 font-medium text-pink-600">下一站</div>}
+                  {isNext && <div className="mt-1 font-medium text-pink-600">{t('nextStop')}</div>}
                 </div>
               </Popup>
             </Marker>
@@ -342,15 +345,15 @@ export function LeafletMapView({
       </MapContainer>
       {stops.length === 0 && (
         <div className="pointer-events-none absolute left-1/2 top-3 z-[400] -translate-x-1/2 rounded-full bg-white/95 px-3 py-1.5 text-sm text-slate-500 shadow">
-          這天還沒有站點
+          {t('noStopsOnMap')}
         </div>
       )}
       <div className="pointer-events-none absolute bottom-2 left-2 z-[400] max-w-[78%] rounded-lg bg-white/95 px-2.5 py-1.5 text-sm leading-snug text-slate-700 shadow">
         <div>
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-sakura-500 align-middle" />
-          下一站
+          {t('nextStop')}
           <span className="ml-2 mr-1 inline-block h-2.5 w-2.5 rounded-full bg-ice-600 align-middle" />
-          選中
+          {t('selectedStop')}
         </div>
         {modesInView.length > 0 && (
           <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
@@ -360,7 +363,7 @@ export function LeafletMapView({
                   className="mr-1 inline-block h-1.5 w-3 align-middle"
                   style={{ background: MODE_COLORS[mode] }}
                 />
-                {MODE_LABELS[mode]}
+                {travelLabel(t, mode)}
               </span>
             ))}
           </div>

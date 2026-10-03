@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import type { FxView } from '../../../server/src/fx.js';
 import {
-  MODE_LABELS,
   billToCsv,
   convertMinor,
   crossSettlement,
@@ -13,6 +12,10 @@ import {
   type Currency,
   type Expense,
 } from '../../../server/src/split.js';
+import { localizeError } from '../i18n/errors';
+import type { Translate } from '../i18n/I18nProvider';
+import { useI18n } from '../i18n/I18nProvider';
+import { splitModeLabel } from '../i18n/labels';
 import { downloadText, emitAck } from '../lib/bill';
 import { splitShareText } from '../lib/splitLink';
 import type { TripState } from '../types/trip';
@@ -38,10 +41,10 @@ function minorOf(expense: Expense) {
   return Number.isInteger(expense.amountMinor) ? expense.amountMinor : toMinor(expense.amount, expense.currency);
 }
 
-function netPhrase(netMinor: number, currency: Currency) {
-  if (netMinor === 0) return '已結清';
-  if (netMinor > 0) return `應收 ${formatMinor(netMinor, currency)}`;
-  return `應付 ${formatMinor(-netMinor, currency)}`;
+function netPhrase(netMinor: number, currency: Currency, t: Translate) {
+  if (netMinor === 0) return t('settled');
+  if (netMinor > 0) return t('netReceive', { amount: formatMinor(netMinor, currency) });
+  return t('netPay', { amount: formatMinor(-netMinor, currency) });
 }
 
 export function SplitBoard({
@@ -56,6 +59,7 @@ export function SplitBoard({
   onNeedLogin,
   onJumpToDay,
 }: Props) {
+  const { t } = useI18n();
   const members = trip.members ?? [];
   const expenses = trip.expenses ?? [];
   const settlements = trip.settlements ?? [];
@@ -94,20 +98,20 @@ export function SplitBoard({
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
   function nameOf(id: string) {
-    return members.find((member) => member.id === id)?.displayName || '（已離開）';
+    return members.find((member) => member.id === id)?.displayName || t('memberLeft');
   }
 
   async function send(event: string, payload: Record<string, unknown>) {
     if (!canEdit || !token) {
       onNeedLogin();
-      return { ok: false, error: '請先登入才能編輯' };
+      return { ok: false, error: t('loginToEdit') };
     }
-    if (!socket) return { ok: false, error: '尚未連線' };
+    if (!socket) return { ok: false, error: t('notConnected') };
     setPending(true);
     setFormError(null);
     try {
       const result = await emitAck(socket, event, { ...payload, token });
-      if (!result.ok) setFormError(result.error || '無法更新');
+      if (!result.ok) setFormError(localizeError(result.error || '無法更新', t));
       return result;
     } finally {
       setPending(false);
@@ -117,8 +121,8 @@ export function SplitBoard({
   async function sendAsMember(event: string, payload: Record<string, unknown>) {
     if (!canSettle) {
       if (!canEdit || !token) onNeedLogin();
-      else setFormError('只有這趟行程的旅伴可以這樣做');
-      return { ok: false, error: '只有這趟行程的旅伴可以這樣做' };
+      else setFormError(t('onlyMembersAct'));
+      return { ok: false, error: t('onlyMembersAct') };
     }
     return send(event, payload);
   }
@@ -150,22 +154,25 @@ export function SplitBoard({
   }
 
   async function removeExpense(expense: Expense) {
-    if (!confirm('確定刪除這筆支出？')) return;
+    if (!confirm(t('deleteExpenseConfirm'))) return;
     const result = await send('expense:delete', { id: expense.id });
     if (result.ok) setEditor(null);
   }
 
+  const payerValue = payerId || selfId || members[0]?.id || '';
+  const payeeValue = payeeId || members.find((member) => member.id !== payerValue)?.id || '';
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-x-hidden">
       <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-3 py-2">
-        <h2 className="min-w-0 flex-1 truncate text-base font-bold text-ice-700">分帳</h2>
+        <h2 className="min-w-0 flex-1 truncate text-base font-bold text-ice-700">{t('tabSplit')}</h2>
         {canEdit && (
           <button
             type="button"
             className="min-h-touch shrink-0 rounded-xl bg-snow-100 px-3 text-sm font-bold text-slate-700"
             onClick={() => void copyLink()}
           >
-            {copied ? '已複製' : '複製連結'}
+            {copied ? t('copied') : t('copyLink')}
           </button>
         )}
         <button
@@ -179,25 +186,21 @@ export function SplitBoard({
             )
           }
         >
-          匯出
+          {t('exportCsv')}
         </button>
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3">
-        <p className="text-sm text-slate-500">支出用原幣別記。換算只用目前匯率，讓大家看該給多少台幣或日圓。</p>
+        <p className="text-sm text-slate-500">{t('splitIntro')}</p>
         {!canEdit && (
-          <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            還沒登入也可以看帳。登入後可以把自己加入這趟。加入別人、記下結算，要先是旅伴。
-          </p>
+          <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t('guestCanView')}</p>
         )}
         {canEdit && !isMember && (
-          <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            你已登入，但還不是這趟的旅伴。先把自己加入，才能加入別人或記下結算。
-          </p>
+          <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t('loggedInNotMember')}</p>
         )}
         {shareFallback && (
           <label className="block rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <span className="font-bold text-slate-700">請自己複製這段</span>
+            <span className="font-bold text-slate-700">{t('copyYourself')}</span>
             <textarea
               readOnly
               className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-base"
@@ -219,13 +222,13 @@ export function SplitBoard({
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-base font-bold text-ice-700">換算後怎麼結</h3>
+            <h3 className="text-base font-bold text-ice-700">{t('crossTitle')}</h3>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {(
               [
-                ['TWD', '用台幣看'],
-                ['JPY', '用日圓看'],
+                ['TWD', t('viewTwd')],
+                ['JPY', t('viewJpy')],
               ] as [Currency, string][]
             ).map(([currency, label]) => (
               <button
@@ -241,15 +244,15 @@ export function SplitBoard({
             ))}
           </div>
           {!cross ? (
-            <p className="mt-2 text-sm text-slate-600">還沒有匯率，先不換算結算。</p>
+            <p className="mt-2 text-sm text-slate-600">{t('noRateSettle')}</p>
           ) : cross.transfers.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-600">換成{settleIn === 'TWD' ? '台幣' : '日圓'}之後已經平衡。</p>
+            <p className="mt-2 text-sm text-slate-600">{settleIn === 'TWD' ? t('balancedTwd') : t('balancedJpy')}</p>
           ) : (
             <ul className="mt-2 space-y-2">
               {cross.transfers.map((transfer) => (
                 <li key={`${transfer.fromId}-${transfer.toId}-${transfer.amountMinor}`} className="rounded-xl bg-snow-50 px-3 py-2">
                   <p className="text-base font-semibold text-slate-800">
-                    {nameOf(transfer.fromId)} 付給 {nameOf(transfer.toId)}
+                    {t('pays', { from: nameOf(transfer.fromId), to: nameOf(transfer.toId) })}
                   </p>
                   <p className="text-lg font-bold text-ice-700">{formatMinor(transfer.amountMinor, settleIn)}</p>
                 </li>
@@ -258,7 +261,7 @@ export function SplitBoard({
           )}
         </section>
 
-        <h3 className="text-sm font-bold text-slate-500">各幣別原本的帳</h3>
+        <h3 className="text-sm font-bold text-slate-500">{t('originalBooks')}</h3>
 
         {(['JPY', 'TWD'] as Currency[]).map((currency) => {
           const book = settlement[currency];
@@ -274,19 +277,17 @@ export function SplitBoard({
               }`}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-base font-bold text-ice-700">{currency === 'JPY' ? '日圓' : '新台幣'}</h3>
-                <p className="text-sm text-slate-500">支出 {formatMinor(spent, currency)}</p>
+                <h3 className="text-base font-bold text-ice-700">{currency === 'JPY' ? t('yen') : t('twd')}</h3>
+                <p className="text-sm text-slate-500">{t('spentLine', { amount: formatMinor(spent, currency) })}</p>
               </div>
               {mine && (
                 <p className="mt-2 rounded-xl bg-snow-100 px-3 py-2 text-base font-bold text-slate-900">
-                  你：{netPhrase(mine.netMinor, currency)}
+                  {t('youNet', { phrase: netPhrase(mine.netMinor, currency, t) })}
                 </p>
               )}
-              <h4 className="mt-3 text-sm font-bold text-slate-500">建議轉帳</h4>
+              <h4 className="mt-3 text-sm font-bold text-slate-500">{t('suggestedTransfers')}</h4>
               {book.transfers.length === 0 ? (
-                <p className="mt-1 text-sm text-slate-600">
-                  {spent === 0 ? '還沒有這筆幣別的支出' : '已經平衡，不用再轉'}
-                </p>
+                <p className="mt-1 text-sm text-slate-600">{spent === 0 ? t('noSpendCurrency') : t('alreadyBalanced')}</p>
               ) : (
                 <ul className="mt-1 space-y-2">
                   {book.transfers.map((transfer) => (
@@ -295,14 +296,14 @@ export function SplitBoard({
                       className="rounded-xl bg-snow-50 px-3 py-2"
                     >
                       <p className="text-base font-semibold text-slate-800">
-                        {nameOf(transfer.fromId)} 付給 {nameOf(transfer.toId)}
+                        {t('pays', { from: nameOf(transfer.fromId), to: nameOf(transfer.toId) })}
                       </p>
                       <p className="text-lg font-bold text-ice-700">{formatMinor(transfer.amountMinor, currency)}</p>
                     </li>
                   ))}
                 </ul>
               )}
-              <h4 className="mt-3 text-sm font-bold text-slate-500">每人淨額</h4>
+              <h4 className="mt-3 text-sm font-bold text-slate-500">{t('netEach')}</h4>
               <ul>
                 {book.nets.map((net) => (
                   <li
@@ -311,14 +312,14 @@ export function SplitBoard({
                   >
                     <span className="min-w-0 truncate font-semibold">
                       {nameOf(net.memberId)}
-                      {net.memberId === selfId ? '（你）' : ''}
+                      {net.memberId === selfId ? t('youSuffix') : ''}
                     </span>
                     <span
                       className={`shrink-0 font-bold ${
                         net.netMinor > 0 ? 'text-ice-700' : net.netMinor < 0 ? 'text-sakura-500' : 'text-slate-400'
                       }`}
                     >
-                      {netPhrase(net.netMinor, currency)}
+                      {netPhrase(net.netMinor, currency, t)}
                     </span>
                   </li>
                 ))}
@@ -330,9 +331,9 @@ export function SplitBoard({
         <div className="grid grid-cols-3 gap-2">
           {(
             [
-              ['all', '全部'],
-              ['JPY', '日圓'],
-              ['TWD', '新台幣'],
+              ['all', t('filterAll')],
+              ['JPY', t('yen')],
+              ['TWD', t('twd')],
             ] as [Filter, string][]
           ).map(([value, label]) => (
             <button
@@ -350,7 +351,7 @@ export function SplitBoard({
 
         {visible.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-300 bg-white px-3 py-6 text-center text-base text-slate-500">
-            {expenses.length === 0 ? '還沒有支出' : '這個幣別還沒有支出'}
+            {expenses.length === 0 ? t('noExpenses') : t('noExpensesFilter')}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -364,7 +365,7 @@ export function SplitBoard({
                     : toMinor(share.amount, expense.currency);
                   return `${nameOf(share.memberId)} ${formatMinor(minor, expense.currency)}`;
                 })
-                .join('、');
+                .join(t('listSep'));
               const other = expense.currency === 'JPY' ? 'TWD' : 'JPY';
               const converted = rate ? convertMinor(minorOf(expense), expense.currency, other, rate) : NaN;
               return (
@@ -375,18 +376,20 @@ export function SplitBoard({
                         expense.currency === 'JPY' ? 'bg-ice-600' : 'bg-amber-500'
                       }`}
                     >
-                      {expense.currency === 'JPY' ? '日圓' : '新台幣'}
+                      {expense.currency === 'JPY' ? t('yen') : t('twd')}
                     </span>
                     <span className="rounded-md bg-snow-100 px-2 py-0.5 text-sm font-bold text-slate-600">
-                      {MODE_LABELS[expense.mode]}
+                      {splitModeLabel(t, expense.mode)}
                     </span>
                     <span className="text-lg font-bold">{formatMinor(minorOf(expense), expense.currency)}</span>
                     {Number.isFinite(converted) && (
-                      <span className="text-sm font-semibold text-slate-500">約 {formatMinor(converted, other)}</span>
+                      <span className="text-sm font-semibold text-slate-500">
+                        {t('approxAmount', { amount: formatMinor(converted, other) })}
+                      </span>
                     )}
                   </div>
-                  <p className="mt-1 break-words text-base font-semibold">{expense.note || '未填備註'}</p>
-                  <p className="mt-1 text-sm text-slate-600">{nameOf(expense.payerId)} 付款</p>
+                  <p className="mt-1 break-words text-base font-semibold">{expense.note || t('noNote')}</p>
+                  <p className="mt-1 text-sm text-slate-600">{t('paidBy', { name: nameOf(expense.payerId) })}</p>
                   <p className="mt-1 break-words text-sm text-slate-600">{shareLine}</p>
                   {(day || expense.stopId) && (
                     <button
@@ -394,8 +397,8 @@ export function SplitBoard({
                       className="mt-2 min-h-touch max-w-full truncate rounded-lg text-left text-sm font-semibold text-ice-700"
                       onClick={() => onJumpToDay(expense.day ?? stop?.day ?? 1, expense.stopId)}
                     >
-                      {day ? `${day.label} ${day.date.slice(5)}` : '行程'}
-                      {expense.stopId ? ` · ${stop?.title || '站點已刪除'}` : ''}
+                      {day ? `${day.label} ${day.date.slice(5)}` : t('itineraryWord')}
+                      {expense.stopId ? ` · ${stop?.title || t('stopDeleted')}` : ''}
                     </button>
                   )}
                   {canEdit && (
@@ -408,14 +411,14 @@ export function SplitBoard({
                           setEditor(expense);
                         }}
                       >
-                        編輯
+                        {t('edit')}
                       </button>
                       <button
                         type="button"
                         className="min-h-touch rounded-xl border border-red-200 text-base font-bold text-red-700"
                         onClick={() => void removeExpense(expense)}
                       >
-                        刪除
+                        {t('delete')}
                       </button>
                     </div>
                   )}
@@ -426,10 +429,10 @@ export function SplitBoard({
         )}
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3">
-          <h3 className="text-base font-bold text-ice-700">旅伴</h3>
-          <p className="mt-1 text-sm text-slate-500">旅伴就是已經註冊的帳號。加入時輸入那個帳號。</p>
+          <h3 className="text-base font-bold text-ice-700">{t('companions')}</h3>
+          <p className="mt-1 text-sm text-slate-500">{t('companionsHint')}</p>
           {members.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-600">還沒有旅伴</p>
+            <p className="mt-2 text-sm text-slate-600">{t('noCompanions')}</p>
           ) : (
             <ul className="mt-2">
               {members.map((member) => (
@@ -437,21 +440,30 @@ export function SplitBoard({
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-base font-semibold">
-                        {member.displayName || '（未知帳號）'}
-                        {member.id === selfId ? '（你）' : ''}
+                        {member.displayName || t('unknownAccount')}
+                        {member.id === selfId ? t('youSuffix') : ''}
                       </p>
-                      {member.username && <p className="text-sm text-slate-500">帳號 {member.username}</p>}
+                      {member.username && (
+                        <p className="text-sm text-slate-500">{t('accountLine', { username: member.username })}</p>
+                      )}
                     </div>
                     {canSettle && (
                       <button
                         type="button"
                         className="min-h-touch shrink-0 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600"
                         onClick={() => {
-                          if (!confirm(`確定移除「${member.displayName || member.username || '這位旅伴'}」？`)) return;
+                          if (
+                            !confirm(
+                              t('removeConfirm', {
+                                name: member.displayName || member.username || t('thisCompanion'),
+                              }),
+                            )
+                          )
+                            return;
                           void sendAsMember('member:remove', { id: member.id });
                         }}
                       >
-                        移除
+                        {t('remove')}
                       </button>
                     )}
                   </div>
@@ -471,7 +483,7 @@ export function SplitBoard({
                 void send('member:add', { username });
               }}
             >
-              把我加入這趟
+              {t('addMyself')}
             </button>
           )}
           {canSettle && (
@@ -488,30 +500,30 @@ export function SplitBoard({
                 className="min-h-touch min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-base"
                 value={accountName}
                 maxLength={32}
-                placeholder="已註冊的帳號"
-                aria-label="旅伴帳號"
+                placeholder={t('registeredAccountPlaceholder')}
+                aria-label={t('companionAccountAria')}
                 autoCapitalize="none"
                 autoCorrect="off"
                 onChange={(event) => setAccountName(event.target.value)}
               />
               <button type="submit" className="min-h-touch shrink-0 rounded-xl bg-ice-600 px-4 text-sm font-bold text-white">
-                加入
+                {t('join')}
               </button>
             </form>
           )}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <h3 className="text-base font-bold text-ice-700">記下的結算</h3>
-          <p className="mt-1 text-sm text-slate-500">直接記下誰要付給誰。付款人和收款人都是這趟的旅伴。</p>
+          <h3 className="text-base font-bold text-ice-700">{t('recordedSettlements')}</h3>
+          <p className="mt-1 text-sm text-slate-500">{t('recordedSettlementsHint')}</p>
           {settlements.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-600">還沒有記下結算</p>
+            <p className="mt-2 text-sm text-slate-600">{t('noRecordedSettlements')}</p>
           ) : (
             <ul className="mt-2 space-y-2">
               {settlements.map((row) => (
                 <li key={row.id} className="rounded-xl bg-snow-50 px-3 py-2">
                   <p className="text-base font-semibold text-slate-800">
-                    {nameOf(row.payerId)} 付給 {nameOf(row.payeeId)}
+                    {t('pays', { from: nameOf(row.payerId), to: nameOf(row.payeeId) })}
                   </p>
                   <p className="text-lg font-bold text-ice-700">
                     {formatMinor(
@@ -524,20 +536,18 @@ export function SplitBoard({
                       type="button"
                       className="mt-2 min-h-touch rounded-xl border border-red-200 px-3 text-sm font-bold text-red-700"
                       onClick={() => {
-                        if (!confirm('確定刪除這筆結算？')) return;
+                        if (!confirm(t('deleteSettlementConfirm'))) return;
                         void sendAsMember('settlement:delete', { id: row.id });
                       }}
                     >
-                      刪除
+                      {t('delete')}
                     </button>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          {canSettle && members.length < 2 && (
-            <p className="mt-2 text-sm text-slate-600">要有兩位旅伴才能記下誰付給誰。</p>
-          )}
+          {canSettle && members.length < 2 && <p className="mt-2 text-sm text-slate-600">{t('needTwoCompanions')}</p>}
           {canSettle && members.length >= 2 && (
             <form
               className="mt-3 space-y-2"
@@ -553,10 +563,10 @@ export function SplitBoard({
               }}
             >
               <label className="block text-sm font-bold text-slate-600">
-                付款人
+                {t('payer')}
                 <select
                   className="mt-1 min-h-touch w-full rounded-xl border border-slate-200 bg-white px-3 text-base"
-                  value={payerId || selfId || members[0]?.id || ''}
+                  value={payerValue}
                   onChange={(event) => setPayerId(event.target.value)}
                 >
                   {members.map((member) => (
@@ -567,10 +577,10 @@ export function SplitBoard({
                 </select>
               </label>
               <label className="block text-sm font-bold text-slate-600">
-                收款人
+                {t('payee')}
                 <select
                   className="mt-1 min-h-touch w-full rounded-xl border border-slate-200 bg-white px-3 text-base"
-                  value={payeeId || members.find((member) => member.id !== (payerId || selfId || members[0]?.id))?.id || ''}
+                  value={payeeValue}
                   onChange={(event) => setPayeeId(event.target.value)}
                 >
                   {members.map((member) => (
@@ -583,8 +593,8 @@ export function SplitBoard({
               <div className="grid grid-cols-2 gap-2">
                 {(
                   [
-                    ['JPY', '日圓'],
-                    ['TWD', '新台幣'],
+                    ['JPY', t('yen')],
+                    ['TWD', t('twd')],
                   ] as [Currency, string][]
                 ).map(([currency, label]) => (
                   <button
@@ -602,13 +612,13 @@ export function SplitBoard({
               <input
                 className="min-h-touch w-full rounded-xl border border-slate-200 px-3 text-base"
                 inputMode="decimal"
-                placeholder="金額"
-                aria-label="結算金額"
+                placeholder={t('amount')}
+                aria-label={t('settleAmountAria')}
                 value={settleAmount}
                 onChange={(event) => setSettleAmount(event.target.value)}
               />
               <button type="submit" className="min-h-touch w-full rounded-xl bg-ice-600 text-base font-bold text-white">
-                記下這筆結算
+                {t('recordSettlement')}
               </button>
             </form>
           )}
@@ -621,7 +631,7 @@ export function SplitBoard({
           className="min-h-touch w-full rounded-xl bg-ice-600 text-lg font-bold text-white shadow active:bg-ice-700"
           onClick={startAdd}
         >
-          新增支出
+          {t('addExpense')}
         </button>
       </div>
 

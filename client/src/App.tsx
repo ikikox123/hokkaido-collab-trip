@@ -7,6 +7,9 @@ import { TripList } from './components/TripList';
 import { MapView } from './components/MapView';
 import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
 import { SplitBoard } from './components/SplitBoard';
+import { LanguageMenu } from './i18n/LanguageMenu';
+import { useI18n } from './i18n/I18nProvider';
+import { localizeError } from './i18n/errors';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { usesGoogleMaps } from './lib/mapProvider';
 import { isSplitPath, leaveSplit, openSplit } from './lib/splitLink';
@@ -15,17 +18,18 @@ import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './typ
 type MobileTab = 'list' | 'map' | 'split';
 
 function CurrentStopBar({ stop }: { stop: Stop | null }) {
+  const { t } = useI18n();
   return (
     <div className="z-20 shrink-0 border-b border-ice-100 bg-white px-3 py-2">
       <div className="flex min-h-touch items-center gap-2">
-        <span className="shrink-0 rounded-md bg-ice-600 px-2 py-1 text-sm font-bold text-white">目前站點</span>
+        <span className="shrink-0 rounded-md bg-ice-600 px-2 py-1 text-sm font-bold text-white">{t('currentStop')}</span>
         {stop ? (
           <p className="min-w-0 truncate text-base font-bold text-slate-900">
-            <span className="mr-2 font-semibold text-ice-700">{stop.time || '時間未定'}</span>
+            <span className="mr-2 font-semibold text-ice-700">{stop.time || t('timeUnset')}</span>
             {stop.title}
           </p>
         ) : (
-          <p className="truncate text-base text-slate-500">這天尚無站點</p>
+          <p className="truncate text-base text-slate-500">{t('noStopsToday')}</p>
         )}
       </div>
     </div>
@@ -57,6 +61,9 @@ export default function App() {
     { mode: 'add' } | { mode: 'edit'; stopId: string } | null
   >(null);
   const googlePlaces = usesGoogleMaps();
+  const { t } = useI18n();
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -77,10 +84,12 @@ export default function App() {
       setOnline(p.online || []);
     });
     s.on('error:auth', (e: { error: string }) => {
-      showToast(e.error || '需要登入');
+      const translate = tRef.current;
+      showToast(localizeError(e.error || translate('needLogin'), translate));
     });
     s.on('error:edit', (e: { error: string }) => {
-      showToast(e.error || '無法更新');
+      const translate = tRef.current;
+      showToast(localizeError(e.error || translate('cannotUpdate'), translate));
     });
     s.on('connect', () => {
       s.emit('room:join', {
@@ -168,23 +177,23 @@ export default function App() {
 
   const canEdit = Boolean(user && token);
 
-  function handleLogin(u: User, t: string) {
+  function handleLogin(u: User, nextToken: string) {
     setUser(u);
-    setToken(t);
-    showToast(`歡迎，${u.displayName}`);
+    setToken(nextToken);
+    showToast(t('welcome', { name: u.displayName }));
   }
 
   function handleLogout() {
     clearAuth();
     setUser(null);
     setToken(null);
-    showToast('已登出');
+    showToast(t('loggedOut'));
   }
 
   function emitAuth(event: string, payload: Record<string, unknown>) {
     if (!socket) return;
     if (!token) {
-      showToast('請先登入才能編輯');
+      showToast(t('loginToEdit'));
       setLoginOpen(true);
       return;
     }
@@ -195,16 +204,19 @@ export default function App() {
     const code = (roomCode || DEFAULT_ROOM).toUpperCase();
     setRoomCode(code);
     socket?.emit('room:join', { roomCode: code, user });
-    showToast(`已加入房間 ${code}`);
+    showToast(t('joinedRoom', { code }));
     setHeaderOpen(false);
   }
 
   if (!trip) {
     return (
-      <div className="min-h-full flex items-center justify-center bg-snow-50 text-ice-700">
+      <div className="relative min-h-full flex items-center justify-center bg-snow-50 text-ice-700">
+        <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))]">
+          <LanguageMenu tone="light" />
+        </div>
         <div className="text-center px-6">
           <div className="text-4xl mb-3">❄️</div>
-          <p className="font-semibold">載入北海道行程中…</p>
+          <p className="font-semibold">{t('loadingTrip')}</p>
         </div>
       </div>
     );
@@ -220,16 +232,17 @@ export default function App() {
               {trip.tripName.split('｜')[0]}
             </h1>
             <p className="truncate text-sm text-white/80">
-              {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : '多人協作'}
+              {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
             </p>
           </div>
+          <LanguageMenu />
           <button
             type="button"
             className="min-h-touch min-w-touch rounded-lg bg-white/15 px-2 text-sm font-medium"
             onClick={() => setHeaderOpen((v) => !v)}
             aria-expanded={headerOpen}
           >
-            {headerOpen ? '收合' : '選單'}
+            {headerOpen ? t('collapse') : t('menu')}
           </button>
           {user ? (
             <button
@@ -245,7 +258,7 @@ export default function App() {
               className="min-h-touch px-3 rounded-lg bg-sakura-500 text-sm font-semibold"
               onClick={() => setLoginOpen(true)}
             >
-              登入
+              {t('login')}
             </button>
           )}
         </div>
@@ -253,7 +266,7 @@ export default function App() {
         {headerOpen && (
           <div className="border-t border-white/15 px-3 py-3 space-y-3 text-sm">
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-white/80">房間碼</span>
+              <span className="text-white/80">{t('roomCode')}</span>
               <input
                 className="flex-1 min-w-[8rem] min-h-touch rounded-lg bg-white/10 border border-white/20 px-3 text-white placeholder:text-white/40"
                 value={roomCode}
@@ -265,29 +278,29 @@ export default function App() {
                 className="min-h-touch px-4 rounded-lg bg-white text-ice-700 font-semibold"
                 onClick={joinRoom}
               >
-                加入
+                {t('join')}
               </button>
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/85">
-              <span>線上 {online.length} 人</span>
+              <span>{t('onlineCount', { count: online.length })}</span>
               <span className="truncate max-w-full">
-                {online.map((o) => o.displayName).join('、') || '尚無'}
+                {online.map((o) => o.displayName).join(t('listSep')) || t('noneYet')}
               </span>
             </div>
             <div className="space-y-0.5 text-sm text-white/80">
-              <div>住宿：{trip.lodging.name}</div>
-              <div>去程 {trip.flights.outbound}</div>
-              <div>回程 {trip.flights.inbound}</div>
+              <div>{t('lodgingLine', { name: trip.lodging.name })}</div>
+              <div>{t('outboundLine', { text: trip.flights.outbound })}</div>
+              <div>{t('inboundLine', { text: trip.flights.inbound })}</div>
             </div>
             {canEdit && (
               <button
                 type="button"
                 className="min-h-touch w-full rounded-lg border border-white/30 text-white/90"
                 onClick={() => {
-                  if (confirm('確定重置為種子行程？')) emitAuth('trip:reset', {});
+                  if (confirm(t('resetConfirm'))) emitAuth('trip:reset', {});
                 }}
               >
-                重置種子資料
+                {t('resetSeed')}
               </button>
             )}
           </div>
@@ -296,7 +309,7 @@ export default function App() {
 
       {/* Day strip stays outside the list scroller. Hidden on the phone bill tab. */}
       {!mobileSplit && (
-      <nav aria-label="行程日期" className="z-20 shrink-0 border-b border-slate-200 bg-white">
+      <nav aria-label={t('dayNav')} className="z-20 shrink-0 border-b border-slate-200 bg-white">
         <div className="flex gap-1 overflow-x-auto no-scrollbar px-2 py-2">
           {trip.days.map((d) => (
             <button
@@ -336,7 +349,7 @@ export default function App() {
               }`}
               onClick={() => selectTab('list')}
             >
-              行程
+              {t('tabItinerary')}
             </button>
             <button
               type="button"
@@ -345,7 +358,7 @@ export default function App() {
               }`}
               onClick={() => selectTab('split')}
             >
-              分帳
+              {t('tabSplit')}
             </button>
           </div>
           <div className="min-h-0 flex-1">
@@ -393,7 +406,7 @@ export default function App() {
                 return;
               }
               const dayMeta = trip.days.find((d) => d.day === selectedDay);
-              const title = prompt('新站點名稱？', '新景點');
+              const title = prompt(t('newStopPrompt'), t('newStopDefault'));
               if (!title) return;
               emitAuth('trip:add', {
                 stop: {
@@ -438,15 +451,15 @@ export default function App() {
       </main>
 
       <nav
-        aria-label="切換行程、分帳與地圖"
+        aria-label={t('tabNav')}
         className="grid shrink-0 grid-cols-3 gap-2 border-t border-slate-200 bg-white px-3 pt-2 md:hidden"
         style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
       >
         {(
           [
-            ['list', '行程'],
-            ['split', '分帳'],
-            ['map', '地圖'],
+            ['list', t('tabItinerary')],
+            ['split', t('tabSplit')],
+            ['map', t('tabMap')],
           ] as [MobileTab, string][]
         ).map(([tab, label]) => (
           <button

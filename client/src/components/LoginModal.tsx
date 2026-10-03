@@ -1,4 +1,6 @@
 import { FormEvent, useState } from 'react';
+import { useI18n } from '../i18n/I18nProvider';
+import { localizeError } from '../i18n/errors';
 import { loginRequest, registerRequest, saveAuth } from '../lib/auth';
 import type { User } from '../types/trip';
 
@@ -25,6 +27,7 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
   const [password, setPassword] = useState('demo1234');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { t } = useI18n();
   const isRegister = mode === 'register';
 
   if (!open) return null;
@@ -79,22 +82,23 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
         <h2 id="login-title" className="text-lg font-bold text-ice-700">
-          {isRegister ? '註冊帳號' : '登入協作編輯'}
+          {isRegister ? t('registerTitle') : t('loginTitle')}
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           {isRegister ? (
-            '註冊後會直接登入。用現在的帳號與密碼，就能加入房間一起編輯。'
+            t('registerHint')
           ) : (
             <>
-              示範帳號：<code className="bg-snow-100 px-1 rounded">alice</code> /{' '}
-              <code className="bg-snow-100 px-1 rounded">bob</code>，密碼{' '}
-              <code className="bg-snow-100 px-1 rounded">demo1234</code>
+              {t('demoAccounts')} <code className="bg-snow-100 px-1 rounded">alice</code> /{' '}
+              <code className="bg-snow-100 px-1 rounded">bob</code>
+              {t('listSep')}
+              {t('demoPasswordLabel')} <code className="bg-snow-100 px-1 rounded">demo1234</code>
             </>
           )}
         </p>
         <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
           <label className="block">
-            <span className="text-sm font-medium">帳號</span>
+            <span className="text-sm font-medium">{t('username')}</span>
             <input
               className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-ice-500 focus:ring-2 focus:ring-ice-500/30"
               autoComplete="username"
@@ -106,7 +110,7 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
             />
           </label>
           <label className="block">
-            <span className="text-sm font-medium">密碼</span>
+            <span className="text-sm font-medium">{t('password')}</span>
             <input
               type="password"
               className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-ice-500 focus:ring-2 focus:ring-ice-500/30"
@@ -117,7 +121,7 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
           </label>
           {error && (
             <p className="text-sm text-red-600" role="alert">
-              {error}
+              {localizeError(error, t)}
             </p>
           )}
           <button
@@ -125,21 +129,21 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
             disabled={loading}
             className="w-full min-h-touch rounded-xl bg-ice-600 text-white font-semibold active:bg-ice-700 disabled:opacity-60"
           >
-            {loading ? (isRegister ? '註冊中…' : '登入中…') : isRegister ? '註冊並登入' : '登入'}
+            {loading ? (isRegister ? t('registering') : t('loggingIn')) : isRegister ? t('registerAndLogin') : t('login')}
           </button>
           <button
             type="button"
             className="w-full min-h-touch rounded-xl text-ice-700 font-medium"
             onClick={switchMode}
           >
-            {isRegister ? '已有帳號？登入' : '還沒有帳號？註冊'}
+            {isRegister ? t('haveAccount') : t('needAccount')}
           </button>
           <button
             type="button"
             className="w-full min-h-touch rounded-xl text-slate-600"
             onClick={onClose}
           >
-            先以訪客瀏覽
+            {t('browseAsGuest')}
           </button>
         </form>
       </div>
