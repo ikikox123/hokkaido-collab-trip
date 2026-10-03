@@ -5,12 +5,13 @@ import {
   billToCsv,
   convertMinor,
   crossSettlement,
+  currencyBooks,
   formatMinor,
-  settlementOf,
   toMinor,
   type BillInput,
   type Currency,
   type Expense,
+  type Transfer,
 } from '../../../server/src/split.js';
 import { localizeError } from '../i18n/errors';
 import type { Translate } from '../i18n/I18nProvider';
@@ -39,6 +40,30 @@ type Filter = 'all' | Currency;
 
 function minorOf(expense: Expense) {
   return Number.isInteger(expense.amountMinor) ? expense.amountMinor : toMinor(expense.amount, expense.currency);
+}
+
+function TransferList({
+  transfers,
+  currency,
+  nameOf,
+}: {
+  transfers: Transfer[];
+  currency: Currency;
+  nameOf: (id: string) => string;
+}) {
+  const { t } = useI18n();
+  return (
+    <ul className="mt-1 space-y-2">
+      {transfers.map((transfer) => (
+        <li key={`${transfer.fromId}-${transfer.toId}-${transfer.amountMinor}`} className="rounded-xl bg-snow-50 px-3 py-2">
+          <p className="text-base font-semibold text-slate-800">
+            {t('pays', { from: nameOf(transfer.fromId), to: nameOf(transfer.toId) })}
+          </p>
+          <p className="text-lg font-bold text-ice-700">{formatMinor(transfer.amountMinor, currency)}</p>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function netPhrase(netMinor: number, currency: Currency, t: Translate) {
@@ -78,7 +103,10 @@ export function SplitBoard({
   const isMember = Boolean(userId && members.some((member) => member.id === userId));
   const canSettle = Boolean(canEdit && isMember);
   const selfId = isMember ? userId : null;
-  const settlement = useMemo(() => settlementOf({ ...trip, members, expenses }), [trip, members, expenses]);
+  const books = useMemo(
+    () => currencyBooks({ ...trip, members, expenses, settlements }),
+    [trip, members, expenses, settlements],
+  );
   const rate = fx?.effective?.twdPerJpy;
   const cross = useMemo(
     () => (rate ? crossSettlement({ ...trip, members, expenses }, settleIn, rate) : null),
@@ -264,11 +292,8 @@ export function SplitBoard({
         <h3 className="text-sm font-bold text-slate-500">{t('originalBooks')}</h3>
 
         {(['JPY', 'TWD'] as Currency[]).map((currency) => {
-          const book = settlement[currency];
-          const spent = expenses
-            .filter((expense) => expense.currency === currency)
-            .reduce((sum, expense) => sum + minorOf(expense), 0);
-          const mine = selfId ? book.nets.find((net) => net.memberId === selfId) : undefined;
+          const book = books[currency];
+          const mine = selfId && book.nets ? book.nets.find((net) => net.memberId === selfId) : undefined;
           return (
             <section
               key={currency}
@@ -278,52 +303,83 @@ export function SplitBoard({
             >
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="text-base font-bold text-ice-700">{currency === 'JPY' ? t('yen') : t('twd')}</h3>
-                <p className="text-sm text-slate-500">{t('spentLine', { amount: formatMinor(spent, currency) })}</p>
+                <p className="text-sm text-slate-500">
+                  {t('spentLine', { amount: formatMinor(book.spentMinor, currency) })}
+                </p>
               </div>
+
+              <h4 className="mt-3 text-sm font-bold text-slate-500">{t('expenseSettlement')}</h4>
+              {!book.hasExpenses && <p className="mt-1 text-sm text-slate-600">{t('noSpendCurrency')}</p>}
               {mine && (
                 <p className="mt-2 rounded-xl bg-snow-100 px-3 py-2 text-base font-bold text-slate-900">
                   {t('youNet', { phrase: netPhrase(mine.netMinor, currency, t) })}
                 </p>
               )}
-              <h4 className="mt-3 text-sm font-bold text-slate-500">{t('suggestedTransfers')}</h4>
-              {book.transfers.length === 0 ? (
-                <p className="mt-1 text-sm text-slate-600">{spent === 0 ? t('noSpendCurrency') : t('alreadyBalanced')}</p>
+              {book.suggested && (
+                <>
+                  <h4 className="mt-3 text-sm font-bold text-slate-500">{t('suggestedTransfers')}</h4>
+                  {book.suggested.length === 0 ? (
+                    <p className="mt-1 text-sm text-slate-600">{t('alreadyBalanced')}</p>
+                  ) : (
+                    <TransferList transfers={book.suggested} currency={currency} nameOf={nameOf} />
+                  )}
+                </>
+              )}
+              {book.nets && (
+                <>
+                  <h4 className="mt-3 text-sm font-bold text-slate-500">{t('netEach')}</h4>
+                  <ul>
+                    {book.nets.map((net) => (
+                      <li
+                        key={net.memberId}
+                        className="flex min-h-touch items-center justify-between gap-3 border-t border-slate-100 text-base"
+                      >
+                        <span className="min-w-0 truncate font-semibold">
+                          {nameOf(net.memberId)}
+                          {net.memberId === selfId ? t('youSuffix') : ''}
+                        </span>
+                        <span
+                          className={`shrink-0 font-bold ${
+                            net.netMinor > 0 ? 'text-ice-700' : net.netMinor < 0 ? 'text-sakura-500' : 'text-slate-400'
+                          }`}
+                        >
+                          {netPhrase(net.netMinor, currency, t)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {book.remaining && (
+                <>
+                  <h4 className="mt-3 text-sm font-bold text-slate-500">{t('stillNeedTransfer')}</h4>
+                  {book.remainingSettled ? (
+                    <p className="mt-1 text-sm text-slate-600">{t('settled')}</p>
+                  ) : (
+                    <TransferList transfers={book.remaining} currency={currency} nameOf={nameOf} />
+                  )}
+                </>
+              )}
+
+              <h4 className="mt-3 text-sm font-bold text-slate-500">{t('recordedTransfers')}</h4>
+              {book.recordedOnly && <p className="mt-1 text-sm text-slate-600">{t('recordedNotDebt')}</p>}
+              {book.recorded.length === 0 ? (
+                <p className="mt-1 text-sm text-slate-600">{t('noRecordedCurrency')}</p>
               ) : (
                 <ul className="mt-1 space-y-2">
-                  {book.transfers.map((transfer) => (
-                    <li
-                      key={`${transfer.fromId}-${transfer.toId}-${transfer.amountMinor}`}
-                      className="rounded-xl bg-snow-50 px-3 py-2"
-                    >
+                  {book.recorded.map((row) => (
+                    <li key={`${row.payerId}-${row.payeeId}`} className="rounded-xl bg-snow-50 px-3 py-2">
                       <p className="text-base font-semibold text-slate-800">
-                        {t('pays', { from: nameOf(transfer.fromId), to: nameOf(transfer.toId) })}
+                        {t('pays', { from: nameOf(row.payerId), to: nameOf(row.payeeId) })}
                       </p>
-                      <p className="text-lg font-bold text-ice-700">{formatMinor(transfer.amountMinor, currency)}</p>
+                      <p className="text-lg font-bold text-ice-700">
+                        {t('recordedTotal', { amount: formatMinor(row.amountMinor, currency) })}
+                      </p>
                     </li>
                   ))}
                 </ul>
               )}
-              <h4 className="mt-3 text-sm font-bold text-slate-500">{t('netEach')}</h4>
-              <ul>
-                {book.nets.map((net) => (
-                  <li
-                    key={net.memberId}
-                    className="flex min-h-touch items-center justify-between gap-3 border-t border-slate-100 text-base"
-                  >
-                    <span className="min-w-0 truncate font-semibold">
-                      {nameOf(net.memberId)}
-                      {net.memberId === selfId ? t('youSuffix') : ''}
-                    </span>
-                    <span
-                      className={`shrink-0 font-bold ${
-                        net.netMinor > 0 ? 'text-ice-700' : net.netMinor < 0 ? 'text-sakura-500' : 'text-slate-400'
-                      }`}
-                    >
-                      {netPhrase(net.netMinor, currency, t)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             </section>
           );
         })}
@@ -516,37 +572,6 @@ export function SplitBoard({
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <h3 className="text-base font-bold text-ice-700">{t('recordedSettlements')}</h3>
           <p className="mt-1 text-sm text-slate-500">{t('recordedSettlementsHint')}</p>
-          {settlements.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-600">{t('noRecordedSettlements')}</p>
-          ) : (
-            <ul className="mt-2 space-y-2">
-              {settlements.map((row) => (
-                <li key={row.id} className="rounded-xl bg-snow-50 px-3 py-2">
-                  <p className="text-base font-semibold text-slate-800">
-                    {t('pays', { from: nameOf(row.payerId), to: nameOf(row.payeeId) })}
-                  </p>
-                  <p className="text-lg font-bold text-ice-700">
-                    {formatMinor(
-                      Number.isInteger(row.amountMinor) ? row.amountMinor : toMinor(row.amount, row.currency),
-                      row.currency,
-                    )}
-                  </p>
-                  {canSettle && (
-                    <button
-                      type="button"
-                      className="mt-2 min-h-touch rounded-xl border border-red-200 px-3 text-sm font-bold text-red-700"
-                      onClick={() => {
-                        if (!confirm(t('deleteSettlementConfirm'))) return;
-                        void sendAsMember('settlement:delete', { id: row.id });
-                      }}
-                    >
-                      {t('delete')}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
           {canSettle && members.length < 2 && <p className="mt-2 text-sm text-slate-600">{t('needTwoCompanions')}</p>}
           {canSettle && members.length >= 2 && (
             <form
@@ -621,6 +646,40 @@ export function SplitBoard({
                 {t('recordSettlement')}
               </button>
             </form>
+          )}
+          {settlements.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-600">{t('noRecordedSettlements')}</p>
+          ) : (
+            <ul
+              className="mt-3 max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1"
+              aria-label={t('recordedSettlements')}
+            >
+              {settlements.map((row) => (
+                <li key={row.id} className="rounded-xl bg-snow-50 px-3 py-2">
+                  <p className="text-base font-semibold text-slate-800">
+                    {t('pays', { from: nameOf(row.payerId), to: nameOf(row.payeeId) })}
+                  </p>
+                  <p className="text-lg font-bold text-ice-700">
+                    {formatMinor(
+                      Number.isInteger(row.amountMinor) ? row.amountMinor : toMinor(row.amount, row.currency),
+                      row.currency,
+                    )}
+                  </p>
+                  {canSettle && (
+                    <button
+                      type="button"
+                      className="mt-2 min-h-touch rounded-xl border border-red-200 px-3 text-sm font-bold text-red-700"
+                      onClick={() => {
+                        if (!confirm(t('deleteSettlementConfirm'))) return;
+                        void sendAsMember('settlement:delete', { id: row.id });
+                      }}
+                    >
+                      {t('delete')}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       </div>

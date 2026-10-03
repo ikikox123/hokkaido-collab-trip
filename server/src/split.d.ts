@@ -93,6 +93,31 @@ export interface CurrencySettlement {
   transfers: Transfer[];
 }
 
+export interface RecordedTransfer {
+  payerId: string;
+  payeeId: string;
+  amount: number;
+  amountMinor: number;
+}
+
+export interface CurrencyBook {
+  currency: Currency;
+  spentMinor: number;
+  hasExpenses: boolean;
+  hasRecorded: boolean;
+  /** Recorded transfers exist and this currency has no expenses. */
+  recordedOnly: boolean;
+  /** Expense nets. Null when this currency has no expenses, so the UI does not call everyone settled. */
+  nets: NetBalance[] | null;
+  /** Expense transfers. Null when there are no expenses, or when recorded transfers replace them with remaining. */
+  suggested: Transfer[] | null;
+  expenseBalanced: boolean;
+  /** Null unless this currency has both expenses and recorded transfers. */
+  remaining: Transfer[] | null;
+  remainingSettled: boolean;
+  recorded: RecordedTransfer[];
+}
+
 export interface AccountRef {
   id: string;
   username?: string;
@@ -151,6 +176,7 @@ export function deleteSettlement<T extends object>(
   id: string,
 ): { ok: true; state: T & BillFields } | { ok: false; error: string };
 export function settlementOf(state: object): Record<Currency, CurrencySettlement>;
+export function currencyBooks(state: object): Record<Currency, CurrencyBook>;
 export function convertMinor(minor: number, from: Currency, to: Currency, twdPerJpy: number): number;
 export function crossSettlement(
   state: object,

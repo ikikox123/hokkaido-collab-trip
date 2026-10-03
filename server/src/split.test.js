@@ -4,6 +4,7 @@ import {
   addMember,
   addSettlement,
   billToCsv,
+  currencyBooks,
   deleteExpense,
   deleteSettlement,
   ensureBill,
@@ -553,4 +554,88 @@ test('a directed settlement stores payer id, payee id, and amount', () => {
   assert.equal(cleared.state.settlements[0].payerId, 'u1');
   assert.equal(cleared.state.settlements[0].payeeId, mika);
   assert.equal(cleared.state.settlements[0].amount, 1200);
+});
+
+test('zero expenses plus two same-currency transfers are not summarized as settled', () => {
+  const dagg = 'u_7e1a1ba5d7ff3beb';
+  let state = ensureBill({
+    stops: [],
+    members: [
+      { id: 'u1', displayName: 'Alice' },
+      { id: dagg, displayName: 'DAGG' },
+    ],
+    expenses: [],
+  });
+  for (const amount of [7000, 500]) {
+    const saved = addSettlement(state, { payerId: 'u1', payeeId: dagg, amount, currency: 'TWD' });
+    assert.equal(saved.ok, true, saved.error);
+    state = saved.state;
+  }
+  assert.equal(state.expenses.length, 0);
+  assert.equal(state.settlements.length, 2);
+
+  const expenseOnly = settlementOf(state).TWD;
+  assert.equal(expenseOnly.transfers.length, 0);
+  assert.ok(expenseOnly.nets.every((net) => net.netMinor === 0));
+
+  const book = currencyBooks(state).TWD;
+  assert.equal(book.hasExpenses, false);
+  assert.equal(book.spentMinor, 0);
+  assert.equal(book.recordedOnly, true);
+  assert.equal(book.nets, null);
+  assert.equal(book.suggested, null);
+  assert.equal(book.remaining, null);
+  assert.equal(book.remainingSettled, false);
+  assert.equal(book.expenseBalanced, false);
+  assert.equal(book.recorded.length, 1);
+  assert.deepEqual(
+    [book.recorded[0].payerId, book.recorded[0].payeeId, book.recorded[0].amount, book.recorded[0].amountMinor],
+    ['u1', dagg, 7500, 750000],
+  );
+  assert.equal(formatMinor(book.recorded[0].amountMinor, 'TWD'), 'NT$7,500');
+  assert.equal(currencyBooks(state).JPY.recorded.length, 0);
+  assert.equal(currencyBooks(state).JPY.hasExpenses, false);
+  assert.equal(currencyBooks(state).JPY.recordedOnly, false);
+});
+
+test('recorded transfers reduce what the same currency still needs, and settled means nothing is left', () => {
+  let state = trip();
+  const saved = upsertExpense(state, {
+    payerId: 'a',
+    currency: 'TWD',
+    amount: '30',
+    mode: 'equal',
+    memberIds: ['a', 'b'],
+  });
+  assert.equal(saved.ok, true, saved.error);
+  state = saved.state;
+
+  const partial = addSettlement(state, { payerId: 'b', payeeId: 'a', amount: '5', currency: 'TWD' });
+  assert.equal(partial.ok, true, partial.error);
+  const open = currencyBooks(partial.state).TWD;
+  assert.equal(open.hasExpenses, true);
+  assert.equal(open.hasRecorded, true);
+  assert.equal(open.recordedOnly, false);
+  assert.equal(open.suggested, null);
+  assert.equal(open.remainingSettled, false);
+  assert.deepEqual(
+    open.remaining.map((row) => [row.fromId, row.toId, row.amountMinor]),
+    [['b', 'a', 1000]],
+  );
+  assert.equal(open.recorded.length, 1);
+  assert.equal(open.recorded[0].amountMinor, 500);
+  const nets = Object.fromEntries(open.nets.map((net) => [net.memberId, net.netMinor]));
+  assert.equal(nets.a, 1500);
+  assert.equal(nets.b, -1500);
+
+  const paid = addSettlement(partial.state, { payerId: 'b', payeeId: 'a', amount: '10', currency: 'TWD' });
+  assert.equal(paid.ok, true, paid.error);
+  const done = currencyBooks(paid.state).TWD;
+  assert.equal(done.remainingSettled, true);
+  assert.deepEqual(done.remaining, []);
+  assert.equal(done.recorded.length, 1);
+  assert.equal(done.recorded[0].payerId, 'b');
+  assert.equal(done.recorded[0].payeeId, 'a');
+  assert.equal(done.recorded[0].amountMinor, 1500);
+  assert.equal(done.nets.find((net) => net.memberId === 'b').netMinor, -1500);
 });
