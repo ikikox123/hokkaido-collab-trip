@@ -143,6 +143,43 @@ test('a saved demo username cannot replace alice or bob', async () => {
   }
 });
 
+test('registration leaves an existing HOKKAIDO2027 state file unchanged', async () => {
+  const { dir, dataFile, store } = tempStore();
+  const stateFile = path.join(dir, 'state.json');
+  const original = '{"roomCode":"HOKKAIDO2027","stops":[{"id":"s9","title":"小樽運河"}]}';
+  try {
+    fs.writeFileSync(stateFile, original);
+    await store.init();
+    const created = await store.register({ username: 'mika', password: 'trip2027' });
+    assert.equal(created.ok, true);
+    assert.equal(fs.readFileSync(stateFile, 'utf8'), original);
+    const saved = fs.readFileSync(dataFile, 'utf8');
+    assert.equal(saved.includes('小樽運河'), false);
+    assert.equal(saved.includes('HOKKAIDO2027'), false);
+    assert.equal(saved.includes('trip2027'), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('account store refuses to open the trip state file', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hokkaido-users-'));
+  const stateFile = path.join(dir, 'state.json');
+  const original = '{"roomCode":"HOKKAIDO2027","stops":[{"id":"s1","title":"既有站點"}]}';
+  try {
+    fs.writeFileSync(stateFile, original);
+    const store = createUserStore({ dataFile: stateFile, rounds: 4 });
+    await assert.rejects(() => store.init(), /行程狀態檔/);
+    await assert.rejects(
+      () => store.register({ username: 'mika', password: 'trip2027' }),
+      /行程狀態檔/,
+    );
+    assert.equal(fs.readFileSync(stateFile, 'utf8'), original);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('failed save does not leave a half-registered account', async () => {
   const { dir, dataFile, store } = tempStore();
   try {

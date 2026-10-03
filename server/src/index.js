@@ -57,7 +57,7 @@ const io = new Server(httpServer, {
   cors: { origin: true, credentials: true },
 });
 
-/** Demo users (alice/bob) plus accounts registered into data/users.json. */
+/** Accounts only. Writes data/users.json and does not read or replace data/state.json. */
 const userStore = createUserStore({ dataFile: USERS_FILE });
 
 function signUser(user) {

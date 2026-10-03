@@ -13,6 +13,16 @@ const DEMO_IDS = new Set(DEMO_USERS.map((user) => user.id));
 const DEMO_NAMES = new Set(DEMO_USERS.map((user) => user.username));
 const USERNAME_MAX = 32;
 const PASSWORD_MAX_BYTES = 72;
+/** Runtime trip files. Account storage must never read or replace these. */
+const TRIP_STATE_FILES = new Set(['state.json', 'geocode-cache.json']);
+
+function assertAccountFile(dataFile) {
+  if (!dataFile) return;
+  const base = path.basename(dataFile);
+  if (TRIP_STATE_FILES.has(base)) {
+    throw new Error('帳號檔不可使用行程狀態檔');
+  }
+}
 
 export function normalizeUsername(username) {
   return String(username ?? '').trim().toLowerCase();
@@ -41,6 +51,7 @@ function publicUser(user) {
 }
 
 function readSavedUsers(dataFile) {
+  assertAccountFile(dataFile);
   try {
     if (!dataFile || !fs.existsSync(dataFile)) return [];
     const parsed = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
@@ -74,6 +85,7 @@ function readSavedUsers(dataFile) {
 }
 
 function writeSavedUsers(dataFile, users) {
+  assertAccountFile(dataFile);
   const records = users
     .filter((user) => !user.demo)
     .map((user) => ({
@@ -104,12 +116,14 @@ async function passwordMatches(password, passwordHash) {
 /**
  * In-memory accounts plus a gitignored JSON file of bcrypt hashes.
  * Demo users are never written to disk.
+ * This store does not load, migrate, or replace trip state.
  */
 export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 10 } = {}) {
   let users = [];
   const pending = new Set();
 
   async function init() {
+    assertAccountFile(dataFile);
     const hash = await bcrypt.hash(demoPassword, rounds);
     const demos = DEMO_USERS.map((user) => ({
       ...user,
@@ -137,6 +151,7 @@ export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 
   }
 
   async function register({ username, password } = {}) {
+    assertAccountFile(dataFile);
     const error = credentialError(username, password);
     if (error) return { ok: false, status: 400, error };
     const name = normalizeUsername(username);
