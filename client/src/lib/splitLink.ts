@@ -10,9 +10,9 @@ export function splitPageUrl(origin: string) {
   return `${origin.replace(/\/$/, '')}${SPLIT_PATH}`;
 }
 
-/** Bare URL on the first line, then one short Traditional Chinese line. */
-export function splitShareText(origin: string) {
-  return `${splitPageUrl(origin)}\n北海道分帳，點開就能看帳、記一筆`;
+/** Bare URL on the first line, then one short line. The default line stays Traditional Chinese. */
+export function splitShareText(origin: string, line = '北海道分帳，點開就能看帳、記一筆') {
+  return `${splitPageUrl(origin)}\n${line}`;
 }
 
 export function openSplit() {

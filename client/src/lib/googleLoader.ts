@@ -1,3 +1,5 @@
+import { mapsLanguage } from '../i18n/messages';
+import { readLocale } from '../i18n/storage';
 import { googleMapsBrowserKey } from './mapProvider';
 
 type LatLng = { lat: number; lng: number };
@@ -68,7 +70,7 @@ export function loadGoogleMaps(): Promise<GoogleMapsNS> {
         key,
         libraries: 'places',
         v: 'weekly',
-        language: 'zh-TW',
+        language: mapsLanguage(readLocale()),
         region: 'JP',
       });
       script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;

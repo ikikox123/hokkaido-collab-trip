@@ -1,0 +1,105 @@
+import { catalog, type MessageKey } from './messages.ts';
+
+/**
+ * Server and socket errors stay in Traditional Chinese.
+ * The screen maps a known sentence onto the active language and leaves every
+ * other string alone, so saved place names and notes are not rewritten.
+ */
+export const KNOWN_ERRORS: Record<string, MessageKey> = {
+  請輸入帳號與密碼: 'enterBoth',
+  請輸入帳號: 'enterUsername',
+  請輸入密碼: 'enterPassword',
+  '註冊失敗，請稍後再試': 'registerFailed',
+  '登入失敗，請稍後再試': 'loginFailed',
+  帳號或密碼錯誤: 'badCredentials',
+  這個帳號已經有人使用: 'usernameTaken',
+  '註冊沒有成功，請稍後再試': 'registerNotSaved',
+  帳號含有無法使用的字元: 'usernameBadChars',
+  帳號不能包含空白: 'usernameNoSpace',
+  '帳號請勿超過 32 個字': 'usernameTooLong',
+  '密碼請勿超過 72 個字元': 'passwordTooLong',
+  未登入: 'notLoggedIn',
+  登入已過期: 'sessionExpired',
+  請輸入地點: 'enterPlace',
+  查詢過長: 'queryTooLong',
+  '伺服器未設定 Google 金鑰': 'noGoogleKey',
+  找不到地點: 'placeNotFound',
+  座標不完整: 'coordsIncomplete',
+  座標超出範圍: 'coordsOutOfRange',
+  交通方式不正確: 'badTravelMode',
+  請先登入才能編輯: 'loginToEdit',
+  無法更新站點: 'cannotUpdateStop',
+  '這份行程是從已儲存的資料讀進來的，不會用種子覆蓋': 'persistedNoSeed',
+  '地點查詢被拒絕。請確認已啟用 Geocoding API（不必啟用舊版 Places）': 'placeDenied',
+  地點查詢額度已用完: 'placeQuota',
+  '地點查詢逾時，請稍後再試': 'placeTimeout',
+  地點查詢格式無效: 'placeInvalid',
+  '地點查詢暫時失敗，請稍後再試': 'placeTempFail',
+  地點查詢失敗: 'placeLookupFailed',
+  請先登入: 'loginFirst',
+  請選擇匯率方向: 'pickFxDirection',
+  '請輸入大於 0 的匯率': 'enterPositiveRate',
+  '這個數字不像日圓兌新台幣，請確認方向': 'rateUnlikely',
+  '無法重新取得匯率，沿用上次成功的資料': 'fxStale',
+  目前拿不到匯率: 'fxUnavailable',
+  匯率內容無法解析: 'fxUnparseable',
+  匯率超出合理範圍: 'fxOutOfRange',
+  匯率來源沒有回應: 'fxNoResponse',
+  支出格式不正確: 'expenseBadFormat',
+  請選擇日圓或新台幣: 'pickCurrency',
+  請選擇分攤方式: 'pickSplitMode',
+  請選擇付款人: 'pickPayer',
+  '備註請在 200 字以內': 'noteTooLong',
+  排除後沒有人可以分攤: 'excludeNoneLeft',
+  請至少選一個人分攤: 'pickSomeone',
+  支出太多了: 'tooManyExpenses',
+  找不到這筆支出: 'expenseNotFound',
+  '旅伴最多 20 人': 'memberCap',
+  已經有這位旅伴: 'memberExists',
+  找不到這位旅伴: 'memberNotFound',
+  至少要留一位旅伴: 'keepOneMember',
+  '這位旅伴已經出現在支出裡，請先修改那些支出': 'memberInUse',
+  請填每位的金額: 'fillEachAmount',
+  '自訂金額加總要等於總額（最多差 1 圓）': 'customSumYen',
+  '自訂金額加總要等於總額（最多差 0.01）': 'customSumTwd',
+  '請填大於 0 的比例': 'fillRatio',
+  金額必須是正數: 'amountPositive',
+  金額太大: 'amountTooBig',
+  '分攤金額必須是 0 或正數': 'shareNonNegative',
+  請輸入金額: 'enterAmount',
+  找不到這個站點: 'stopMissing',
+  日期不在行程裡: 'dayNotInTrip',
+  站點不在所選的那一天: 'stopWrongDay',
+  有不在旅伴名單裡的人: 'unknownMember',
+  請輸入旅伴名字: 'enterMemberName',
+  '名字請在 20 字以內': 'memberNameTooLong',
+  地點名稱不可空白: 'titleBlank',
+  地點名稱過長: 'titleTooLong',
+  找不到站點: 'stopNotFound',
+  需要登入: 'needLogin',
+  無法更新: 'cannotUpdate',
+  '連線逾時，請再試一次': 'timeoutRetry',
+  尚未連線: 'notConnected',
+  天氣失敗: 'weatherFailed',
+  天氣取得失敗: 'weatherFetchFailed',
+  告警取得失敗: 'alertsFetchFailed',
+  天氣暫時無法更新: 'weatherUnavailable',
+  告警暫時無法更新: 'alertsUnavailable',
+  警報暫時無法更新: 'warningsUnavailable',
+  暫時無法取得運行摘要: 'jrSummaryUnavailable',
+  名稱不可空白: 'nameBlank',
+  缺少瀏覽器地圖金鑰: 'missingMapKey',
+  'Google 地圖無法載入': 'googleLoadFailed',
+};
+
+export type TranslateFn = (key: MessageKey) => string;
+
+export function localizeError(message: string, translate: TranslateFn) {
+  const key = KNOWN_ERRORS[message];
+  if (!key) return message;
+  return translate(key);
+}
+
+export function knownErrorMatchesCatalog() {
+  return Object.entries(KNOWN_ERRORS).every(([source, key]) => catalog[key]['zh-Hant'] === source);
+}
