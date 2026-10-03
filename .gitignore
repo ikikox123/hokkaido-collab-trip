@@ -18,9 +18,10 @@ secrets/
 server/.env
 client/.env
 
-# runtime state
+# runtime state — never commit a live itinerary
 data/state.json
 data/geocode-cache.json
+hokkaido-trip-snapshot.json
 
 # logs
 *.log

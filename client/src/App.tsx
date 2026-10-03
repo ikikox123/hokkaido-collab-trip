@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import type { FxView } from '../../server/src/fx.js';
 import { LoginModal } from './components/LoginModal';
 import { TripAlerts } from './components/TripAlerts';
 import { TripList } from './components/TripList';
 import { MapView } from './components/MapView';
 import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
+import { SplitBoard } from './components/SplitBoard';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { usesGoogleMaps } from './lib/mapProvider';
+import { isSplitPath, leaveSplit, openSplit } from './lib/splitLink';
 import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './types/trip';
 
-type MobileTab = 'list' | 'map';
+type MobileTab = 'list' | 'map' | 'split';
 
 function CurrentStopBar({ stop }: { stop: Stop | null }) {
   return (
@@ -41,7 +44,10 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState<MobileTab>('list');
+  const [mobileTab, setMobileTab] = useState<MobileTab>(() => (isSplitPath(window.location.pathname) ? 'split' : 'list'));
+  const [fx, setFx] = useState<FxView | null>(null);
+  const [composeToken, setComposeToken] = useState(0);
+  const pendingCompose = useRef(false);
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
   );
@@ -62,6 +68,10 @@ export default function App() {
     setSocket(s);
     s.on('trip:update', (state: TripState) => {
       setTrip(state);
+      if (state.fx) setFx(state.fx);
+    });
+    s.on('fx:update', (next: FxView) => {
+      setFx(next);
     });
     s.on('presence:update', (p: { online: PresenceUser[]; count: number }) => {
       setOnline(p.online || []);
@@ -90,6 +100,38 @@ export default function App() {
   }, [socket, user, roomCode]);
 
   useEffect(() => {
+    const onPop = () => setMobileTab(isSplitPath(window.location.pathname) ? 'split' : 'list');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const pullFx = useCallback(async () => {
+    try {
+      const res = await fetch('/api/fx');
+      if (!res.ok) return;
+      setFx((await res.json()) as FxView);
+    } catch {
+      /* keep the last successful rate */
+    }
+  }, []);
+
+  useEffect(() => {
+    void pullFx();
+    const id = window.setInterval(() => void pullFx(), 3 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, [pullFx]);
+
+  useEffect(() => {
+    if (mobileTab === 'split') void pullFx();
+  }, [mobileTab, pullFx]);
+
+  function selectTab(tab: MobileTab) {
+    if (tab === 'split') openSplit();
+    else if (isSplitPath(window.location.pathname)) leaveSplit();
+    setMobileTab(tab);
+  }
+
+  useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
     const sync = () => setIsDesktop(mq.matches);
     sync();
@@ -115,6 +157,7 @@ export default function App() {
   }, [trip, dayStops]);
 
   const mapActive = isDesktop || mobileTab === 'map';
+  const mobileSplit = !isDesktop && mobileTab === 'split';
 
   useEffect(() => {
     if (dayStops.length && !dayStops.find((s) => s.id === selectedId)) {
@@ -251,7 +294,8 @@ export default function App() {
         )}
       </header>
 
-      {/* Day strip stays outside the list scroller */}
+      {/* Day strip stays outside the list scroller. Hidden on the phone bill tab. */}
+      {!mobileSplit && (
       <nav aria-label="行程日期" className="z-20 shrink-0 border-b border-slate-200 bg-white">
         <div className="flex gap-1 overflow-x-auto no-scrollbar px-2 py-2">
           {trip.days.map((d) => (
@@ -271,18 +315,61 @@ export default function App() {
           ))}
         </div>
       </nav>
+      )}
 
-      <CurrentStopBar stop={dayStops.find((s) => s.id === selectedId) ?? null} />
+      {!mobileSplit && <CurrentStopBar stop={dayStops.find((s) => s.id === selectedId) ?? null} />}
 
-      <TripAlerts />
+      {!mobileSplit && <TripAlerts />}
 
       {/* Main: stacked on mobile via tabs; side-by-side on md+ */}
-      <main className="flex-1 min-h-0 flex flex-col md:flex-row">
+      <main className="flex min-h-0 flex-1 flex-col md:flex-row">
         <section
-          className={`flex-1 min-h-0 md:w-[42%] md:max-w-md md:border-r border-slate-200 bg-snow-50 ${
-            mobileTab === 'list' ? 'flex flex-col' : 'hidden md:flex md:flex-col'
+          className={`min-h-0 flex-1 flex-col border-slate-200 bg-snow-50 md:w-[42%] md:max-w-md md:border-r ${
+            mobileTab === 'map' ? 'hidden md:flex' : 'flex'
           }`}
         >
+          <div className="hidden shrink-0 grid-cols-2 gap-1 border-b border-slate-100 bg-white p-2 md:grid">
+            <button
+              type="button"
+              className={`min-h-touch rounded-xl text-base font-bold ${
+                mobileTab === 'split' ? 'bg-snow-100 text-slate-700' : 'bg-ice-600 text-white'
+              }`}
+              onClick={() => selectTab('list')}
+            >
+              行程
+            </button>
+            <button
+              type="button"
+              className={`min-h-touch rounded-xl text-base font-bold ${
+                mobileTab === 'split' ? 'bg-ice-600 text-white' : 'bg-snow-100 text-slate-700'
+              }`}
+              onClick={() => selectTab('split')}
+            >
+              分帳
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+          {mobileTab === 'split' ? (
+            <SplitBoard
+              trip={trip}
+              canEdit={canEdit}
+              userId={user?.id ?? null}
+              socket={socket}
+              token={token}
+              fx={fx}
+              composeToken={composeToken}
+              onNeedLogin={() => {
+                pendingCompose.current = true;
+                openSplit();
+                setLoginOpen(true);
+              }}
+              onJumpToDay={(day, stopId) => {
+                setSelectedDay(day);
+                if (stopId) setSelectedId(stopId);
+                selectTab('list');
+              }}
+            />
+          ) : (
           <TripList
             stops={dayStops}
             legs={dayLegs}
@@ -325,6 +412,8 @@ export default function App() {
             onUpdateTime={(id, time) => emitAuth('trip:updateStop', { id, patch: { time } })}
             onRename={(id, title) => emitAuth('trip:updateStop', { id, patch: { title } })}
           />
+          )}
+          </div>
         </section>
 
         <section
@@ -348,33 +437,48 @@ export default function App() {
       </main>
 
       <nav
-        aria-label="切換行程列表與地圖"
-        className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-200 bg-white px-3 pt-2 md:hidden"
+        aria-label="切換行程、分帳與地圖"
+        className="grid shrink-0 grid-cols-3 gap-2 border-t border-slate-200 bg-white px-3 pt-2 md:hidden"
         style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
       >
-        <button
-          type="button"
-          aria-current={mobileTab === 'list' ? 'page' : undefined}
-          className={`min-h-touch rounded-xl px-2 text-base font-bold ${
-            mobileTab === 'list' ? 'bg-ice-600 text-white shadow' : 'bg-snow-100 text-slate-700'
-          }`}
-          onClick={() => setMobileTab('list')}
-        >
-          行程列表
-        </button>
-        <button
-          type="button"
-          aria-current={mobileTab === 'map' ? 'page' : undefined}
-          className={`min-h-touch rounded-xl px-2 text-base font-bold ${
-            mobileTab === 'map' ? 'bg-ice-600 text-white shadow' : 'bg-snow-100 text-slate-700'
-          }`}
-          onClick={() => setMobileTab('map')}
-        >
-          地圖
-        </button>
+        {(
+          [
+            ['list', '行程'],
+            ['split', '分帳'],
+            ['map', '地圖'],
+          ] as [MobileTab, string][]
+        ).map(([tab, label]) => (
+          <button
+            key={tab}
+            type="button"
+            aria-current={mobileTab === tab ? 'page' : undefined}
+            className={`min-h-touch min-w-0 rounded-xl px-1 text-base font-bold ${
+              mobileTab === tab ? 'bg-ice-600 text-white shadow' : 'bg-snow-100 text-slate-700'
+            }`}
+            onClick={() => selectTab(tab)}
+          >
+            {label}
+          </button>
+        ))}
       </nav>
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLogin={handleLogin} />
+      <LoginModal
+        open={loginOpen}
+        onClose={() => {
+          pendingCompose.current = false;
+          setLoginOpen(false);
+        }}
+        onLogin={(nextUser, nextToken) => {
+          const openForm = pendingCompose.current;
+          pendingCompose.current = false;
+          handleLogin(nextUser, nextToken);
+          if (openForm) {
+            openSplit();
+            setMobileTab('split');
+            setComposeToken((current) => current + 1);
+          }
+        }}
+      />
 
       <PlaceStopDialog
         open={Boolean(placeDialog)}

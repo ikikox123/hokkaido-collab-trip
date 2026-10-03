@@ -25,10 +25,15 @@ import { getWeather } from './weather.js';
 import { getJmaWarnings } from './jmaWarnings.js';
 import { getJrStatus } from './jrStatus.js';
 import { getTripAlerts } from './tripAlerts.js';
+import { addMember, deleteExpense, ensureBill, removeMember, renameMember, upsertExpense } from './split.js';
+import { createFxBook, parseOverride, presentFx } from './fx.js';
+import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
+const FX_POLL_MS = 3 * 60 * 1000;
+const FX_MIN_INTERVAL_MS = 90 * 1000;
 const CLIENT_DIST = path.resolve(__dirname, '../../client/dist');
 const isProd = process.env.NODE_ENV === 'production';
 const JWT_SECRET = (() => {
@@ -62,19 +67,6 @@ async function initUsers() {
   ];
 }
 
-function loadState() {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const raw = fs.readFileSync(STATE_FILE, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.stops)) return parsed;
-    }
-  } catch (e) {
-    console.warn('loadState failed, using seed', e.message);
-  }
-  return createSeedState();
-}
-
 function saveState(state) {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -84,7 +76,21 @@ function saveState(state) {
   }
 }
 
-let tripState = normalizeTripState(loadState());
+let loadedTrip;
+try {
+  loadedTrip = loadPersistedTrip({
+    dataDir: DATA_DIR,
+    nodeEnv: process.env.NODE_ENV,
+    createSeed: createSeedState,
+  });
+} catch (err) {
+  console.error(`[server] ${err.message}`);
+  process.exit(1);
+}
+let tripState = loadedTrip.source === 'file' ? loadedTrip.state : normalizeTripState(ensureBill(loadedTrip.state));
+const loadedFromFile = loadedTrip.source === 'file';
+const fxBook = createFxBook(tripState.fx);
+tripState = { ...tripState, fx: fxBook.get() };
 const roomPresence = new Map(); // roomCode -> Map(socketId -> {userId, displayName})
 
 function authMiddleware(req, res, next) {
@@ -140,12 +146,16 @@ app.post('/api/login', async (req, res) => {
   });
 });
 
+app.get('/api/fx', async (_req, res) => {
+  res.json(await refreshFx());
+});
+
 app.get('/api/me', authMiddleware, (req, res) => {
   res.json({ user: req.user });
 });
 
 app.get('/api/trip', optionalAuth, (_req, res) => {
-  res.json(tripState);
+  res.json(tripForClient());
 });
 
 app.get('/api/places', authMiddleware, async (req, res) => {
@@ -204,9 +214,27 @@ app.get('/api/trip-alerts', async (_req, res) => {
   res.json(body);
 });
 
+function tripForClient() {
+  return { ...tripState, fx: presentFx(tripState.fx) };
+}
+
 function broadcastTrip(roomCode = ROOM_CODE) {
-  io.to(roomCode).emit('trip:update', tripState);
+  io.to(roomCode).emit('trip:update', tripForClient());
   saveState(tripState);
+}
+
+function publishFx() {
+  tripState = { ...tripState, fx: fxBook.get() };
+  saveState(tripState);
+  io.emit('fx:update', presentFx(tripState.fx));
+}
+
+async function refreshFx({ force = false, minIntervalMs = FX_MIN_INTERVAL_MS } = {}) {
+  const before = JSON.stringify(fxBook.get());
+  await fxBook.refresh({ force, minIntervalMs });
+  const next = JSON.stringify(fxBook.get());
+  if (next !== before) publishFx();
+  return presentFx(fxBook.get());
 }
 
 let enrichGen = 0;
@@ -254,13 +282,24 @@ function scheduleEnrich(roomCode = ROOM_CODE) {
 }
 
 function publish(roomCode = ROOM_CODE, { enrich = true } = {}) {
-  tripState = {
+  tripState = normalizeTripState(ensureBill({
     ...tripState,
-    legs: reconcileLegs(tripState),
     updatedAt: new Date().toISOString(),
-  };
+  }));
   broadcastTrip(roomCode);
   if (enrich) scheduleEnrich(roomCode);
+}
+
+function saveBill(roomCode = ROOM_CODE) {
+  tripState = ensureBill({
+    ...tripState,
+    updatedAt: new Date().toISOString(),
+  });
+  broadcastTrip(roomCode);
+}
+
+function ackResult(ack, result) {
+  if (typeof ack === 'function') ack(result);
 }
 
 function presenceList(roomCode) {
@@ -294,7 +333,8 @@ io.on('connection', (socket) => {
       displayName: user?.displayName || '訪客',
       username: user?.username || null,
     });
-    socket.emit('trip:update', tripState);
+    socket.emit('trip:update', tripForClient());
+    socket.emit('fx:update', presentFx(tripState.fx));
     io.to(code).emit('presence:update', {
       online: presenceList(code),
       count: presenceList(code).length,
@@ -404,9 +444,143 @@ io.on('connection', (socket) => {
       socket.emit('error:auth', { error: '請先登入才能編輯' });
       return;
     }
-    tripState = createSeedState();
+    if (loadedFromFile) {
+      socket.emit('error:edit', { error: '這份行程是從已儲存的資料讀進來的，不會用種子覆蓋' });
+      return;
+    }
+    const members = tripState.members;
+    const expenses = tripState.expenses;
+    const fx = tripState.fx;
+    tripState = { ...createSeedState(), members, expenses, fx };
     publish(joinedRoom || ROOM_CODE, { enrich: false });
     void applySeedCorrection(joinedRoom || ROOM_CODE);
+  });
+
+  socket.on('expense:upsert', ({ expense, token }, ack) => {
+    if (!verifyToken(token)) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const result = upsertExpense(tripState, expense);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    tripState = result.state;
+    saveBill(joinedRoom || ROOM_CODE);
+    ackResult(ack, { ok: true });
+  });
+
+  socket.on('expense:delete', ({ id, token }, ack) => {
+    if (!verifyToken(token)) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const result = deleteExpense(tripState, id);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    tripState = result.state;
+    saveBill(joinedRoom || ROOM_CODE);
+    ackResult(ack, { ok: true });
+  });
+
+  socket.on('member:add', ({ displayName, token }, ack) => {
+    if (!verifyToken(token)) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const result = addMember(tripState, displayName);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    tripState = result.state;
+    saveBill(joinedRoom || ROOM_CODE);
+    ackResult(ack, { ok: true });
+  });
+
+  socket.on('member:rename', ({ id, displayName, token }, ack) => {
+    if (!verifyToken(token)) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const result = renameMember(tripState, id, displayName);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    tripState = result.state;
+    saveBill(joinedRoom || ROOM_CODE);
+    ackResult(ack, { ok: true });
+  });
+
+  socket.on('member:remove', ({ id, token }, ack) => {
+    if (!verifyToken(token)) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const result = removeMember(tripState, id);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    tripState = result.state;
+    saveBill(joinedRoom || ROOM_CODE);
+    ackResult(ack, { ok: true });
+  });
+
+  socket.on('fx:override', ({ basis, value, token }, ack) => {
+    const verified = verifyToken(token);
+    if (!verified) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    const parsed = parseOverride({ basis, value });
+    if (!parsed.ok) {
+      socket.emit('error:edit', { error: parsed.error });
+      ackResult(ack, parsed);
+      return;
+    }
+    fxBook.setOverride({
+      twdPerJpy: parsed.twdPerJpy,
+      jpyPerTwd: parsed.jpyPerTwd,
+      setAt: new Date().toISOString(),
+      setBy: verified.displayName,
+      setById: verified.id,
+    });
+    publishFx();
+    ackResult(ack, { ok: true, fx: presentFx(fxBook.get()) });
+  });
+
+  socket.on('fx:clearOverride', ({ token }, ack) => {
+    if (!verifyToken(token)) {
+      const error = '請先登入才能編輯';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return;
+    }
+    fxBook.clearOverride();
+    publishFx();
+    ackResult(ack, { ok: true, fx: presentFx(fxBook.get()) });
   });
 
   socket.on('disconnect', () => {
@@ -442,6 +616,8 @@ function dropLegEstimates(state, movedIds) {
 }
 
 async function applySeedCorrection(roomCode = ROOM_CODE) {
+  // A trip restored from state.json keeps its saved coordinates.
+  if (!shouldApplySeedCorrection(loadedTrip.source)) return;
   try {
     const result = await correctSeedState(tripState);
     if (!result.changed) {
@@ -479,7 +655,11 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] listening on http://0.0.0.0:${PORT} (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
   console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
   console.log(`[server] routing ${serverMapsKey() ? 'google' : 'osrm'}`);
-  void applySeedCorrection(ROOM_CODE);
+  if (shouldApplySeedCorrection(loadedTrip.source)) void applySeedCorrection(ROOM_CODE);
+  void refreshFx({ force: true, minIntervalMs: 0 });
+  setInterval(() => {
+    void refreshFx({ force: true, minIntervalMs: 0 });
+  }, FX_POLL_MS);
   void getJmaWarnings().catch((err) => console.warn('[jma] warmup failed', err?.message || err));
   void getJrStatus().catch((err) => console.warn('[jr] warmup failed', err?.message || err));
 });

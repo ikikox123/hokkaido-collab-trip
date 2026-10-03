@@ -1,3 +1,15 @@
+import type { FxView } from '../../../server/src/fx.js';
+import type { BillMember, Expense } from '../../../server/src/split.js';
+
+export type {
+  BillMember,
+  Currency,
+  Expense,
+  ExpensePart,
+  ExpenseShare,
+  SplitMode,
+} from '../../../server/src/split.js';
+
 export type DayInfo = {
   day: number;
   date: string;
@@ -41,6 +53,9 @@ export type TripState = {
   days: DayInfo[];
   stops: Stop[];
   legs?: Leg[];
+  members?: BillMember[];
+  expenses?: Expense[];
+  fx?: FxView;
   updatedAt: string;
 };
 
