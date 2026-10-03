@@ -27,7 +27,7 @@ import { getJrStatus } from './jrStatus.js';
 import { getTripAlerts } from './tripAlerts.js';
 import { addMember, deleteExpense, ensureBill, removeMember, renameMember, upsertExpense } from './split.js';
 import { createFxBook, parseOverride, presentFx } from './fx.js';
-import { loadPersistedTrip } from './persist.js';
+import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -616,6 +616,8 @@ function dropLegEstimates(state, movedIds) {
 }
 
 async function applySeedCorrection(roomCode = ROOM_CODE) {
+  // A trip restored from state.json keeps its saved coordinates.
+  if (!shouldApplySeedCorrection(loadedTrip.source)) return;
   try {
     const result = await correctSeedState(tripState);
     if (!result.changed) {
@@ -653,7 +655,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] listening on http://0.0.0.0:${PORT} (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
   console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
   console.log(`[server] routing ${serverMapsKey() ? 'google' : 'osrm'}`);
-  void applySeedCorrection(ROOM_CODE);
+  if (shouldApplySeedCorrection(loadedTrip.source)) void applySeedCorrection(ROOM_CODE);
   void refreshFx({ force: true, minIntervalMs: 0 });
   setInterval(() => {
     void refreshFx({ force: true, minIntervalMs: 0 });

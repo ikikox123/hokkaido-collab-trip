@@ -24,6 +24,11 @@ export function migrateSplitFields(state) {
   return next;
 }
 
+/** Seed geocode may run only for a room created from seed, never for state.json. */
+export function shouldApplySeedCorrection(source) {
+  return source !== 'file';
+}
+
 export function loadPersistedTrip({ dataDir, nodeEnv = process.env.NODE_ENV, createSeed, fsImpl = fs } = {}) {
   const stateFile = path.join(path.resolve(dataDir), 'state.json');
   if (fsImpl.existsSync(stateFile)) {

@@ -45,7 +45,7 @@ npm run dev
 
 ## 功能說明
 
-1. **即時協作**：Socket.io 房間同步行程。行程存在 `data/state.json`（容器裡是 `/app/data/state.json`，`server/src/index.js` 的 `DATA_DIR`）。這個檔案不在 git，也不在 Docker 映像裡。`NODE_ENV=production` 時若檔案不存在，程序會以非 0 結束，印出 `Refusing to start`，不會呼叫 `createSeedState()`、不會寫入種子檔、也不會開始服務。本機開發時檔案不存在才會用種子建立新房間。已存在的 `state.json` 會原樣讀入；若沒有分帳或匯率欄位，只補上空的 `members`、`expenses` 與空白匯率，不改站點、日期與其他已存欄位。上線前要先把外部存好的行程放到 volume 的 `/app/data/state.json`，再啟動新程序。本 repo 不掛 volume。
+1. **即時協作**：Socket.io 房間同步行程。行程存在 `data/state.json`（容器裡是 `/app/data/state.json`，`server/src/index.js` 的 `DATA_DIR`）。這個檔案不在 git，也不在 Docker 映像裡。`NODE_ENV=production` 時若檔案不存在，程序會以非 0 結束，印出 `Refusing to start`，不會呼叫 `createSeedState()`、不會寫入種子檔、也不會開始服務。本機開發時檔案不存在才會用種子建立新房間。已存在的 `state.json` 會原樣讀入；若沒有分帳或匯率欄位，只補上空的 `members`、`expenses` 與空白匯率，不改站點、日期與其他已存欄位。從 `state.json` 讀入的行程，啟動時不做種子座標修正，也不會把地理編碼結果寫回站點座標。上線前要先把外部存好的行程放到 volume 的 `/app/data/state.json`，再啟動新程序。本 repo 不掛 volume。
 2. **地圖**：`VITE_MAP_PROVIDER=google` 且建置時有 `VITE_GOOGLE_MAPS_API_KEY` 才畫 Google 地圖（標記、折線、`gestureHandling=greedy`、44px 縮放鈕）。否則維持 Leaflet + Esri。切換日期、從列表切到地圖、或當天站點變更時，視野會貼到**當天全部站點**。只有 1 站時用 zoom 15，沒有站點時回到住宿 Minn（約 43.0573, 141.3366）zoom 13。手機地圖面板填滿日期列、目前站點與底部導覽之間的剩餘高度。Google 腳本載入失敗時改回 Leaflet。Leaflet 主圖磚若連線失敗才改打 OpenStreetMap。
 3. **交通方式**：同一天相鄰站（列表順序）可設 `步行 / 地鐵 / JR / 巴士 / 計程車 / 自駕 / 包車`。估時與路徑寫進共用 `legs`，經 Socket.io `trip:setLegMode` 同步（與其他編輯一樣廣播 `trip:update`）。訪客只讀。地圖依路段畫路徑，顏色依交通方式。有伺服器金鑰時：步行→walking、計程車／自駕／包車→driving、地鐵／JR／巴士→transit；transit 失敗則改 driving，摘要標成開車路徑估算。
 4. **拖曳排序**：長按（約 0.2 秒）拖動手把可排序，避免誤觸捲動。排序、新增、刪除會重算受影響路段。

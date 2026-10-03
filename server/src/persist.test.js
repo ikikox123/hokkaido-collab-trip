@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadPersistedTrip, migrateSplitFields } from './persist.js';
+import { loadPersistedTrip, migrateSplitFields, shouldApplySeedCorrection } from './persist.js';
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'hokkaido-state-'));
@@ -117,6 +117,11 @@ test('development may seed only when state.json is absent', () => {
   assert.equal(loaded.source, 'seed');
   assert.equal(loaded.state.stops[0].id, 'seed-stop');
   assert.equal(fs.existsSync(path.join(dir, 'state.json')), false);
+});
+
+test('a trip loaded from state.json does not run seed geocode correction', () => {
+  assert.equal(shouldApplySeedCorrection('file'), false);
+  assert.equal(shouldApplySeedCorrection('seed'), true);
 });
 
 test('migrateSplitFields does not invent members when the saved list is empty', () => {
