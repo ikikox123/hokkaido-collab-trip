@@ -112,66 +112,71 @@ html:has(.share-root) #root {
   overflow-wrap: anywhere;
 }
 
-@page {
+/* Named page so A4 margins apply only while printing the share sheet. */
+@page share-sheet {
   size: A4 portrait;
   margin: 12mm 14mm 14mm;
 }
 
+.share-root {
+  page: share-sheet;
+}
+
 @media print {
-  html,
-  body,
-  #root {
+  html:has(.share-root),
+  html:has(.share-root) body,
+  html:has(.share-root) #root {
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
     background: #fff !important;
   }
 
-  .share-root {
+  html:has(.share-root) .share-root {
     background: #fff !important;
   }
 
-  .share-sheet {
+  html:has(.share-root) .share-sheet {
     max-width: none !important;
     padding: 0 !important;
     color: #111;
   }
 
-  .share-print-title {
+  html:has(.share-root) .share-print-title {
     font-size: 16pt;
   }
 
-  .share-day + .share-day {
+  html:has(.share-root) .share-day + .share-day {
     break-before: page;
     page-break-before: always;
   }
 
-  .share-day + .share-day .share-day-stay {
+  html:has(.share-root) .share-day + .share-day .share-day-stay {
     display: block;
   }
 
-  .share-day-head,
-  .share-lodging,
-  .share-mast {
+  html:has(.share-root) .share-day-head,
+  html:has(.share-root) .share-lodging,
+  html:has(.share-root) .share-mast {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .share-day-head {
+  html:has(.share-root) .share-day-head {
     break-after: avoid;
     page-break-after: avoid;
   }
 
-  .share-stop {
+  html:has(.share-root) .share-stop {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .share-stop-title {
+  html:has(.share-root) .share-stop-title {
     font-size: 12pt;
   }
 
-  .share-notes {
+  html:has(.share-root) .share-notes {
     font-size: 10.5pt;
   }
 }

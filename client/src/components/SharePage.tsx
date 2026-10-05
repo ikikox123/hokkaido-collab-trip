@@ -129,9 +129,9 @@ export function SharePage() {
         {trip && (
           <>
             <header className="share-mast">
-              <h1 className="share-print-title hidden text-[1.35rem] font-bold leading-tight text-slate-900 print:block">
+              <p className="share-print-title hidden text-[1.35rem] font-bold leading-tight text-slate-900 print:block">
                 {pageHeading(locale)}
-              </h1>
+              </p>
               <p className="text-sm leading-relaxed text-slate-600 print:hidden">{t('shareGuest')}</p>
               <a href="/" className="mt-1 inline-flex min-h-touch items-center text-sm font-semibold text-ice-700 print:hidden">
                 {t('shareBack')}
