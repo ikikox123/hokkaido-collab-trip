@@ -182,6 +182,7 @@ export default function App() {
   }, [dayStops, selectedId]);
 
   const canEdit = Boolean(user && token);
+  const isTripCompanion = Boolean(user?.id && trip?.members?.some((member) => member.id === user.id));
 
   function handleLogin(u: User, nextToken: string) {
     setUser(u);
@@ -298,7 +299,7 @@ export default function App() {
                 <div className="min-w-0 flex-1 truncate">
                   {t('lodgingLine', { name: trip.lodging?.name?.trim() || t('lodgingUnset') })}
                 </div>
-                {canEdit && (
+                {canEdit && isTripCompanion && (
                   <button
                     type="button"
                     className="min-h-touch shrink-0 rounded-lg bg-white/15 px-3 text-sm font-semibold text-white"

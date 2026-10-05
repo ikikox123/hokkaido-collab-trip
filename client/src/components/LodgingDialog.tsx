@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { localizeError } from '../i18n/errors';
 import { useI18n } from '../i18n/I18nProvider';
 import type { Lodging, Stop } from '../types/trip';
@@ -30,19 +30,23 @@ export function LodgingDialog({ open, lodging, stops, token, onClose, onSave }: 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [searching, setSearching] = useState(false);
+  const lodgingRef = useRef(lodging);
+  lodgingRef.current = lodging;
 
+  // Read lodging only when the dialog opens. A trip:update while it stays open must not wipe the form.
   useEffect(() => {
     if (!open) return;
-    setName(lodging?.name || '');
-    setAddress(lodging?.address || '');
-    setLat(Number.isFinite(lodging?.lat) ? String(lodging?.lat) : '');
-    setLng(Number.isFinite(lodging?.lng) ? String(lodging?.lng) : '');
+    const current = lodgingRef.current;
+    setName(current?.name || '');
+    setAddress(current?.address || '');
+    setLat(Number.isFinite(current?.lat) ? String(current?.lat) : '');
+    setLng(Number.isFinite(current?.lng) ? String(current?.lng) : '');
     setStopId('');
     setQuery('');
     setError(null);
     setSaving(false);
     setSearching(false);
-  }, [open, lodging]);
+  }, [open]);
 
   if (!open) return null;
 
