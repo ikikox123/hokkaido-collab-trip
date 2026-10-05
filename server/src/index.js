@@ -40,7 +40,7 @@ import { createFxBook, parseOverride, presentFx } from './fx.js';
 import { BUCKET_ENV_VARS, startPeriodicBackup } from './backup.js';
 import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
 import { createUserStore } from './users.js';
-import { tripMemberAddAllowed } from './memberAccess.js';
+import { collaborativeTripReadable, NOT_COMPANION_ERROR, tripMemberAddAllowed } from './memberAccess.js';
 import { toPublicShare } from './shareTrip.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -116,12 +116,10 @@ function authMiddleware(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: '未登入' });
-  try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch {
-    return res.status(401).json({ error: '登入已過期' });
-  }
+  const parsed = parseToken(token);
+  if (parsed.status !== 'ok') return res.status(401).json({ error: '登入已過期' });
+  req.user = parsed.user;
+  next();
 }
 
 app.get('/api/health', (_req, res) => {
@@ -157,7 +155,10 @@ app.get('/api/share', (_req, res) => {
   res.json(toPublicShare(tripState));
 });
 
-app.get('/api/trip', authMiddleware, (_req, res) => {
+app.get('/api/trip', authMiddleware, (req, res) => {
+  if (!collaborativeTripReadable(tripState, req.user.id)) {
+    return res.status(403).json({ error: NOT_COMPANION_ERROR });
+  }
   res.json(tripForClient());
 });
 
@@ -235,13 +236,21 @@ function tripForClient() {
 }
 
 function requireTripMember(socket, token, ack) {
-  const user = verifyToken(token);
-  if (!user) {
+  const parsed = parseToken(token);
+  if (parsed.status === 'missing-account') {
+    socket.emit('session:required');
+    const error = '登入已過期';
+    socket.emit('error:auth', { error });
+    ackResult(ack, { ok: false, error });
+    return null;
+  }
+  if (parsed.status !== 'ok') {
     const error = '請先登入才能編輯';
     socket.emit('error:auth', { error });
     ackResult(ack, { ok: false, error });
     return null;
   }
+  const user = parsed.user;
   if (!isTripMember(tripState, user.id)) {
     const error = '只有這趟行程的旅伴可以這樣做';
     socket.emit('error:auth', { error });
@@ -251,7 +260,30 @@ function requireTripMember(socket, token, ack) {
   return user;
 }
 
+function evictBlockedCompanions(roomCode) {
+  const code = roomCode || ROOM_CODE;
+  const presence = roomPresence.get(code);
+  if (!presence) return;
+  let changed = false;
+  for (const [socketId, meta] of [...presence.entries()]) {
+    if (collaborativeTripReadable(tripState, meta?.userId)) continue;
+    presence.delete(socketId);
+    changed = true;
+    const sock = io.sockets.sockets.get(socketId);
+    if (!sock) continue;
+    if (typeof sock.data?.markLeft === 'function') sock.data.markLeft();
+    sock.leave(code);
+    sock.emit('companion:required', { error: NOT_COMPANION_ERROR });
+  }
+  if (!changed) return;
+  io.to(code).emit('presence:update', {
+    online: presenceList(code),
+    count: presenceList(code).length,
+  });
+}
+
 function broadcastTrip(roomCode = ROOM_CODE) {
+  evictBlockedCompanions(roomCode);
   io.to(roomCode).emit('trip:update', tripForClient());
   saveState(tripState);
 }
@@ -260,7 +292,8 @@ function publishFx() {
   tripState = { ...tripState, fx: fxBook.get() };
   saveState(tripState);
   const payload = presentFx(tripState.fx);
-  for (const code of roomPresence.keys()) {
+  for (const code of [...roomPresence.keys()]) {
+    evictBlockedCompanions(code);
     io.to(code).emit('fx:update', payload);
   }
 }
@@ -346,8 +379,13 @@ function presenceList(roomCode) {
 
 io.on('connection', (socket) => {
   let joinedRoom = null;
+  socket.data.markLeft = () => {
+    joinedRoom = null;
+  };
 
-  socket.on('room:join', ({ roomCode, token }) => {
+  socket.on('room:join', (payload, ack) => {
+    const body = payload && typeof payload === 'object' ? payload : {};
+    const { roomCode, token } = body;
     if (joinedRoom) {
       socket.leave(joinedRoom);
       const prev = roomPresence.get(joinedRoom);
@@ -360,12 +398,20 @@ io.on('connection', (socket) => {
       }
       joinedRoom = null;
     }
-    const code = String(roomCode || ROOM_CODE).toUpperCase();
-    const user = verifyToken(token);
-    if (!user) {
+    const parsed = parseToken(token);
+    if (parsed.status !== 'ok') {
       if (token) socket.emit('session:required');
+      const error = parsed.status === 'missing' ? '請先登入' : '登入已過期';
+      ackResult(ack, { ok: false, error });
       return;
     }
+    const code = String(roomCode || ROOM_CODE).toUpperCase();
+    if (!collaborativeTripReadable(tripState, parsed.user.id)) {
+      socket.emit('companion:required', { error: NOT_COMPANION_ERROR });
+      ackResult(ack, { ok: false, error: NOT_COMPANION_ERROR });
+      return;
+    }
+    const user = parsed.user;
     joinedRoom = code;
     socket.join(code);
     if (!roomPresence.has(code)) roomPresence.set(code, new Map());
@@ -381,6 +427,7 @@ io.on('connection', (socket) => {
       online: presenceList(code),
       count: presenceList(code).length,
     });
+    ackResult(ack, { ok: true });
   });
 
   socket.on('trip:reorder', ({ day, orderedIds, token }, ack) => {
@@ -533,13 +580,21 @@ io.on('connection', (socket) => {
   });
 
   function beginAccountAdd(token, username, ack) {
-    const caller = verifyToken(token);
-    if (!caller) {
+    const parsed = parseToken(token);
+    if (parsed.status === 'missing-account') {
+      socket.emit('session:required');
+      const error = '登入已過期';
+      socket.emit('error:auth', { error });
+      ackResult(ack, { ok: false, error });
+      return null;
+    }
+    if (parsed.status !== 'ok') {
       const error = '請先登入才能編輯';
       socket.emit('error:auth', { error });
       ackResult(ack, { ok: false, error });
       return null;
     }
+    const caller = parsed.user;
     const requested = typeof username === 'string' ? username : '';
     if (!requested.trim()) {
       const error = '請輸入已註冊的帳號';
@@ -680,13 +735,19 @@ io.on('connection', (socket) => {
   });
 });
 
-function verifyToken(token) {
-  if (!token) return null;
+function parseToken(token) {
+  if (!token || typeof token !== 'string') return { status: 'missing' };
+  let user;
   try {
-    return jwt.verify(token, JWT_SECRET);
+    user = jwt.verify(token, JWT_SECRET);
   } catch {
-    return null;
+    return { status: 'invalid' };
   }
+  if (!user || typeof user !== 'object' || typeof user.id !== 'string' || !user.id) {
+    return { status: 'invalid' };
+  }
+  if (!userStore.publicById(user.id)) return { status: 'missing-account' };
+  return { status: 'ok', user };
 }
 
 function dropLegEstimates(state, movedIds) {
@@ -721,24 +782,38 @@ async function applySeedCorrection(roomCode = ROOM_CODE) {
 }
 
 await userStore.init();
+const demoAccountRemoval = userStore.planProductionDemoRemoval(
+  (Array.isArray(tripState.members) ? tripState.members : []).flatMap((member) => {
+    if (!member || typeof member !== 'object' || typeof member.id !== 'string') return [];
+    const id = member.id.trim();
+    return id ? [id] : [];
+  }),
+);
 
 let releaseFirstFx = () => {};
 const firstFxSettled = new Promise((resolve) => {
   releaseFirstFx = resolve;
 });
 
+let whenBackupStarted = Promise.resolve(null);
 try {
   // The listen callback's first refreshFx may write state.json. The startup copy waits for that save.
   const periodicBackup = startPeriodicBackup({
     dataDir: DATA_DIR,
     startupReady: firstFxSettled,
   });
+  whenBackupStarted = Promise.resolve(periodicBackup.whenStarted);
   if (!periodicBackup.started) {
     console.log(`[backup] periodic copies are off (${periodicBackup.reason}). Set ${BUCKET_ENV_VARS.join(', ')}.`);
   }
 } catch (err) {
   console.warn('[backup] periodic copies were not started', err.message);
 }
+// Demo rows leave memory before listen. The file rewrite waits until the startup
+// backup copy finishes, so that copy still has the pre-removal users.json.
+void whenBackupStarted.finally(() => {
+  void demoAccountRemoval.commit();
+});
 
 // Production: serve Vite build from client/dist (single-port deploy)
 if (fs.existsSync(CLIENT_DIST)) {
@@ -754,7 +829,11 @@ if (fs.existsSync(CLIENT_DIST)) {
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] listening on http://0.0.0.0:${PORT} (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
-  console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
+  if (!isProd) {
+    console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
+  } else {
+    console.log(`[server] room ${ROOM_CODE}`);
+  }
   console.log(`[server] routing ${serverMapsKey() ? 'google' : 'osrm'}`);
   if (shouldApplySeedCorrection(loadedTrip.source)) void applySeedCorrection(ROOM_CODE);
   void refreshFx({ force: true, minIntervalMs: 0 }).finally(releaseFirstFx);

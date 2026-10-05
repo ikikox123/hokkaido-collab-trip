@@ -3,7 +3,12 @@ import path from 'path';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
-/** Reserved demo accounts. Always recreated at startup; registration cannot replace them. */
+/**
+ * Dev-only demo accounts. Production does not recreate them.
+ * In development they are always recreated in memory and registration cannot replace them.
+ * They are never written to users.json by this store.
+ */
+
 export const DEMO_USERS = [
   { id: 'u1', username: 'alice', displayName: 'Alice' },
   { id: 'u2', username: 'bob', displayName: 'Bob' },
@@ -50,38 +55,77 @@ function publicUser(user) {
   return { id: user.id, username: user.username, displayName: user.displayName };
 }
 
-function readSavedUsers(dataFile) {
+/** Ids minted by register(). A later alice/bob with this id is a normal account, not a demo row. */
+function isRegisteredAccountId(id) {
+  return typeof id === 'string' && /^u_[0-9a-f]{16}$/.test(id);
+}
+
+function isExactDemoUsername(username) {
+  return username === 'alice' || username === 'bob';
+}
+
+/**
+ * A users.json row is a demo account when the username is exactly alice or bob
+ * and the id was not minted by registration. Companion membership is checked separately.
+ */
+function isRemovableDemoRow(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (!isExactDemoUsername(row.username)) return false;
+  if (typeof row.id !== 'string' || !row.id || isRegisteredAccountId(row.id)) return false;
+  return true;
+}
+
+function readUsersDocument(dataFile) {
   assertAccountFile(dataFile);
+  if (!dataFile || !fs.existsSync(dataFile)) return { status: 'missing', list: [] };
+  let parsed;
   try {
-    if (!dataFile || !fs.existsSync(dataFile)) return [];
-    const parsed = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-    const list = Array.isArray(parsed) ? parsed : parsed?.users;
-    if (!Array.isArray(list)) return [];
-    const seen = new Set();
-    const out = [];
-    for (const row of list) {
-      if (!row || typeof row !== 'object') continue;
-      const username = normalizeUsername(row.username);
-      const passwordHash = typeof row.passwordHash === 'string' ? row.passwordHash : '';
-      const id = typeof row.id === 'string' ? row.id : '';
-      const displayNameRaw = typeof row.displayName === 'string' ? row.displayName.trim() : '';
-      if (!username || !passwordHash || !id) continue;
-      if (DEMO_NAMES.has(username) || DEMO_IDS.has(id) || seen.has(username)) continue;
-      if (passwordHash.length > 200 || id.length > 80) continue;
-      seen.add(username);
-      out.push({
-        id,
-        username,
-        displayName: (displayNameRaw || username).slice(0, USERNAME_MAX),
-        passwordHash,
-        demo: false,
-      });
-    }
-    return out;
+    parsed = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
   } catch (err) {
     console.warn('[users] 無法讀取帳號檔，只保留示範帳號', err?.message || err);
-    return [];
+    return { status: 'invalid', list: [] };
   }
+  const list = Array.isArray(parsed) ? parsed : parsed?.users;
+  if (!Array.isArray(list)) return { status: 'invalid', list: [] };
+  return { status: 'ok', list };
+}
+
+function rowToUser(row, { skipDemos }) {
+  if (!row || typeof row !== 'object') return null;
+  const rawUsername = typeof row.username === 'string' ? row.username : '';
+  const username = normalizeUsername(rawUsername);
+  const passwordHash = typeof row.passwordHash === 'string' ? row.passwordHash : '';
+  const id = typeof row.id === 'string' ? row.id : '';
+  const displayNameRaw = typeof row.displayName === 'string' ? row.displayName.trim() : '';
+  if (!username || !passwordHash || !id) return null;
+  if (passwordHash.length > 200 || id.length > 80) return null;
+  if (skipDemos && (DEMO_NAMES.has(username) || DEMO_IDS.has(id))) return null;
+  return {
+    id,
+    username,
+    displayName: (displayNameRaw || username).slice(0, USERNAME_MAX),
+    passwordHash,
+    demo: false,
+    removableDemo: isRemovableDemoRow(row),
+  };
+}
+
+function usersFromList(list, { skipDemos }) {
+  const seen = new Set();
+  const out = [];
+  for (const row of list) {
+    const user = rowToUser(row, { skipDemos });
+    if (!user || seen.has(user.username)) continue;
+    seen.add(user.username);
+    out.push(user);
+  }
+  return out;
+}
+
+function readSavedUsers(dataFile, { skipDemos }) {
+  const doc = readUsersDocument(dataFile);
+  if (doc.status !== 'ok') return [];
+  return usersFromList(doc.list, { skipDemos });
 }
 
 function writeSavedUsers(dataFile, users) {
@@ -115,25 +159,103 @@ async function passwordMatches(password, passwordHash) {
 
 /**
  * In-memory accounts plus a gitignored JSON file of bcrypt hashes.
- * Demo users are never written to disk.
- * This store does not load, migrate, or replace trip state.
+ * Demo users are never written to disk. Development recreates alice (u1) and bob (u2)
+ * in memory. Production does not create them and drops leftover demo rows that are
+ * not on the companion list. A later registration of those names gets a normal u_ id
+ * and is left in place. This store does not load, migrate, or replace trip state.
  *
  * The account id is the split-member id. It is chosen once at registration and
- * reloaded from users.json. Startup does not mint a new id. alice and bob stay u1 and u2.
+ * reloaded from users.json. Startup does not mint a new id.
  */
-export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 10 } = {}) {
+export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 10, nodeEnv = process.env.NODE_ENV } = {}) {
   let users = [];
   const pending = new Set();
+  const production = nodeEnv === 'production';
+  let writeQueue = Promise.resolve();
+
+  function enqueueWrite(task) {
+    const run = writeQueue.then(task, task);
+    writeQueue = run.then(() => {}, () => {});
+    return run;
+  }
 
   async function init() {
     assertAccountFile(dataFile);
+    if (production) {
+      users = readSavedUsers(dataFile, { skipDemos: false });
+      return;
+    }
     const hash = await bcrypt.hash(demoPassword, rounds);
     const demos = DEMO_USERS.map((user) => ({
       ...user,
       passwordHash: hash,
       demo: true,
     }));
-    users = [...demos, ...readSavedUsers(dataFile)];
+    users = [...demos, ...readSavedUsers(dataFile, { skipDemos: true })];
+  }
+
+  /**
+   * Production only. Drops demo alice/bob from memory immediately when they are
+   * not companion ids. The users.json rewrite is commit(), which the server runs
+   * after the startup backup. Dev is a no-op. Missing or unreadable files are not written.
+   */
+  function planProductionDemoRemoval(memberIds) {
+    if (!production) return { commit: async () => {} };
+    const companions = new Set(
+      (Array.isArray(memberIds) ? memberIds : [])
+        .filter((id) => typeof id === 'string')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    );
+    const doc = readUsersDocument(dataFile);
+    const removeIds = new Set();
+    if (doc.status === 'ok') {
+      for (const row of doc.list) {
+        if (!isRemovableDemoRow(row)) continue;
+        if (companions.has(row.id.trim())) {
+          console.warn(`[users] ${row.username} is on the companion list; not removed`);
+          continue;
+        }
+        removeIds.add(row.id);
+      }
+    }
+    if (removeIds.size > 0) {
+      users = users.filter((user) => !removeIds.has(user.id));
+    }
+    return {
+      async commit() {
+        if (removeIds.size === 0 || !dataFile) return;
+        try {
+          await enqueueWrite(() => {
+            const current = readUsersDocument(dataFile);
+            if (current.status !== 'ok') return;
+            const doomed = current.list.filter((row) => row && removeIds.has(row.id));
+            if (doomed.length === 0) return;
+            const doomedIds = new Set(doomed.map((row) => row.id));
+            const keep = [];
+            for (const row of current.list) {
+              if (!row || typeof row !== 'object' || doomedIds.has(row.id)) continue;
+              if (typeof row.id !== 'string' || typeof row.username !== 'string' || typeof row.passwordHash !== 'string') {
+                continue;
+              }
+              if (!row.id || !row.username || !row.passwordHash) continue;
+              keep.push({
+                id: row.id,
+                username: row.username,
+                displayName: typeof row.displayName === 'string' ? row.displayName : row.username,
+                passwordHash: row.passwordHash,
+                demo: false,
+              });
+            }
+            writeSavedUsers(dataFile, keep);
+            const names = doomed.map((row) => row.username);
+            console.log(`[users] removed ${names.length}: ${names.join(', ')}`);
+          });
+        } catch (err) {
+          console.warn('[users] 無法寫入帳號檔', err?.message || err);
+        }
+      },
+    };
   }
 
   function findByUsername(username) {
@@ -166,9 +288,9 @@ export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 
       const displayName = String(username).trim().slice(0, USERNAME_MAX);
       const id = `u_${crypto.randomBytes(8).toString('hex')}`;
       const passwordHash = await bcrypt.hash(String(password), rounds);
-      const record = { id, username: name, displayName, passwordHash, demo: false };
+      const record = { id, username: name, displayName, passwordHash, demo: false, removableDemo: false };
       users.push(record);
-      if (dataFile) writeSavedUsers(dataFile, users);
+      if (dataFile) await enqueueWrite(() => writeSavedUsers(dataFile, users));
       return { ok: true, status: 201, user: publicUser(record) };
     } catch (err) {
       users = users.filter((user) => user.demo || user.username !== name);
@@ -185,5 +307,5 @@ export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 
     return user ? publicUser(user) : null;
   }
 
-  return { init, authenticate, register, findByUsername, publicById };
+  return { init, authenticate, register, findByUsername, publicById, planProductionDemoRemoval };
 }

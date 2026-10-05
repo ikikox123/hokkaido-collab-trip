@@ -75,6 +75,7 @@ export const KNOWN_ERRORS: Record<string, MessageKey> = {
   只有這趟行程的旅伴可以加入別人: 'onlyMembersAddOthers',
   '旅伴就是登入帳號，不能另外取名': 'membersAreAccounts',
   只有這趟行程的旅伴可以這樣做: 'onlyMembersAct',
+  你還不是這趟行程的旅伴: 'notCompanion',
   請填每位的金額: 'fillEachAmount',
   '自訂金額加總要等於總額（最多差 1 圓）': 'customSumYen',
   '自訂金額加總要等於總額（最多差 0.01）': 'customSumTwd',
