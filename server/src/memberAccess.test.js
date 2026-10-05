@@ -1,16 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { memberAddAllowed } from './split.js';
 import { tripMemberAddAllowed } from './memberAccess.js';
 
-test('an empty roster can accept the caller, and only a member can add someone else', () => {
+test('self-join is only allowed while the roster is empty', () => {
   const empty = { members: [] };
-  assert.equal(tripMemberAddAllowed(empty, 'u1', 'u1').ok, true);
-  const blocked = tripMemberAddAllowed(empty, 'u1', 'u2');
-  assert.equal(blocked.ok, false);
-  assert.equal(blocked.error, '只有這趟行程的旅伴可以這樣做');
+  assert.equal(memberAddAllowed(empty, 'u1', 'u1').ok, true);
+  assert.deepEqual(tripMemberAddAllowed(empty, 'u1', 'u1'), memberAddAllowed(empty, 'u1', 'u1'));
+  const addingOther = memberAddAllowed(empty, 'u1', 'u2');
+  assert.equal(addingOther.ok, false);
+  assert.equal(addingOther.error, '只有這趟行程的旅伴可以這樣做');
 
-  const withAlice = { members: [{ id: 'u1' }] };
-  assert.equal(tripMemberAddAllowed(withAlice, 'u1', 'u2').ok, true);
-  assert.equal(tripMemberAddAllowed(withAlice, 'u2', 'u2').ok, false);
-  assert.equal(tripMemberAddAllowed(withAlice, 'u2', 'u3').ok, false);
+  const occupied = { members: [{ id: 'u1' }, { id: 'u2' }] };
+  const self = memberAddAllowed(occupied, 'u3', 'u3');
+  assert.equal(self.ok, false);
+  assert.equal(self.error, '只有這趟行程的旅伴可以這樣做');
+  assert.deepEqual(tripMemberAddAllowed(occupied, 'u3', 'u3'), self);
+  assert.equal(memberAddAllowed(occupied, 'u1', 'u3').ok, true);
+  assert.equal(tripMemberAddAllowed(occupied, 'u2', 'u9').ok, true);
 });

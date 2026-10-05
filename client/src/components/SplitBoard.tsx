@@ -115,11 +115,11 @@ export function SplitBoard({
   );
 
   useEffect(() => {
-    if (composeToken > 0 && canEdit) {
+    if (composeToken > 0 && canSettle) {
       setFormError(null);
       setEditor('new');
     }
-  }, [composeToken, canEdit]);
+  }, [composeToken, canSettle]);
 
   const visible = expenses
     .filter((expense) => filter === 'all' || expense.currency === filter)
@@ -157,8 +157,9 @@ export function SplitBoard({
   }
 
   function startAdd() {
-    if (!canEdit || !token) {
-      onNeedLogin();
+    if (!canSettle) {
+      if (!canEdit || !token) onNeedLogin();
+      else setFormError(members.length === 0 ? t('loggedInNotMember') : t('askCompanionToAdd'));
       return;
     }
     setFormError(null);
@@ -224,8 +225,11 @@ export function SplitBoard({
         {!canEdit && (
           <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t('guestCanView')}</p>
         )}
-        {canEdit && !isMember && (
+        {canEdit && !isMember && members.length === 0 && (
           <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t('loggedInNotMember')}</p>
+        )}
+        {canEdit && !isMember && members.length > 0 && (
+          <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t('askCompanionToAdd')}</p>
         )}
         {shareFallback && (
           <label className="block rounded-xl border border-slate-200 bg-white p-3 text-sm">
@@ -243,7 +247,7 @@ export function SplitBoard({
 
         <FxCard
           fx={fx}
-          canEdit={canEdit}
+          canEdit={canSettle}
           pending={pending}
           onOverride={(basis, value) => void send('fx:override', { basis, value })}
           onClear={() => void send('fx:clearOverride', {})}
@@ -488,7 +492,7 @@ export function SplitBoard({
                       {expense.stopId ? ` · ${stop ? displayStopTitle(locale, stop.title) : t('stopDeleted')}` : ''}
                     </button>
                   )}
-                  {canEdit && (
+                  {canSettle && (
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -558,7 +562,7 @@ export function SplitBoard({
               ))}
             </ul>
           )}
-          {canEdit && !isMember && (
+          {canEdit && !isMember && members.length === 0 && (
             <button
               type="button"
               className="mt-2 min-h-touch w-full rounded-xl bg-ice-600 text-base font-bold text-white"

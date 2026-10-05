@@ -127,7 +127,6 @@ function authMiddleware(req, res, next) {
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
-    room: ROOM_CODE,
     routing: serverMapsKey() ? 'google' : 'osrm',
   });
 });
@@ -163,6 +162,9 @@ app.get('/api/trip', authMiddleware, (_req, res) => {
 });
 
 app.get('/api/places', authMiddleware, async (req, res) => {
+  if (!isTripMember(tripState, req.user.id)) {
+    return res.status(403).json({ error: '只有這趟行程的旅伴可以這樣做' });
+  }
   const q = String(req.query.q || '').trim();
   if (!q) return res.status(400).json({ error: '請輸入地點' });
   if (q.length > 160) return res.status(400).json({ error: '查詢過長' });
@@ -438,13 +440,19 @@ io.on('connection', (socket) => {
     if (!requireTripMember(socket, token, ack)) return;
     const result = applyStopPatch(tripState, id, patch);
     if (!result.ok) {
-      socket.emit('error:edit', { error: result.error || '無法更新站點' });
+      const error = result.error || '無法更新站點';
+      socket.emit('error:edit', { error });
+      ackResult(ack, { ok: false, error });
       return;
     }
-    if (result.unchanged) return;
+    if (result.unchanged) {
+      ackResult(ack, { ok: true, unchanged: true });
+      return;
+    }
     tripState = result.state;
     // A title-only rename must not recompute routes. Coordinate edits still do.
     publish(joinedRoom || ROOM_CODE, { enrich: !result.titleOnly });
+    ackResult(ack, { ok: true });
   });
 
   socket.on('trip:delete', ({ id, token }, ack) => {
@@ -456,11 +464,8 @@ io.on('connection', (socket) => {
     publish(joinedRoom || ROOM_CODE);
   });
 
-  socket.on('trip:setLegMode', ({ fromStopId, toStopId, mode, token }) => {
-    if (!verifyToken(token)) {
-      socket.emit('error:auth', { error: '請先登入才能編輯' });
-      return;
-    }
+  socket.on('trip:setLegMode', ({ fromStopId, toStopId, mode, token }, ack) => {
+    if (!requireTripMember(socket, token, ack)) return;
     const next = setLegMode(tripState, fromStopId, toStopId, mode);
     if (!next.changed) return;
     tripState = next.state;
@@ -484,13 +489,12 @@ io.on('connection', (socket) => {
     ackResult(ack, { ok: true });
   });
 
-  socket.on('trip:reset', ({ token }) => {
-    if (!verifyToken(token)) {
-      socket.emit('error:auth', { error: '請先登入才能編輯' });
-      return;
-    }
-    if (loadedFromFile) {
-      socket.emit('error:edit', { error: '這份行程是從已儲存的資料讀進來的，不會用種子覆蓋' });
+  socket.on('trip:reset', ({ token }, ack) => {
+    if (!requireTripMember(socket, token, ack)) return;
+    if (isProd || loadedFromFile) {
+      const error = '這份行程是從已儲存的資料讀進來的，不會用種子覆蓋';
+      socket.emit('error:edit', { error });
+      ackResult(ack, { ok: false, error });
       return;
     }
     const members = tripState.members;
@@ -503,12 +507,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('expense:upsert', ({ expense, token }, ack) => {
-    if (!verifyToken(token)) {
-      const error = '請先登入才能編輯';
-      socket.emit('error:auth', { error });
-      ackResult(ack, { ok: false, error });
-      return;
-    }
+    if (!requireTripMember(socket, token, ack)) return;
     const result = upsertExpense(tripState, expense);
     if (!result.ok) {
       socket.emit('error:edit', { error: result.error });
@@ -521,12 +520,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('expense:delete', ({ id, token }, ack) => {
-    if (!verifyToken(token)) {
-      const error = '請先登入才能編輯';
-      socket.emit('error:auth', { error });
-      ackResult(ack, { ok: false, error });
-      return;
-    }
+    if (!requireTripMember(socket, token, ack)) return;
     const result = deleteExpense(tripState, id);
     if (!result.ok) {
       socket.emit('error:edit', { error: result.error });
@@ -646,13 +640,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('fx:override', ({ basis, value, token }, ack) => {
-    const verified = verifyToken(token);
-    if (!verified) {
-      const error = '請先登入才能編輯';
-      socket.emit('error:auth', { error });
-      ackResult(ack, { ok: false, error });
-      return;
-    }
+    const verified = requireTripMember(socket, token, ack);
+    if (!verified) return;
     const parsed = parseOverride({ basis, value });
     if (!parsed.ok) {
       socket.emit('error:edit', { error: parsed.error });
@@ -671,12 +660,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('fx:clearOverride', ({ token }, ack) => {
-    if (!verifyToken(token)) {
-      const error = '請先登入才能編輯';
-      socket.emit('error:auth', { error });
-      ackResult(ack, { ok: false, error });
-      return;
-    }
+    if (!requireTripMember(socket, token, ack)) return;
     fxBook.clearOverride();
     publishFx();
     ackResult(ack, { ok: true, fx: presentFx(fxBook.get()) });

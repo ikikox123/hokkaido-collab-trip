@@ -360,7 +360,7 @@ export default function App() {
             >
               {t('shareOpen')}
             </a>
-            {canEdit && (
+            {isTripCompanion && (
               <button
                 type="button"
                 className="min-h-touch w-full rounded-lg border border-white/30 text-white/90"
@@ -456,7 +456,7 @@ export default function App() {
             stops={dayStops}
             legs={dayLegs}
             selectedId={selectedId}
-            canEdit={canEdit}
+            canEdit={isTripCompanion}
             onSelect={(id) => {
               setSelectedId(id);
               if (window.matchMedia('(max-width: 767px)').matches) {
@@ -511,7 +511,7 @@ export default function App() {
             selectedId={selectedId}
             active={mapActive}
             lodging={trip.lodging}
-            canEdit={canEdit}
+            canEdit={isTripCompanion}
             onSelect={setSelectedId}
             onRename={(id, title) => emitAuth('trip:updateStop', { id, patch: { title } })}
           />
