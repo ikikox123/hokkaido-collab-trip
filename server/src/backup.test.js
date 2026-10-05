@@ -7,7 +7,10 @@ import { fileURLToPath } from 'url';
 import {
   BUCKET_ENV_VARS,
   BACKUP_INTERVAL_MS,
+  BACKUP_MAX_ATTEMPTS,
+  BACKUP_RETRY_DELAYS_MS,
   createBackup,
+  createBackupWithRetry,
   formatBackupId,
   listBackups,
   readBucketConfig,
@@ -500,6 +503,165 @@ test('cli backup and restore use the injected client and a temp directory', asyn
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('a change during copy retries from scratch and keeps one consistent snapshot', async () => {
+  const dir = tempDir();
+  const original = trip('2026-06-02T00:00:00.000Z', '複製前');
+  const rewritten = trip('2026-06-02T00:00:01.000Z', '匯率寫入');
+  const { stateFile, usersFile } = writeLive(dir, { state: original });
+  const usersBefore = snapshot(usersFile);
+  const client = memoryBucket();
+  const realPut = client.putObject.bind(client);
+  let statePuts = 0;
+  client.putObject = async (args) => {
+    if (args.key.endsWith('state.json')) {
+      statePuts += 1;
+      if (statePuts === 1) {
+        fs.writeFileSync(stateFile, rewritten);
+        const stamp = new Date('2026-08-01T00:00:05.000Z');
+        fs.utimesSync(stateFile, stamp, stamp);
+      }
+    }
+    return realPut(args);
+  };
+  const logs = [];
+  const sleeps = [];
+  let tick = 0;
+  const times = [new Date('2026-08-01T00:00:00.000Z'), new Date('2026-08-01T00:00:01.000Z')];
+  try {
+    const result = await createBackupWithRetry({
+      dataDir: dir,
+      client,
+      bucket: BUCKET,
+      fsImpl: guardWrites(dir),
+      now: () => times[Math.min(tick++, times.length - 1)],
+      sleep: async (ms) => sleeps.push(ms),
+      log: (message) => logs.push(message),
+    });
+    assert.equal(result.backupId, '20260801T000001000Z');
+    assert.deepEqual(sleeps, [BACKUP_RETRY_DELAYS_MS[0]]);
+    assert.equal(logs.length, 1);
+    assert.match(logs[0], /retry 2\/3 in 200ms: Refusing to backup: state\.json changed while it was copied/);
+    const keys = [...client.objects.keys()];
+    assert.deepEqual(keys.sort(), [
+      `${BUCKET}\0backups/20260801T000001000Z/state.json`,
+      `${BUCKET}\0backups/20260801T000001000Z/users.json`,
+    ]);
+    assert.equal(client.objects.get(keys.find((key) => key.endsWith('state.json'))).toString('utf8'), rewritten);
+    assert.equal(client.objects.get(keys.find((key) => key.endsWith('users.json'))).equals(usersBefore.bytes), true);
+    assert.equal(fs.readFileSync(stateFile, 'utf8'), rewritten);
+    assert.deepEqual(snapshot(usersFile), usersBefore);
+    assert.equal(fs.existsSync(path.join(dir, 'backups')), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('changes on every attempt give up with nothing uploaded and live files left to the writer', async () => {
+  const dir = tempDir();
+  const { stateFile, usersFile } = writeLive(dir, { state: trip('2026-06-02T00:00:00.000Z', '複製前') });
+  const usersBefore = snapshot(usersFile);
+  const client = memoryBucket();
+  const realPut = client.putObject.bind(client);
+  let statePuts = 0;
+  let lastWrite = '';
+  client.putObject = async (args) => {
+    if (args.key.endsWith('state.json')) {
+      statePuts += 1;
+      lastWrite = trip(`2026-06-02T00:00:0${statePuts}.000Z`, `寫入${statePuts}`);
+      fs.writeFileSync(stateFile, lastWrite);
+      const stamp = new Date(`2026-08-01T00:00:0${statePuts}.000Z`);
+      fs.utimesSync(stateFile, stamp, stamp);
+    }
+    return realPut(args);
+  };
+  const logs = [];
+  const sleeps = [];
+  await assert.rejects(
+    () => createBackupWithRetry({
+      dataDir: dir,
+      client,
+      bucket: BUCKET,
+      fsImpl: guardWrites(dir),
+      now: () => new Date(`2026-08-01T00:00:0${statePuts}.000Z`),
+      sleep: async (ms) => sleeps.push(ms),
+      log: (message) => logs.push(message),
+    }),
+    (err) => err.code === 'BACKUP_GAVE_UP' && /giving up after 3 attempts: Refusing to backup: state\.json changed while it was copied/.test(err.message),
+  );
+  assert.equal(statePuts, BACKUP_MAX_ATTEMPTS);
+  assert.deepEqual(sleeps, [...BACKUP_RETRY_DELAYS_MS]);
+  assert.deepEqual(logs, [
+    'retry 2/3 in 200ms: Refusing to backup: state.json changed while it was copied',
+    'retry 3/3 in 500ms: Refusing to backup: state.json changed while it was copied',
+  ]);
+  assert.equal(client.objects.size, 0);
+  assert.equal(fs.readFileSync(stateFile, 'utf8'), lastWrite);
+  assert.deepEqual(snapshot(usersFile), usersBefore);
+  assert.equal(fs.existsSync(path.join(dir, 'backups')), false);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('an unchanged pair is uploaded once', async () => {
+  const dir = tempDir();
+  const { stateFile, usersFile } = writeLive(dir);
+  const stateBefore = snapshot(stateFile);
+  const usersBefore = snapshot(usersFile);
+  const client = memoryBucket();
+  const logs = [];
+  const sleeps = [];
+  const result = await createBackupWithRetry({
+    dataDir: dir,
+    client,
+    bucket: BUCKET,
+    fsImpl: guardWrites(dir),
+    now: new Date('2026-08-01T00:00:00.000Z'),
+    sleep: async (ms) => sleeps.push(ms),
+    log: (message) => logs.push(message),
+  });
+  assert.equal(result.backupId, '20260801T000000000Z');
+  assert.deepEqual(logs, []);
+  assert.deepEqual(sleeps, []);
+  assert.deepEqual(client.calls.filter((call) => call[0] === 'put').map((call) => call[2]), [
+    'backups/20260801T000000000Z/state.json',
+    'backups/20260801T000000000Z/users.json',
+  ]);
+  assert.deepEqual(snapshot(stateFile), stateBefore);
+  assert.deepEqual(snapshot(usersFile), usersBefore);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('startup copy waits until the first exchange-rate save settles', async () => {
+  const dir = tempDir();
+  writeLive(dir);
+  const client = memoryBucket();
+  let release = () => {};
+  const startupReady = new Promise((resolve) => {
+    release = resolve;
+  });
+  const logs = [];
+  const handle = startPeriodicBackup({
+    dataDir: dir,
+    client,
+    bucket: BUCKET,
+    startupReady,
+    now: () => new Date('2026-08-01T00:00:00.000Z'),
+    schedule: () => () => {},
+    log: (message) => logs.push(message),
+    createClient() {
+      throw new Error('real bucket client must not be created');
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(client.calls.filter((call) => call[0] === 'put').length, 0);
+  release();
+  const result = await handle.whenStarted;
+  assert.equal(result.backupId, '20260801T000000000Z');
+  assert.equal(client.calls.filter((call) => call[0] === 'put').length, 2);
+  assert.deepEqual(logs, []);
+  handle.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('the image build does not copy the data directory', () => {
   const dockerfile = fs.readFileSync(path.join(repoRoot, 'Dockerfile'), 'utf8');
   const copies = dockerfile.split('\n').filter((line) => /^\s*COPY\b/.test(line));
@@ -507,5 +669,6 @@ test('the image build does not copy the data directory', () => {
   const ignore = fs.readFileSync(path.join(repoRoot, '.dockerignore'), 'utf8');
   assert.match(ignore, /^data$/m);
   const source = fs.readFileSync(path.join(repoRoot, 'server/src/index.js'), 'utf8');
-  assert.match(source, /startPeriodicBackup\(\{ dataDir: DATA_DIR \}\)/);
+  assert.match(source, /startupReady: firstFxSettled/);
+  assert.match(source, /refreshFx\(\{ force: true, minIntervalMs: 0 \}\)\.finally\(releaseFirstFx\)/);
 });
