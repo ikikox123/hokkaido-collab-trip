@@ -13,6 +13,7 @@ export const KNOWN_ERRORS: Record<string, MessageKey> = {
   '登入失敗，請稍後再試': 'loginFailed',
   帳號或密碼錯誤: 'badCredentials',
   這個帳號已經有人使用: 'usernameTaken',
+  這個帳號名稱不能使用: 'usernameReserved',
   '註冊沒有成功，請稍後再試': 'registerNotSaved',
   帳號含有無法使用的字元: 'usernameBadChars',
   帳號不能包含空白: 'usernameNoSpace',

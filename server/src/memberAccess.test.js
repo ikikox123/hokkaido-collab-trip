@@ -22,10 +22,18 @@ test('self-join is only allowed while the roster is empty', () => {
 
 test('collaborative read uses companion membership, with an empty-list exception', () => {
   assert.equal(collaborativeTripReadable({ members: [] }, 'u1'), true);
-  assert.equal(collaborativeTripReadable({ members: [] }, ''), true);
   assert.equal(collaborativeTripReadable({}, 'u1'), true);
   const occupied = { members: [{ id: 'u2' }] };
   assert.equal(collaborativeTripReadable(occupied, 'u2'), true);
   assert.equal(collaborativeTripReadable(occupied, 'u1'), false);
   assert.equal(collaborativeTripReadable(occupied, ''), false);
+});
+
+test('an empty companion list still requires an account id', () => {
+  assert.equal(collaborativeTripReadable({ members: [] }, ''), false);
+  assert.equal(collaborativeTripReadable({ members: [] }, '   '), false);
+  assert.equal(collaborativeTripReadable({ members: [] }, undefined), false);
+  assert.equal(collaborativeTripReadable({ members: [] }, null), false);
+  assert.equal(collaborativeTripReadable({}, undefined), false);
+  assert.equal(collaborativeTripReadable({ members: [] }, 'u1'), true);
 });

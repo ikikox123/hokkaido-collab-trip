@@ -13,10 +13,11 @@ export const NOT_COMPANION_ERROR = '你還不是這趟行程的旅伴';
 /**
  * Read access for the collaborative trip.
  * Uses the same membership test as requireTripMember (`isTripMember`).
- * An empty companion list is the only exception, so the first logged-in
- * account can still open the trip and add themself.
+ * An empty companion list still lets a logged-in account read, so the first
+ * person can open the trip and add themself. A missing account id does not.
  */
 export function collaborativeTripReadable(state, accountId) {
+  if (typeof accountId !== 'string' || !accountId.trim()) return false;
   const members = Array.isArray(state?.members) ? state.members : [];
   if (members.length === 0) return true;
   return isTripMember(state, accountId);

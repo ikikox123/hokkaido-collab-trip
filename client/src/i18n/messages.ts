@@ -498,6 +498,7 @@ export const catalog = {
   weatherThunder: { 'zh-Hant': '雷雨', ja: '雷雨', en: 'Thunderstorm' },
   badCredentials: { 'zh-Hant': '帳號或密碼錯誤', ja: 'アカウントまたはパスワードが違います', en: 'Wrong username or password' },
   usernameTaken: { 'zh-Hant': '這個帳號已經有人使用', ja: 'このアカウントはすでに使われています', en: 'That username is already taken' },
+  usernameReserved: { 'zh-Hant': '這個帳號名稱不能使用', ja: 'このアカウント名は使えません', en: 'This account name cannot be used' },
   registerNotSaved: { 'zh-Hant': '註冊沒有成功，請稍後再試', ja: '登録が完了しませんでした。しばらくしてからもう一度お試しください', en: 'Registration did not finish. Try again shortly' },
   usernameBadChars: { 'zh-Hant': '帳號含有無法使用的字元', ja: 'アカウントに使えない文字が含まれています', en: 'The username has a character that cannot be used' },
   usernameNoSpace: { 'zh-Hant': '帳號不能包含空白', ja: 'アカウントに空白は使えません', en: 'The username cannot contain spaces' },

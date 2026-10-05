@@ -160,9 +160,9 @@ async function passwordMatches(password, passwordHash) {
 /**
  * In-memory accounts plus a gitignored JSON file of bcrypt hashes.
  * Demo users are never written to disk. Development recreates alice (u1) and bob (u2)
- * in memory. Production does not create them and drops leftover demo rows that are
- * not on the companion list. A later registration of those names gets a normal u_ id
- * and is left in place. This store does not load, migrate, or replace trip state.
+ * in memory. Production does not create them, drops leftover demo rows that are
+ * not on the companion list, and rejects new registration of those names.
+ * This store does not load, migrate, or replace trip state.
  *
  * The account id is the split-member id. It is chosen once at registration and
  * reloaded from users.json. Startup does not mint a new id.
@@ -280,6 +280,9 @@ export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 
     const error = credentialError(username, password);
     if (error) return { ok: false, status: 400, error };
     const name = normalizeUsername(username);
+    if (production && (name === 'alice' || name === 'bob')) {
+      return { ok: false, status: 400, error: '這個帳號名稱不能使用' };
+    }
     if (findByUsername(name) || pending.has(name)) {
       return { ok: false, status: 409, error: '這個帳號已經有人使用' };
     }

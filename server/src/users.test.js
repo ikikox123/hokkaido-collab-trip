@@ -267,23 +267,43 @@ test('production boot does not create alice or bob', async () => {
     assert.equal((await store.authenticate('bob', 'demo1234')).ok, false);
     assert.equal(store.publicById('u1'), null);
     assert.equal(store.publicById('u2'), null);
-    const created = await store.register({ username: 'alice', password: 'fresh-pass' });
-    assert.equal(created.ok, true);
-    assert.match(created.user.id, /^u_[0-9a-f]{16}$/);
-    assert.notEqual(created.user.id, 'u1');
-    const raw = fs.readFileSync(dataFile, 'utf8');
     await store.planProductionDemoRemoval([]).commit();
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), raw);
-
-    const again = createUserStore({ dataFile, rounds: 4, nodeEnv: 'production' });
-    await again.init();
-    await again.planProductionDemoRemoval([]).commit();
-    assert.equal(fs.readFileSync(dataFile, 'utf8'), raw);
-    const login = await again.authenticate('alice', 'fresh-pass');
-    assert.equal(login.ok, true);
-    assert.equal(login.user.id, created.user.id);
+    assert.equal(fs.existsSync(dataFile), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('production refuses registration of alice and bob; dev does not reserve them', async () => {
+  const { dir, dataFile, store } = productionStore();
+  const dev = tempStore();
+  try {
+    await store.init();
+    for (const username of ['alice', 'Alice', 'ALICE', 'bob', ' Bob ', 'BOB']) {
+      const blocked = await store.register({ username, password: 'fresh-pass' });
+      assert.equal(blocked.ok, false, username);
+      assert.equal(blocked.status, 400, username);
+      assert.equal(blocked.error, '這個帳號名稱不能使用', username);
+    }
+    assert.equal(fs.existsSync(dataFile), false);
+    const nearby = await store.register({ username: 'alice2', password: 'fresh-pass' });
+    assert.equal(nearby.ok, true);
+    assert.equal(nearby.user.username, 'alice2');
+
+    await dev.store.init();
+    const taken = await dev.store.register({ username: 'Alice', password: 'secret1' });
+    assert.equal(taken.ok, false);
+    assert.equal(taken.status, 409);
+    assert.equal(taken.error, '這個帳號已經有人使用');
+    const alice = await dev.store.authenticate('alice', 'demo1234');
+    const bob = await dev.store.authenticate('bob', 'demo1234');
+    assert.equal(alice.ok, true);
+    assert.equal(alice.user.id, 'u1');
+    assert.equal(bob.ok, true);
+    assert.equal(bob.user.id, 'u2');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dev.dir, { recursive: true, force: true });
   }
 });
 
