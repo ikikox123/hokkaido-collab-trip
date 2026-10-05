@@ -1,6 +1,9 @@
 import type { Stop } from '../types/trip';
 
-/** Minn 札幌大通 西14（南1条西14）. */
+/**
+ * Fallback map center used only when the trip has no lodging coordinates.
+ * Values stay at Minn 札幌大通 西14（南1条西14） and are not a live lodging rewrite.
+ */
 export const SAPPORO_BASE = { lat: 43.057291, lng: 141.336603 };
 
 export type LodgingPoint = { lat: number; lng: number };
@@ -14,7 +17,7 @@ export type DayCamera =
 
 /**
  * Camera for one day.
- * 0 stops → lodging / Minn Sapporo zoom 13.
+ * 0 stops → lodging zoom 13. If lodging is missing, SAPPORO_BASE is the fallback.
  * 1 stop → that point zoom 15 (fitBounds on one point zooms out too far).
  * 2+ stops → fit all of them.
  */
