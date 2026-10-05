@@ -182,6 +182,19 @@ export function printSharePdf(print: () => void = () => window.print()) {
   print();
 }
 
+/**
+ * PDF click while an image capture is running.
+ * `capturing` does not block the call: `print()` runs in this turn, on the tap.
+ */
+export function clickSharePdf(
+  state: { canExport: boolean; capturing: boolean },
+  print: () => void = () => window.print(),
+) {
+  if (!state.canExport) return false;
+  print();
+  return true;
+}
+
 type ShareRaster = (node: HTMLElement, options: ShareImageOptions) => Promise<Blob | null>;
 
 function defaultMarkCapturing(active: boolean) {

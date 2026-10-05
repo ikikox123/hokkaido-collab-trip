@@ -12,6 +12,7 @@ import {
   inAppBrowserKind,
   isIosDevice,
   lineExternalBrowserUrl,
+  clickSharePdf,
   printSharePdf,
   revokeSharePreviewUrls,
   settleShareImageExport,
@@ -265,8 +266,7 @@ export function SharePage() {
   }
 
   function onPdf() {
-    if (!trip) return;
-    printSharePdf();
+    clickSharePdf({ canExport: Boolean(trip), capturing: busy }, printSharePdf);
   }
 
   const lodging = shareLodgingDisplay(trip?.lodging);

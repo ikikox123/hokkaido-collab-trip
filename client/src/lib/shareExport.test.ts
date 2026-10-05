@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { catalog, text } from '../i18n/messages.ts';
 import { shareLocation } from './sharePath.ts';
 import {
@@ -10,6 +12,7 @@ import {
   SHARE_EXPORT_INTENT_KEY,
   canShareImageFile,
   captureSharePng,
+  clickSharePdf,
   deliverSharePng,
   inAppBrowserKind,
   includeInShareImage,
@@ -689,6 +692,72 @@ test('a closed preview revokes its blob url', () => {
     URL.revokeObjectURL = originalRevoke;
     revokeSharePreviewUrls();
   }
+});
+
+const shareCaptureCss = readFileSync(fileURLToPath(new URL('../index.css', import.meta.url)), 'utf8');
+
+/** True when the capture stylesheet forces this node to display:none. */
+function hiddenByShareCapture(classes: string[], insideExportRoot: boolean) {
+  const globalHide = /html\.share-capturing \.print\\:hidden\s*\{[^}]*display:\s*none\s*!important/.test(shareCaptureCss);
+  const scopedHide =
+    /html\.share-capturing \[data-share-export-root\] \.print\\:hidden\s*\{[^}]*display:\s*none\s*!important/.test(
+      shareCaptureCss,
+    );
+  if (!classes.includes('print:hidden')) return false;
+  if (globalHide) return true;
+  return scopedHide && insideExportRoot;
+}
+
+test('during capture the action bar and notices stay visible', () => {
+  assert.match(
+    shareCaptureCss,
+    /html\.share-capturing \[data-share-export-root\] \.print\\:hidden \{\s*display: none !important;\s*\}/,
+  );
+  assert.equal(/html\.share-capturing \.print\\:hidden \{/.test(shareCaptureCss), false);
+
+  const actionBar = ['share-actionbar', 'share-export-ignore', 'print:hidden', 'md:hidden'];
+  const notice = ['share-export-ignore', 'print:hidden'];
+  const saveButton = ['share-export-ignore', 'print:hidden'];
+  assert.equal(hiddenByShareCapture(actionBar, false), false);
+  assert.equal(hiddenByShareCapture(notice, false), false);
+  assert.equal(hiddenByShareCapture(saveButton, false), false);
+  assert.equal(hiddenByShareCapture(['print:hidden'], true), true);
+
+  assert.equal(
+    includeInShareImage({
+      hasAttribute: (name: string) => name === 'data-share-export-ignore',
+      classList: { contains: (name: string) => actionBar.includes(name) },
+    }),
+    false,
+  );
+  assert.equal(
+    includeInShareImage({
+      hasAttribute: () => false,
+      classList: { contains: (name: string) => notice.includes(name) },
+    }),
+    false,
+  );
+});
+
+test('during capture, tapping PDF synchronously calls print', () => {
+  const controls = shareExportControlState(true, true);
+  assert.equal(controls.imageDisabled, true);
+  assert.equal(controls.pdfDisabled, false);
+  let printed = 0;
+  let sawMicrotask = false;
+  queueMicrotask(() => {
+    sawMicrotask = true;
+  });
+  const ran = clickSharePdf({ canExport: true, capturing: true }, () => {
+    printed += 1;
+    assert.equal(sawMicrotask, false);
+  });
+  assert.equal(ran, true);
+  assert.equal(printed, 1);
+  assert.equal(clickSharePdf({ canExport: false, capturing: true }, () => {
+    printed += 1;
+  }), false);
+  assert.equal(printed, 1);
 });
 
 test('in-app browsers ask for Safari, and LINE can open the same page outside', () => {

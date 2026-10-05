@@ -112,12 +112,13 @@ html:has(.share-root) #root {
   overflow-wrap: anywhere;
 }
 
-/* Image export reuses the print sheet: show the title, drop chrome. No remote fonts are fetched. */
+/* Image export reuses the print sheet inside the capture root only.
+   Toolbars, notices, and the second-step button sit outside that root and stay on screen. */
 html.share-capturing .share-print-title {
   display: block !important;
 }
 
-html.share-capturing .print\:hidden {
+html.share-capturing [data-share-export-root] .print\:hidden {
   display: none !important;
 }
 
