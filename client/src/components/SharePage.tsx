@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { LanguageMenu } from '../i18n/LanguageMenu';
 import { useI18n } from '../i18n/I18nProvider';
 import { pageHeading } from '../i18n/screen.ts';
-import { parseShareScope, shareLocation, type ShareScope } from '../lib/sharePath';
+import type { Locale } from '../i18n/messages.ts';
+import { ShareLinkButton } from './ShareLinkButton';
+import { parseShareLang, parseShareScope, shareLocation, type ShareScope } from '../lib/sharePath';
 import {
   formatLodgingPoint,
   isShareTrip,
@@ -21,16 +23,23 @@ function chipClass(active: boolean) {
 }
 
 export function SharePage() {
-  const { locale, t } = useI18n();
+  const { locale, setDisplayLocale, t } = useI18n();
   const [scope, setScope] = useState<ShareScope>(() => parseShareScope(window.location.search));
   const [trip, setTrip] = useState<ShareTrip | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const onPop = () => setScope(parseShareScope(window.location.search));
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
+    const sync = () => {
+      setScope(parseShareScope(window.location.search));
+      setDisplayLocale(parseShareLang(window.location.search));
+    };
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('popstate', sync);
+      setDisplayLocale(null);
+    };
+  }, [setDisplayLocale]);
 
   useEffect(() => {
     const active = document.querySelector<HTMLButtonElement>('.share-toolbar nav button[aria-pressed="true"]');
@@ -44,7 +53,7 @@ export function SharePage() {
     let cancelled = false;
     const ctrl = new AbortController();
     setFailed(false);
-    fetch('/api/trip', { signal: ctrl.signal, headers: { accept: 'application/json' } })
+    fetch('/api/share', { signal: ctrl.signal, headers: { accept: 'application/json' } })
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         const body: unknown = await res.json();
@@ -62,8 +71,15 @@ export function SharePage() {
     };
   }, []);
 
+  function pickLang(next: Locale) {
+    setDisplayLocale(next);
+    const href = shareLocation(scope, next);
+    const current = `${window.location.pathname.replace(/\/+$/, '') || '/'}${window.location.search}`;
+    if (current !== href) window.history.replaceState({ view: 'share' }, '', href);
+  }
+
   function selectScope(next: ShareScope) {
-    const href = shareLocation(next);
+    const href = shareLocation(next, locale);
     const current = `${window.location.pathname.replace(/\/+$/, '') || '/'}${window.location.search}`;
     if (current !== href) {
       window.history.pushState({ view: 'share' }, '', href);
@@ -85,7 +101,10 @@ export function SharePage() {
               <p className="text-xs font-bold tracking-wide text-ice-700">{t('shareReadOnly')}</p>
               <h1 className="text-lg font-bold leading-snug text-slate-900">{pageHeading(locale)}</h1>
             </div>
-            <LanguageMenu tone="light" />
+            <div className="flex shrink-0 items-center gap-2">
+              <ShareLinkButton scope={scope} lang={locale} tone="light" />
+              <LanguageMenu tone="light" onPick={pickLang} />
+            </div>
           </div>
           {trip && (
             <nav aria-label={t('dayNav')} className="mt-2 flex gap-1 overflow-x-auto no-scrollbar pb-1">

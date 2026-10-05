@@ -7,7 +7,14 @@ const OPTIONS: { value: Locale; label: string }[] = [
   { value: 'en', label: 'English' },
 ];
 
-export function LanguageMenu({ tone = 'onDark' }: { tone?: 'onDark' | 'light' }) {
+export function LanguageMenu({
+  tone = 'onDark',
+  onPick,
+}: {
+  tone?: 'onDark' | 'light';
+  /** When set, the choice stays on this page and is not written to `hokkaido.locale`. */
+  onPick?: (locale: Locale) => void;
+}) {
   const { locale, setLocale, t } = useI18n();
   const face =
     tone === 'light'
@@ -22,7 +29,9 @@ export function LanguageMenu({ tone = 'onDark' }: { tone?: 'onDark' | 'light' })
         aria-label={t('language')}
         onChange={(event) => {
           const next = event.target.value;
-          if (next === 'zh-Hant' || next === 'ja' || next === 'en') setLocale(next);
+          if (next !== 'zh-Hant' && next !== 'ja' && next !== 'en') return;
+          if (onPick) onPick(next);
+          else setLocale(next);
         }}
       >
         {OPTIONS.map((option) => (

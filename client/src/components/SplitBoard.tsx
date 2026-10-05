@@ -578,7 +578,7 @@ export function SplitBoard({
               className="mt-2 flex gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                void sendAsMember('member:add', { username: accountName }).then((result) => {
+                void sendAsMember('trip:addMember', { username: accountName }).then((result) => {
                   if (result.ok) setAccountName('');
                 });
               }}

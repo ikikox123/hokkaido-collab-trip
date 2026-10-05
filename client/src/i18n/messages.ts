@@ -91,6 +91,15 @@ export const catalog = {
     ja: '行程を読み込めません。しばらくしてからもう一度お試しください。',
     en: 'Could not load the trip. Try again shortly.',
   },
+  shareLink: { 'zh-Hant': '分享連結', ja: 'リンクを共有', en: 'Share link' },
+  shareCopied: { 'zh-Hant': '已複製分享連結', ja: '共有リンクをコピーしました', en: 'Share link copied' },
+  shareOpened: { 'zh-Hant': '已開啟分享', ja: '共有を開きました', en: 'Opened the share sheet' },
+  shareCopyFailed: { 'zh-Hant': '無法複製連結', ja: 'リンクをコピーできませんでした', en: 'Could not copy the link' },
+  collabNeedsLogin: {
+    'zh-Hant': '協作頁要先登入。行程表不用登入，也不含帳號或帳務。',
+    ja: '共同編集ページはログインが必要です。行程表はログイン不要で、アカウントや会計は含みません。',
+    en: 'Log in to open the collaborative trip. The itinerary sheet needs no login and leaves out accounts and bills.',
+  },
   newStopPrompt: { 'zh-Hant': '新站點名稱？', ja: '新しい地点の名前は？', en: 'Name for the new stop?' },
   newStopDefault: { 'zh-Hant': '新景點', ja: '新しいスポット', en: 'New place' },
   tabNav: {
