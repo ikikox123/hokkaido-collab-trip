@@ -17,6 +17,7 @@ import { localizeError } from '../i18n/errors';
 import type { Translate } from '../i18n/I18nProvider';
 import { useI18n } from '../i18n/I18nProvider';
 import { splitModeLabel } from '../i18n/labels';
+import { displayStopTitle } from '../i18n/stopNames';
 import { downloadText, emitAck } from '../lib/bill';
 import { splitShareText } from '../lib/splitLink';
 import type { TripState } from '../types/trip';
@@ -84,7 +85,7 @@ export function SplitBoard({
   onNeedLogin,
   onJumpToDay,
 }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const members = trip.members ?? [];
   const expenses = trip.expenses ?? [];
   const settlements = trip.settlements ?? [];
@@ -484,7 +485,7 @@ export function SplitBoard({
                       onClick={() => onJumpToDay(expense.day ?? stop?.day ?? 1, expense.stopId)}
                     >
                       {day ? `${day.label} ${day.date.slice(5)}` : t('itineraryWord')}
-                      {expense.stopId ? ` · ${stop?.title || t('stopDeleted')}` : ''}
+                      {expense.stopId ? ` · ${stop ? displayStopTitle(locale, stop.title) : t('stopDeleted')}` : ''}
                     </button>
                   )}
                   {canEdit && (

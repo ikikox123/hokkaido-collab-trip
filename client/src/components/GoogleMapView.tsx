@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { dayCamera, fitKeyFor, SAPPORO_BASE, type LodgingPoint } from '../lib/dayView';
 import { useI18n } from '../i18n/I18nProvider';
+import { displayStopTitle } from '../i18n/stopNames';
 import { MODE_COLORS } from '../lib/travel';
 import { loadGoogleMaps, markerIconUrl, type GoogleMap, type GoogleMapsNS } from '../lib/googleLoader';
 import { MapChrome } from './MapChrome';
@@ -52,14 +53,16 @@ function popupNode(
   stop: Stop,
   isNext: boolean,
   copy: PopupCopy,
+  labelFor: (stored: string) => string,
   edit?: { canEdit: boolean; onRename: (title: string) => void },
 ) {
   const root = document.createElement('div');
   root.style.fontSize = '14px';
   root.style.minWidth = '180px';
+  const shown = labelFor(stop.title);
   const title = document.createElement('div');
   title.style.fontWeight = '700';
-  title.textContent = stop.title;
+  title.textContent = shown;
   root.appendChild(title);
 
   function showError(message: string) {
@@ -79,7 +82,7 @@ function popupNode(
     const renameBtn = document.createElement('button');
     renameBtn.type = 'button';
     renameBtn.textContent = copy.rename;
-    renameBtn.setAttribute('aria-label', copy.editName(stop.title));
+    renameBtn.setAttribute('aria-label', copy.editName(shown));
     renameBtn.style.cssText =
       'margin-top:6px;min-height:44px;padding:0 12px;border:0;border-radius:8px;background:#e8f1fa;color:#1e4f8a;font:inherit;font-size:14px;font-weight:600;';
 
@@ -111,7 +114,9 @@ function popupNode(
         }
         root.querySelector('[data-rename-error]')?.remove();
         if (next !== stop.title) edit.onRename(next);
-        title.textContent = next;
+        const savedLabel = labelFor(next);
+        title.textContent = savedLabel;
+        title.setAttribute('aria-label', copy.editName(savedLabel));
         form.replaceWith(renameBtn);
       };
       form.addEventListener('submit', (submitEvent) => {
@@ -134,7 +139,7 @@ function popupNode(
     title.style.cursor = 'pointer';
     title.setAttribute('role', 'button');
     title.tabIndex = 0;
-    title.setAttribute('aria-label', copy.editName(stop.title));
+    title.setAttribute('aria-label', copy.editName(shown));
     title.addEventListener('click', openEditor);
     title.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') openEditor(event);
@@ -189,7 +194,7 @@ export function GoogleMapView({
   onRenameRef.current = onRename;
   const canEditRef = useRef(canEdit);
   canEditRef.current = canEdit;
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const copyRef = useRef<PopupCopy>({
     rename: '',
     editName: (title) => title,
@@ -365,7 +370,7 @@ export function GoogleMapView({
       const marker = new g.maps.Marker({
         map,
         position: { lat: stop.lat, lng: stop.lng },
-        title: stop.title,
+        title: displayStopTitle(locale, stop.title),
         zIndex: isSel ? 3 : isNext ? 2 : 1,
         icon: {
           url: markerIconUrl(color, size),
@@ -376,10 +381,16 @@ export function GoogleMapView({
       marker.addListener('click', () => {
         onSelectRef.current(stop.id);
         info.setContent(
-          popupNode(stop, isNext, copyRef.current, {
-            canEdit: canEditRef.current,
-            onRename: (title) => onRenameRef.current?.(stop.id, title),
-          }),
+          popupNode(
+            stop,
+            isNext,
+            copyRef.current,
+            (stored) => displayStopTitle(locale, stored),
+            {
+              canEdit: canEditRef.current,
+              onRename: (title) => onRenameRef.current?.(stop.id, title),
+            },
+          ),
         );
         info.open({ map, anchor: marker });
       });
@@ -391,7 +402,7 @@ export function GoogleMapView({
       overlaysRef.current.forEach((overlay) => overlay.setMap(null));
       overlaysRef.current = [];
     };
-  }, [legLines, selectedId, status, stops]);
+  }, [legLines, locale, selectedId, status, stops]);
 
   function zoomBy(delta: number) {
     const map = mapRef.current;

@@ -10,6 +10,7 @@ import {
 import { localizeError } from '../i18n/errors';
 import { useI18n } from '../i18n/I18nProvider';
 import { splitModeLabel } from '../i18n/labels';
+import { displayStopTitle } from '../i18n/stopNames';
 import type { TripState } from '../types/trip';
 
 const MODES: SplitMode[] = ['equal', 'custom', 'ratio', 'exclude'];
@@ -107,7 +108,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
     return !samePeople || expense.day != null || Boolean(expense.stopId);
   });
   const members = trip.members ?? [];
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const preview = useMemo(() => prepareExpense(trip, toInput(draft, expense?.id)), [trip, draft, expense?.id]);
 
   const stops = trip.stops.filter((stop) => !draft.day || String(stop.day) === draft.day);
@@ -377,7 +378,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
               <option value="">{t('noStopLink')}</option>
               {stops.map((stop) => (
                 <option key={stop.id} value={stop.id}>
-                  {trip.days.find((day) => day.day === stop.day)?.label || `D${stop.day}`} · {stop.title}
+                  {trip.days.find((day) => day.day === stop.day)?.label || `D${stop.day}`} · {displayStopTitle(locale, stop.title)}
                 </option>
               ))}
             </select>
