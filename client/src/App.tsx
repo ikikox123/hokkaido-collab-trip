@@ -294,6 +294,12 @@ export default function App() {
               <div>{t('outboundLine', { text: trip.flights.outbound })}</div>
               <div>{t('inboundLine', { text: trip.flights.inbound })}</div>
             </div>
+            <a
+              href="/share"
+              className="flex min-h-touch items-center justify-center rounded-lg border border-white/30 px-3 font-semibold text-white/90"
+            >
+              {t('shareOpen')}
+            </a>
             {canEdit && (
               <button
                 type="button"

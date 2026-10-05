@@ -50,6 +50,27 @@ export const catalog = {
   },
   resetSeed: { 'zh-Hant': '重置種子資料', ja: '初期データに戻す', en: 'Reset starter data' },
   dayNav: { 'zh-Hant': '行程日期', ja: '行程の日付', en: 'Trip days' },
+  shareReadOnly: { 'zh-Hant': '唯讀行程表', ja: '閲覧用の行程表', en: 'Read-only itinerary' },
+  shareWhole: { 'zh-Hant': '整趟', ja: '全行程', en: 'Whole trip' },
+  shareStayBase: { 'zh-Hant': '住宿／基地', ja: '宿泊／拠点', en: 'Stay / base' },
+  shareCoords: { 'zh-Hant': '座標', ja: '座標', en: 'Coordinates' },
+  shareBaseFallback: {
+    'zh-Hant': '住宿座標不完整，基地改用札幌大通西14。',
+    ja: '宿泊の座標が足りないため、拠点は札幌大通西14にしています。',
+    en: 'The stay has no usable coordinates, so the base is Sapporo Odori West 14.',
+  },
+  shareGuest: {
+    'zh-Hant': '不用登入也能看。這頁只讀，不能改行程。',
+    ja: 'ログインなしで見られます。このページは閲覧だけで、行程は変更できません。',
+    en: 'You can view this without logging in. It is read-only and cannot change the trip.',
+  },
+  shareBack: { 'zh-Hant': '回到行程', ja: '行程に戻る', en: 'Back to the trip' },
+  shareOpen: { 'zh-Hant': '看行程表', ja: '行程表を見る', en: 'View the itinerary sheet' },
+  shareLoadFailed: {
+    'zh-Hant': '讀不到行程。請稍後再試。',
+    ja: '行程を読み込めません。しばらくしてからもう一度お試しください。',
+    en: 'Could not load the trip. Try again shortly.',
+  },
   newStopPrompt: { 'zh-Hant': '新站點名稱？', ja: '新しい地点の名前は？', en: 'Name for the new stop?' },
   newStopDefault: { 'zh-Hant': '新景點', ja: '新しいスポット', en: 'New place' },
   tabNav: {

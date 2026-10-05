@@ -91,3 +91,92 @@ body:not(.place-dialog-open) .pac-container {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Read-only share sheet scrolls as a document. Print is an A4 itinerary with no map. */
+html:has(.share-root),
+html:has(.share-root) body,
+html:has(.share-root) #root {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.share-sheet {
+  font-family: 'Noto Sans TC', 'Noto Sans JP', 'PingFang TC', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
+    'Yu Gothic', 'Microsoft JhengHei', 'WenQuanYi Micro Hei', 'Droid Sans Fallback', system-ui, sans-serif;
+}
+
+.share-stop-title,
+.share-notes,
+.share-lodging p {
+  overflow-wrap: anywhere;
+}
+
+/* Named page so A4 margins apply only while printing the share sheet. */
+@page share-sheet {
+  size: A4 portrait;
+  margin: 12mm 14mm 14mm;
+}
+
+.share-root {
+  page: share-sheet;
+}
+
+@media print {
+  html:has(.share-root),
+  html:has(.share-root) body,
+  html:has(.share-root) #root {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  html:has(.share-root) .share-root {
+    background: #fff !important;
+  }
+
+  html:has(.share-root) .share-sheet {
+    max-width: none !important;
+    padding: 0 !important;
+    color: #111;
+  }
+
+  html:has(.share-root) .share-print-title {
+    font-size: 16pt;
+  }
+
+  html:has(.share-root) .share-day + .share-day {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  html:has(.share-root) .share-day + .share-day .share-day-stay {
+    display: block;
+  }
+
+  html:has(.share-root) .share-day-head,
+  html:has(.share-root) .share-lodging,
+  html:has(.share-root) .share-mast {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  html:has(.share-root) .share-day-head {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  html:has(.share-root) .share-stop {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  html:has(.share-root) .share-stop-title {
+    font-size: 12pt;
+  }
+
+  html:has(.share-root) .share-notes {
+    font-size: 10.5pt;
+  }
+}
