@@ -36,6 +36,7 @@ import {
   upsertExpense,
 } from './split.js';
 import { createFxBook, parseOverride, presentFx } from './fx.js';
+import { BUCKET_ENV_VARS, startPeriodicBackup } from './backup.js';
 import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
 import { createUserStore } from './users.js';
 
@@ -703,6 +704,15 @@ async function applySeedCorrection(roomCode = ROOM_CODE) {
 }
 
 await userStore.init();
+
+try {
+  const periodicBackup = startPeriodicBackup({ dataDir: DATA_DIR });
+  if (!periodicBackup.started) {
+    console.log(`[backup] periodic copies are off (${periodicBackup.reason}). Set ${BUCKET_ENV_VARS.join(', ')}.`);
+  }
+} catch (err) {
+  console.warn('[backup] periodic copies were not started', err.message);
+}
 
 // Production: serve Vite build from client/dist (single-port deploy)
 if (fs.existsSync(CLIENT_DIST)) {

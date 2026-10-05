@@ -85,6 +85,11 @@ npm run dev
 | `VITE_MAP_PROVIDER` | `google` 或 `leaflet`。**建置時**決定前端地圖。`google` 還需要下一列的瀏覽器金鑰，否則仍走 Leaflet | `leaflet` |
 | `VITE_GOOGLE_MAPS_API_KEY` | **建置時**瀏覽器金鑰：Maps JavaScript API、Places Autocomplete。會進前端 bundle，請用 HTTP referrer 限制。勿把真實金鑰寫進 git | |
 | `GOOGLE_MAPS_SERVER_KEY` | **執行時**伺服器金鑰：Directions、Geocoding、Places Find Place。可與瀏覽器金鑰相同（需在 Google Cloud 啟用對應 API）。勿提交 | |
+| `ENDPOINT` | Railway bucket 的 S3 endpoint（https）。定期備份必填，用 bucket 的變數引用，勿把真實值寫進 git | |
+| `REGION` | Railway bucket 的 S3 region。定期備份必填 | |
+| `BUCKET` | Railway bucket 的 S3 API 名稱（不是顯示名稱）。定期備份必填 | |
+| `ACCESS_KEY_ID` | Railway bucket 的 access key id。定期備份必填 | |
+| `SECRET_ACCESS_KEY` | Railway bucket 的 secret key。定期備份必填 | |
 
 本機開發可不設 `JWT_SECRET`（會用開發用 fallback）。正式環境務必設定強隨機字串。
 
@@ -144,7 +149,7 @@ hokkaido-collab-trip/
   .env.example          # 環境變數範本（勿提交真實 .env）
   Dockerfile            # multi-stage：build client → Express 單 port
   render.yaml / railway.toml
-  data/                 # state.json、users.json 執行期產生（已 gitignore）
+  data/                 # state.json、users.json 執行期產生（已 gitignore，不進映像）
   server/
     package.json
     src/index.js        # Express + Socket.io + JWT + 靜態檔 + 天氣
@@ -184,9 +189,26 @@ Socket.io（需登入 JWT，成功後廣播 `trip:update`）：
 - `expense:upsert` / `expense:delete`、`member:add` / `member:remove`、`settlement:add` / `settlement:delete` 改分帳，同樣廣播整份行程（含 `expenses` 與 `settlements`）。不重算路線。旅伴 id 就是登入帳號 id（`alice` 是 `u1`，`bob` 是 `u2`，新註冊是 `u_` 加 16 個十六進位字）。`member:add` 傳已註冊的 `username`，把那個帳號加進這趟，不會為沒註冊的人發邀請，也不改註冊。一筆結算直接存 `payerId`、`payeeId` 與 `amount`（外加這筆金額的 `currency`）。訪客只讀。已登入的帳號可以把自己加入這趟，即使旅伴名單還是空的。加入別人仍要對方是已註冊帳號，而且操作者已經是旅伴。記下結算的付款人與收款人仍必須是旅伴 id
 - `fx:override` `{ basis: 'twdPerJpy' | 'jpyPerTwd', value, token }` 設定手動匯率；`fx:clearOverride` `{ token }` 改回即時。成功後廣播 `fx:update`
 
+## 備份與還原
+
+`state.json` 與 `users.json` 會定期複製到 Railway bucket。程序啟動後先複製一次，之後每小時再複製一次。複製只讀取這兩個檔案，不會改寫它們，也不會在資料目錄裡另開備份資料夾。物件鍵是 `backups/<時間戳>/state.json` 與 `backups/<時間戳>/users.json`，這個前綴在 bucket 裡。
+
+操作者要把 Railway bucket 的變數引用接到這個服務，名稱必須是 `ENDPOINT`、`REGION`、`BUCKET`、`ACCESS_KEY_ID`、`SECRET_ACCESS_KEY`。五個都要有，而且 `ENDPOINT` 必須是 https。少任何一個，定期複製不會啟動，行程服務仍會起來。這個 repo 不建立 bucket，也不寫入真實金鑰。
+
+還原只會把選定那一份備份的 `state.json` 與 `users.json` 寫回資料目錄。空檔案會拒絕。備份裡 `state.json` 的 `updatedAt` 如果比目前這份 `state.json` 的 `updatedAt` 舊，也會拒絕，不會用較舊的快照蓋掉較新的行程。
+
+```bash
+node server/src/backup.js backup
+node server/src/backup.js list
+node server/src/backup.js restore --id <備份時間戳>
+```
+
+容器裡的資料目錄是 `/app/data`。上面的指令在這個目錄讀寫那兩個線上檔。備份本體在 bucket，不在映像裡，也不進 git。
+
 ## 已知限制
 
 - 帳號＋密碼登入（JWT），可公開註冊；非正式 OAuth。註冊帳存在 `data/users.json`。production 必須設 `JWT_SECRET`（未設會拒絕啟動）
+- 定期備份要有 Railway bucket 的 `ENDPOINT`、`REGION`、`BUCKET`、`ACCESS_KEY_ID`、`SECRET_ACCESS_KEY`。沒設定就不會複製。還原不會蓋過 `updatedAt` 較新的 `state.json`
 - 狀態以單一預設房間為主（房間碼主要用於 presence 分組）；`legs` 存在同一份行程狀態裡
 - 未啟用 Google 時，新增站點座標沿用當日第一站或住宿點。啟用後以 Places Autocomplete（或「伺服器搜尋」的 Geocoding／Places API (New)）帶入 lat/lng，並可改既有站的地點。瀏覽器舊版 Autocomplete 載入失敗時，仍可用「伺服器搜尋」
 - Open-Meteo、氣象廳 XML、JR 公開 JSON、圖磚、OSRM 或 Google 需外網。CARTO 公開 raster 需 key，否則是浮水印
