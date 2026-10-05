@@ -191,7 +191,7 @@ Socket.io（需登入 JWT，成功後廣播 `trip:update`）：
 
 ## 備份與還原
 
-`state.json` 與 `users.json` 會定期複製到 Railway bucket。程序啟動後先複製一次，之後每小時再複製一次。複製只讀取這兩個檔案，不會改寫它們，也不會在資料目錄裡另開備份資料夾。物件鍵是 `backups/<時間戳>/state.json` 與 `backups/<時間戳>/users.json`，這個前綴在 bucket 裡。
+`state.json` 與 `users.json` 會定期複製到 Railway bucket。程序啟動後先複製一次，之後每小時再複製一次。啟動那一次會等第一次匯率寫入結束，因為那個寫入會改 `state.json`。複製只讀取這兩個檔案，不會改寫它們，也不會在資料目錄裡另開備份資料夾。如果讀取或上傳時檔案被改到，會整份重讀再上傳，最多 3 次；三次都不一致就放棄這一次，行程服務繼續跑。每小時的複製也一樣重試。物件鍵是 `backups/<時間戳>/state.json` 與 `backups/<時間戳>/users.json`，這個前綴在 bucket 裡。
 
 操作者要把 Railway bucket 的變數引用接到這個服務，名稱必須是 `ENDPOINT`、`REGION`、`BUCKET`、`ACCESS_KEY_ID`、`SECRET_ACCESS_KEY`。五個都要有，而且 `ENDPOINT` 必須是 https。少任何一個，定期複製不會啟動，行程服務仍會起來。這個 repo 不建立 bucket，也不寫入真實金鑰。
 

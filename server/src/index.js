@@ -705,8 +705,17 @@ async function applySeedCorrection(roomCode = ROOM_CODE) {
 
 await userStore.init();
 
+let releaseFirstFx = () => {};
+const firstFxSettled = new Promise((resolve) => {
+  releaseFirstFx = resolve;
+});
+
 try {
-  const periodicBackup = startPeriodicBackup({ dataDir: DATA_DIR });
+  // The listen callback's first refreshFx may write state.json. The startup copy waits for that save.
+  const periodicBackup = startPeriodicBackup({
+    dataDir: DATA_DIR,
+    startupReady: firstFxSettled,
+  });
   if (!periodicBackup.started) {
     console.log(`[backup] periodic copies are off (${periodicBackup.reason}). Set ${BUCKET_ENV_VARS.join(', ')}.`);
   }
@@ -731,7 +740,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] room ${ROOM_CODE} | demo users alice/bob password demo1234`);
   console.log(`[server] routing ${serverMapsKey() ? 'google' : 'osrm'}`);
   if (shouldApplySeedCorrection(loadedTrip.source)) void applySeedCorrection(ROOM_CODE);
-  void refreshFx({ force: true, minIntervalMs: 0 });
+  void refreshFx({ force: true, minIntervalMs: 0 }).finally(releaseFirstFx);
   setInterval(() => {
     void refreshFx({ force: true, minIntervalMs: 0 });
   }, FX_POLL_MS);

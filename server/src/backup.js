@@ -15,6 +15,12 @@ export const BUCKET_ENV_VARS = ['ENDPOINT', 'REGION', 'BUCKET', 'ACCESS_KEY_ID',
 /** Object-key prefix inside the bucket. This is not a directory on the data volume. */
 export const BACKUP_KEY_PREFIX = 'backups';
 export const BACKUP_INTERVAL_MS = 60 * 60 * 1000;
+/** A changed live file is copied again from scratch, up to this many attempts. */
+export const BACKUP_MAX_ATTEMPTS = 3;
+/** Wait before attempt 2, then attempt 3. */
+export const BACKUP_RETRY_DELAYS_MS = [200, 500];
+/** Startup copy waits this long for the first exchange-rate save, then copies anyway. */
+export const BACKUP_STARTUP_WAIT_MS = 20000;
 const BACKUP_ID_RE = /^\d{8}T\d{9}Z$/;
 
 function fail(code, message) {
@@ -195,6 +201,15 @@ export async function createBackup({ dataDir, now = new Date(), client, bucket, 
         fail('BACKUP_SOURCE_CHANGED', `Refusing to backup: ${file.name} changed while it was copied`);
       }
     }
+    for (const file of files) {
+      const after = fsImpl.statSync(file.file);
+      if (after.ino !== file.before.ino || after.mtimeMs !== file.before.mtimeMs || after.size !== file.before.size) {
+        fail('BACKUP_SOURCE_CHANGED', `Refusing to backup: ${file.name} changed while it was copied`);
+      }
+      if (!asBuffer(fsImpl.readFileSync(file.file)).equals(file.bytes)) {
+        fail('BACKUP_SOURCE_CHANGED', `Refusing to backup: ${file.name} changed while it was copied`);
+      }
+    }
   } catch (err) {
     if (typeof client.deleteObject === 'function') {
       for (const key of uploaded) {
@@ -208,6 +223,71 @@ export async function createBackup({ dataDir, now = new Date(), client, bucket, 
     throw err;
   }
   return { backupId: id, bucket, files: [...LIVE_FILES] };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    if (typeof timer.unref === 'function') timer.unref();
+  });
+}
+
+/**
+ * Each attempt reads both live files again and uploads only if they still match.
+ * A failed attempt deletes any objects it uploaded. The live files are not written.
+ */
+export async function createBackupWithRetry({
+  attempts = BACKUP_MAX_ATTEMPTS,
+  retryDelaysMs = BACKUP_RETRY_DELAYS_MS,
+  sleep = delay,
+  log = (message) => console.warn(`[backup] ${message}`),
+  shouldStop = () => false,
+  now,
+  ...options
+} = {}) {
+  const clock = typeof now === 'function' ? now : () => now ?? new Date();
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (shouldStop()) return null;
+    try {
+      return await createBackup({ ...options, now: clock() });
+    } catch (err) {
+      lastError = err;
+      if (err.code !== 'BACKUP_SOURCE_CHANGED' || attempt === attempts) {
+        if (err.code === 'BACKUP_SOURCE_CHANGED') {
+          const gaveUp = new Error(`giving up after ${attempts} attempts: ${err.message}`);
+          gaveUp.code = 'BACKUP_GAVE_UP';
+          gaveUp.cause = err;
+          throw gaveUp;
+        }
+        throw err;
+      }
+      const wait = retryDelaysMs[attempt - 1] ?? retryDelaysMs[retryDelaysMs.length - 1] ?? 200;
+      log(`retry ${attempt + 1}/${attempts} in ${wait}ms: ${err.message}`);
+      await sleep(wait);
+    }
+  }
+  throw lastError;
+}
+
+async function waitForStartupReady({ startupReady, startupReadyTimeoutMs, log }) {
+  if (!startupReady) return;
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), startupReadyTimeoutMs);
+    if (typeof timer.unref === 'function') timer.unref();
+  });
+  try {
+    const outcome = await Promise.race([
+      Promise.resolve(startupReady).then(() => 'ready', () => 'ready'),
+      timeout,
+    ]);
+    if (outcome === 'timeout') {
+      log(`startup copy waited ${startupReadyTimeoutMs}ms for the first exchange-rate save; copying now`);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function assertNotOlder(backupBytes, currentPath, fsImpl) {
@@ -373,6 +453,12 @@ export function startPeriodicBackup({
   runOnStart = true,
   schedule = defaultSchedule,
   createClient = createS3BackupClient,
+  startupReady = null,
+  startupReadyTimeoutMs = BACKUP_STARTUP_WAIT_MS,
+  attempts = BACKUP_MAX_ATTEMPTS,
+  retryDelaysMs = BACKUP_RETRY_DELAYS_MS,
+  sleep = delay,
+  log = (message) => console.warn(`[backup] ${message}`),
 } = {}) {
   let activeClient = client ?? null;
   let activeBucket = bucket ?? null;
@@ -398,19 +484,35 @@ export function startPeriodicBackup({
     if (stopped || running) return null;
     running = true;
     try {
-      return await createBackup({
+      return await createBackupWithRetry({
         dataDir,
-        now: now(),
+        now,
         client: activeClient,
         bucket: activeBucket,
         fsImpl,
+        attempts,
+        retryDelaysMs,
+        sleep,
+        log,
+        shouldStop: () => stopped,
       });
     } finally {
       running = false;
     }
   }
   const cancel = schedule(() => run().catch((err) => onError(err)), intervalMs);
-  const whenStarted = runOnStart ? run().catch((err) => { onError(err); return null; }) : Promise.resolve(null);
+  const whenStarted = runOnStart
+    ? (async () => {
+        try {
+          await waitForStartupReady({ startupReady, startupReadyTimeoutMs, log });
+          if (stopped) return null;
+          return await run();
+        } catch (err) {
+          onError(err);
+          return null;
+        }
+      })()
+    : Promise.resolve(null);
   return {
     started: true,
     intervalMs,
@@ -450,7 +552,17 @@ export async function runCli(argv, deps = {}) {
     }
     if (!bucket) fail('BACKUP_BUCKET', 'Refusing to backup: bucket name is required');
     if (command === 'backup') {
-      const result = await createBackup({ dataDir, client, bucket, fsImpl, now: deps.now });
+      const result = await createBackupWithRetry({
+        dataDir,
+        client,
+        bucket,
+        fsImpl,
+        now: deps.now ?? (() => new Date()),
+        sleep: deps.sleep,
+        log: deps.log,
+        attempts: deps.attempts,
+        retryDelaysMs: deps.retryDelaysMs,
+      });
       printLine(stdout, result.backupId);
       return 0;
     }
