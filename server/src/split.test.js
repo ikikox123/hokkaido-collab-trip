@@ -4,6 +4,7 @@ import {
   addMember,
   addSettlement,
   billToCsv,
+  crossSettlement,
   currencyBooks,
   deleteExpense,
   deleteSettlement,
@@ -586,6 +587,7 @@ test('zero expenses plus two same-currency transfers are not summarized as settl
   assert.equal(book.suggested, null);
   assert.equal(book.remaining, null);
   assert.equal(book.remainingSettled, false);
+  assert.deepEqual(book.notices, []);
   assert.equal(book.expenseBalanced, false);
   assert.equal(book.recorded.length, 1);
   assert.deepEqual(
@@ -638,4 +640,119 @@ test('recorded transfers reduce what the same currency still needs, and settled 
   assert.equal(done.recorded[0].payeeId, 'a');
   assert.equal(done.recorded[0].amountMinor, 1500);
   assert.equal(done.nets.find((net) => net.memberId === 'b').netMinor, -1500);
+  assert.deepEqual(done.notices, []);
+});
+
+function twdPaidByAlice() {
+  const saved = upsertExpense(trip(), {
+    payerId: 'a',
+    currency: 'TWD',
+    amount: '7500',
+    mode: 'equal',
+    memberIds: ['a', 'b'],
+  });
+  assert.equal(saved.ok, true, saved.error);
+  return saved.state;
+}
+
+function netMinor(book, memberId) {
+  return book.nets.find((net) => net.memberId === memberId).netMinor;
+}
+
+test('recording part of the 7500 split reduces what is still owed and leaves expense nets unchanged', () => {
+  const state = twdPaidByAlice();
+  const partial = addSettlement(state, { payerId: 'b', payeeId: 'a', amount: '1000', currency: 'TWD' });
+  assert.equal(partial.ok, true, partial.error);
+  const book = currencyBooks(partial.state).TWD;
+  assert.equal(book.suggested, null);
+  assert.equal(book.remainingSettled, false);
+  assert.deepEqual(
+    book.remaining.map((row) => [row.fromId, row.toId, row.amountMinor, row.amount]),
+    [['b', 'a', 275000, 2750]],
+  );
+  assert.equal(netMinor(book, 'a'), 375000);
+  assert.equal(netMinor(book, 'b'), -375000);
+  assert.deepEqual(book.notices, []);
+  assert.equal(currencyBooks(partial.state).JPY.remaining, null);
+  assert.equal(currencyBooks(partial.state).JPY.recorded.length, 0);
+});
+
+test('paying the owed 3750 settles what is left and does not rewrite expense nets', () => {
+  const state = twdPaidByAlice();
+  const paid = addSettlement(state, { payerId: 'b', payeeId: 'a', amount: '3750', currency: 'TWD' });
+  assert.equal(paid.ok, true, paid.error);
+  const book = currencyBooks(paid.state).TWD;
+  assert.equal(book.remainingSettled, true);
+  assert.deepEqual(book.remaining, []);
+  assert.deepEqual(book.notices, []);
+  assert.equal(netMinor(book, 'a'), 375000);
+  assert.equal(netMinor(book, 'b'), -375000);
+  assert.equal(book.recorded[0].amountMinor, 375000);
+});
+
+test('overpaying the whole 7500 is explained and does not flip a new debt back', () => {
+  const state = twdPaidByAlice();
+  const over = addSettlement(state, { payerId: 'b', payeeId: 'a', amount: '7500', currency: 'TWD' });
+  assert.equal(over.ok, true, over.error);
+  const book = currencyBooks(over.state).TWD;
+  assert.equal(book.remainingSettled, true);
+  assert.deepEqual(book.remaining, []);
+  assert.equal(netMinor(book, 'a'), 375000);
+  assert.equal(netMinor(book, 'b'), -375000);
+  assert.equal(book.notices.length, 1);
+  assert.equal(book.notices[0].kind, 'overpay');
+  assert.deepEqual(
+    [book.notices[0].fromId, book.notices[0].toId, book.notices[0].amountMinor, book.notices[0].amount],
+    ['b', 'a', 375000, 3750],
+  );
+  assert.equal(
+    book.remaining.some((row) => row.fromId === 'a' && row.toId === 'b'),
+    false,
+  );
+});
+
+test('a reversed payment is explained and does not increase what is still owed', () => {
+  const state = twdPaidByAlice();
+  const backward = addSettlement(state, { payerId: 'a', payeeId: 'b', amount: '3750', currency: 'TWD' });
+  assert.equal(backward.ok, true, backward.error);
+  const book = currencyBooks(backward.state).TWD;
+  assert.equal(book.remainingSettled, false);
+  assert.deepEqual(
+    book.remaining.map((row) => [row.fromId, row.toId, row.amountMinor]),
+    [['b', 'a', 375000]],
+  );
+  assert.equal(netMinor(book, 'a'), 375000);
+  assert.equal(netMinor(book, 'b'), -375000);
+  assert.equal(book.notices.length, 1);
+  assert.equal(book.notices[0].kind, 'reversed');
+  assert.deepEqual(
+    [book.notices[0].fromId, book.notices[0].toId, book.notices[0].amountMinor, book.notices[0].amount],
+    ['a', 'b', 375000, 3750],
+  );
+});
+
+test('exchange rates do not enter nets, remaining, or recorded amounts', () => {
+  let state = twdPaidByAlice();
+  const yen = upsertExpense(state, {
+    payerId: 'a',
+    currency: 'JPY',
+    amount: '10000',
+    mode: 'equal',
+    memberIds: ['a', 'b'],
+  });
+  assert.equal(yen.ok, true, yen.error);
+  state = yen.state;
+  const paid = addSettlement(state, { payerId: 'b', payeeId: 'a', amount: '1000', currency: 'TWD' });
+  assert.equal(paid.ok, true, paid.error);
+  state = paid.state;
+  const book = currencyBooks(state).TWD;
+  const cross = crossSettlement(state, 'JPY', 0.2);
+  assert.equal(netMinor(book, 'a'), 375000);
+  assert.equal(book.remaining[0].amountMinor, 275000);
+  assert.equal(book.recorded[0].amountMinor, 100000);
+  assert.deepEqual(book.notices, []);
+  assert.notEqual(cross.nets.find((net) => net.memberId === 'a').netMinor, netMinor(book, 'a'));
+  assert.equal(currencyBooks(state).JPY.recorded.length, 0);
+  assert.equal(currencyBooks(state).JPY.remaining, null);
+  assert.equal(currencyBooks(state).JPY.hasRecorded, false);
 });
