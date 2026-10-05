@@ -10,6 +10,11 @@ export function useTimedNotice() {
     timer.current = window.setTimeout(() => setNotice(null), 2500);
   }, []);
 
+  const dismiss = useCallback(() => {
+    if (timer.current != null) window.clearTimeout(timer.current);
+    setNotice(null);
+  }, []);
+
   useEffect(
     () => () => {
       if (timer.current != null) window.clearTimeout(timer.current);
@@ -17,7 +22,7 @@ export function useTimedNotice() {
     [],
   );
 
-  return { notice, flash };
+  return { notice, flash, dismiss };
 }
 
 export function ShareNotice({ message, lift = false }: { message: string | null; lift?: boolean }) {

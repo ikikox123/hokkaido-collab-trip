@@ -6,6 +6,16 @@ import { openShareExport, shareMenuPosition } from '../lib/shareExport';
 import { shareLocation, type ShareLang, type ShareScope } from '../lib/sharePath';
 import { ShareNotice, useTimedNotice } from './ShareNotice';
 
+function ShareGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12" />
+      <path d="M7 8l5-5 5 5" />
+      <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+    </svg>
+  );
+}
+
 /**
  * Header share control. It stays in the top row at every width
  * and is not placed inside the collapsible menu.
@@ -119,13 +129,15 @@ export function ShareMenu({
       <button
         ref={buttonRef}
         type="button"
-        className={`min-h-touch shrink-0 whitespace-nowrap rounded-lg px-2.5 text-sm font-bold ${face}`}
+        className={`inline-flex min-h-touch min-w-touch shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg px-2 text-sm font-bold sm:min-w-0 sm:px-2.5 ${face}`}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={panelId}
+        aria-label={t('share')}
         onClick={() => setOpen((value) => !value)}
       >
-        {t('share')}
+        <ShareGlyph />
+        <span className="hidden sm:inline">{t('share')}</span>
       </button>
       {panel}
       <ShareNotice message={notice} />

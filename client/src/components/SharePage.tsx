@@ -8,8 +8,11 @@ import { ShareNotice, useTimedNotice } from './ShareNotice';
 import { shareOrCopy, sharePageUrl } from '../lib/shareLink';
 import {
   captureSharePng,
+  deliverSharePng,
+  pngFile,
   printSharePdf,
   shareExportFilename,
+  shareImageNoticeKey,
   takeShareExport,
 } from '../lib/shareExport';
 import { parseShareLang, parseShareScope, shareLocation, type ShareScope } from '../lib/sharePath';
@@ -36,10 +39,11 @@ export function SharePage() {
   const [trip, setTrip] = useState<ShareTrip | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [readyFile, setReadyFile] = useState<File | null>(null);
   const exportRootRef = useRef<HTMLDivElement>(null);
   const scopeRef = useRef(scope);
   const localeRef = useRef(locale);
-  const { notice, flash } = useTimedNotice();
+  const { notice, flash, dismiss } = useTimedNotice();
   const flashRef = useRef(flash);
   const tRef = useRef(t);
   scopeRef.current = scope;
@@ -113,14 +117,15 @@ export function SharePage() {
       }
       setBusy(true);
       flashRef.current(translate('shareExporting'));
-      void captureSharePng(node, shareExportFilename(scopeRef.current, localeRef.current))
-        .then(() => {
-          if (!cancelled) flashRef.current(tRef.current('shareImageSaved'));
+      const filename = shareExportFilename(scopeRef.current, localeRef.current);
+      void captureSharePng(node)
+        .then((blob) => {
+          setBusy(false);
+          if (cancelled) return null;
+          return handoffImage(pngFile(blob, filename));
         })
         .catch(() => {
           if (!cancelled) flashRef.current(tRef.current('shareExportFailed'));
-        })
-        .finally(() => {
           setBusy(false);
         });
     }, 300);
@@ -159,17 +164,32 @@ export function SharePage() {
     }
   }
 
+  async function handoffImage(file: File) {
+    const outcome = await deliverSharePng(file, { hint: t('shareImageLongPress') });
+    if (outcome === 'cancelled') return;
+    if (outcome === 'needs-gesture') {
+      dismiss();
+      setReadyFile(file);
+      return;
+    }
+    setReadyFile(null);
+    const key = shareImageNoticeKey(outcome);
+    if (key) flash(t(key));
+  }
+
   async function onImage() {
     const node = exportRootRef.current;
     if (!node || busy) return;
     setBusy(true);
+    dismiss();
+    setReadyFile(null);
     flash(t('shareExporting'));
     try {
-      await captureSharePng(node, shareExportFilename(scope, locale));
-      flash(t('shareImageSaved'));
+      const blob = await captureSharePng(node);
+      setBusy(false);
+      await handoffImage(pngFile(blob, shareExportFilename(scope, locale)));
     } catch {
       flash(t('shareExportFailed'));
-    } finally {
       setBusy(false);
     }
   }
@@ -351,6 +371,23 @@ export function SharePage() {
           onPdf={onPdf}
         />
       </div>
+      {readyFile && (
+        <div
+          className="share-export-ignore print:hidden fixed left-1/2 z-40 w-[min(100%-1.5rem,36rem)] -translate-x-1/2 bottom-[calc(5.75rem+var(--safe-bottom))] md:bottom-6"
+          data-share-export-ignore="true"
+        >
+          <button
+            type="button"
+            className="min-h-touch w-full rounded-xl bg-ice-700 px-4 text-sm font-bold text-white shadow-lg"
+            onClick={() => {
+              if (!readyFile) return;
+              void handoffImage(readyFile);
+            }}
+          >
+            {t('shareImageReady')}
+          </button>
+        </div>
+      )}
       <ShareNotice message={notice} lift />
     </div>
   );

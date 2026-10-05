@@ -275,7 +275,7 @@ export default function App() {
     <div className="h-[100dvh] flex flex-col bg-snow-50 overflow-hidden pt-[var(--safe-top)]">
       {/* Top bar — compact on mobile, expandable */}
       <header className="shrink-0 bg-ice-700 text-white shadow-md z-20">
-        <div className="flex items-center gap-2 px-3 min-h-touch py-2">
+        <div className="flex items-center gap-1 px-2 min-h-touch py-2 sm:gap-2 sm:px-3">
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sm sm:text-base truncate leading-tight">
               {pageHeading(locale)}
@@ -297,7 +297,8 @@ export default function App() {
           {user ? (
             <button
               type="button"
-              className="min-h-touch px-3 rounded-lg bg-white/20 text-sm font-semibold"
+              className="min-h-touch min-w-0 max-w-[3.5rem] truncate rounded-lg bg-white/20 px-2 text-sm font-semibold sm:max-w-[9rem] sm:px-3"
+              title={user.displayName}
               onClick={handleLogout}
             >
               {user.displayName}

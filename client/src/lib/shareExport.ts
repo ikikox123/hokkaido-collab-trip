@@ -129,16 +129,146 @@ function defaultMarkCapturing(active: boolean) {
   document.documentElement.classList.toggle(SHARE_CAPTURE_CLASS, active);
 }
 
-export function saveShareBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
+export type ShareImageOutcome = 'shared' | 'cancelled' | 'downloaded' | 'preview' | 'needs-gesture';
+
+export type ShareFileTarget = {
+  canShare?: (data: { files?: File[] }) => boolean;
+  share?: (data: { files?: File[] }) => Promise<void>;
+};
+
+export function isAbortError(err: unknown) {
+  return (err instanceof DOMException || err instanceof Error) && err.name === 'AbortError';
+}
+
+/** The user activation expired, so share or a new tab has to wait for another tap. */
+export function isGestureBlocked(err: unknown) {
+  if (!(err instanceof DOMException) && !(err instanceof Error)) return false;
+  return err.name === 'NotAllowedError' || err.name === 'SecurityError';
+}
+
+/** iPhone, iPad, iPod, and iPadOS pretending to be a desktop Mac. */
+export function isIosDevice(ua: string, maxTouchPoints = 0) {
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  return /Macintosh/i.test(ua) && maxTouchPoints > 1;
+}
+
+export function pngFile(blob: Blob, filename: string) {
+  return new File([blob], filename, { type: 'image/png' });
+}
+
+export function canShareImageFile(file: File, nav: ShareFileTarget | null) {
+  if (!nav || typeof nav.canShare !== 'function') return false;
+  try {
+    return nav.canShare({ files: [file] }) === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Only the path that actually ran. A cancelled share or a waiting button says nothing about a download. */
+export function shareImageNoticeKey(
+  outcome: ShareImageOutcome,
+): 'shareImageSaved' | 'shareImageShared' | 'shareImageLongPress' | null {
+  if (outcome === 'downloaded') return 'shareImageSaved';
+  if (outcome === 'shared') return 'shareImageShared';
+  if (outcome === 'preview') return 'shareImageLongPress';
+  return null;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (ch) => {
+    if (ch === '&') return '&amp;';
+    if (ch === '<') return '&lt;';
+    if (ch === '>') return '&gt;';
+    if (ch === '"') return '&quot;';
+    return '&#39;';
+  });
+}
+
+/** New tab: the hint sits above the picture so a long-press has something to save. */
+export function shareImagePreviewHtml(imageUrl: string, hint: string, title: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{margin:0;background:#111;color:#fff;font:16px/1.45 -apple-system,sans-serif}p{margin:0;padding:16px;text-align:center}img{display:block;width:100%;height:auto}</style></head><body><p>${escapeHtml(hint)}</p><img alt="${escapeHtml(title)}" src="${escapeHtml(imageUrl)}"></body></html>`;
+}
+
+export function downloadShareFile(file: File) {
+  const url = URL.createObjectURL(file);
   const link = document.createElement('a');
   link.href = url;
-  link.download = filename;
+  link.download = file.name;
   link.rel = 'noopener';
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+type PreviewDocument = { open: () => void; write: (html: string) => void; close: () => void };
+
+export function openShareImagePreview(
+  file: File,
+  hint: string,
+  openImpl: (url?: string | URL, target?: string) => { document: PreviewDocument } | null = (url, target) =>
+    window.open(url, target),
+) {
+  const imageUrl = URL.createObjectURL(file);
+  const popup = openImpl('', '_blank');
+  if (!popup) {
+    URL.revokeObjectURL(imageUrl);
+    return false;
+  }
+  popup.document.open();
+  popup.document.write(shareImagePreviewHtml(imageUrl, hint, file.name));
+  popup.document.close();
+  return true;
+}
+
+function browserShareTarget(): ShareFileTarget | null {
+  const nav = navigator as Navigator & ShareFileTarget;
+  return nav;
+}
+
+/**
+ * Hand a finished PNG to the user.
+ * Share runs only when this is called inside a click. A blocked share returns
+ * `needs-gesture` so the page can offer a second tap. iOS does not pretend an
+ * `<a download>` succeeded.
+ */
+export async function deliverSharePng(
+  file: File,
+  options: {
+    nav?: ShareFileTarget | null;
+    ios?: boolean;
+    hint?: string;
+    download?: (file: File) => void;
+    openPreview?: (file: File, hint: string) => boolean;
+  } = {},
+): Promise<ShareImageOutcome> {
+  const nav = options.nav === undefined ? browserShareTarget() : options.nav;
+  const ios = options.ios ?? isIosDevice(navigator.userAgent, navigator.maxTouchPoints || 0);
+  const hint = options.hint ?? '';
+  const download = options.download ?? downloadShareFile;
+  const openPreview = options.openPreview ?? ((next, text) => openShareImagePreview(next, text));
+
+  if (canShareImageFile(file, nav) && typeof nav?.share === 'function') {
+    try {
+      await nav.share({ files: [file] });
+      return 'shared';
+    } catch (err) {
+      if (isAbortError(err)) return 'cancelled';
+      if (isGestureBlocked(err)) return 'needs-gesture';
+    }
+  }
+
+  if (ios) {
+    return openPreview(file, hint) ? 'preview' : 'needs-gesture';
+  }
+
+  try {
+    download(file);
+    return 'downloaded';
+  } catch {
+    return openPreview(file, hint) ? 'preview' : 'needs-gesture';
+  }
 }
 
 async function loadRaster(): Promise<ShareRaster> {
@@ -149,15 +279,12 @@ async function loadRaster(): Promise<ShareRaster> {
 /** PNG of the sheet that is on screen. Retries once at 1x if the tall trip image is too large. */
 export async function captureSharePng(
   node: HTMLElement,
-  filename: string,
   deps: {
     toBlob?: ShareRaster;
-    save?: (blob: Blob, filename: string) => void;
     markCapturing?: (active: boolean) => void;
   } = {},
-): Promise<void> {
+): Promise<Blob> {
   const raster = deps.toBlob ?? (await loadRaster());
-  const save = deps.save ?? saveShareBlob;
   const mark = deps.markCapturing ?? defaultMarkCapturing;
   mark(true);
   try {
@@ -169,7 +296,7 @@ export async function captureSharePng(
     }
     if (!blob) blob = await raster(node, shareImageCaptureOptions(1));
     if (!blob) throw new Error('export-image-failed');
-    save(blob, filename);
+    return blob;
   } finally {
     mark(false);
   }

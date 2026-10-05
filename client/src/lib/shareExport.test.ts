@@ -5,14 +5,20 @@ import { shareLocation } from './sharePath.ts';
 import {
   SHARE_EXPORT_IGNORE_ATTR,
   SHARE_EXPORT_INTENT_KEY,
+  canShareImageFile,
   captureSharePng,
+  deliverSharePng,
   includeInShareImage,
+  isIosDevice,
   isShareExportKind,
   openShareExport,
+  pngFile,
   printSharePdf,
   rememberShareExport,
   shareExportFilename,
   shareImageCaptureOptions,
+  shareImageNoticeKey,
+  shareImagePreviewHtml,
   shareMenuPosition,
   takeShareExport,
   type ExportStorage,
@@ -151,41 +157,167 @@ test('the share panel stays inside the viewport', () => {
   assert.ok(cramped.left + cramped.width <= 200 - 8);
 });
 
-test('capture saves one png and clears the capture class', async () => {
-  const saved: string[] = [];
+test('capture returns one png and clears the capture class', async () => {
   const marks: boolean[] = [];
   const ratios: number[] = [];
-  await captureSharePng({} as HTMLElement, 'hokkaido-day-2-ja.png', {
+  const blob = await captureSharePng({} as HTMLElement, {
     toBlob: async (_node, options) => {
       ratios.push(options.pixelRatio ?? 0);
       assert.equal(options.skipFonts, true);
       assert.equal(options.fontEmbedCSS, '');
       return new Blob(['png'], { type: 'image/png' });
     },
-    save: (_blob, filename) => saved.push(filename),
     markCapturing: (active) => marks.push(active),
   });
+  assert.equal(blob.type, 'image/png');
   assert.deepEqual(ratios, [2]);
-  assert.deepEqual(saved, ['hokkaido-day-2-ja.png']);
   assert.deepEqual(marks, [true, false]);
 });
 
 test('a failed 2x capture retries once at 1x', async () => {
   const ratios: number[] = [];
-  let saved = '';
-  await captureSharePng({} as HTMLElement, 'hokkaido-trip-en.png', {
+  const blob = await captureSharePng({} as HTMLElement, {
     toBlob: async (_node, options) => {
       ratios.push(options.pixelRatio ?? 0);
       if (options.pixelRatio === 2) throw new Error('canvas-too-big');
       return new Blob(['png'], { type: 'image/png' });
     },
-    save: (_blob, filename) => {
-      saved = filename;
-    },
     markCapturing: () => {},
   });
+  assert.equal(blob.type, 'image/png');
   assert.deepEqual(ratios, [2, 1]);
-  assert.equal(saved, 'hokkaido-trip-en.png');
+});
+
+function sampleFile() {
+  return pngFile(new Blob(['png'], { type: 'image/png' }), 'hokkaido-day-2-zh-Hant.png');
+}
+
+test('a shareable file uses the share sheet and does not download', async () => {
+  const shared: File[][] = [];
+  const downloads: string[] = [];
+  const file = sampleFile();
+  const outcome = await deliverSharePng(file, {
+    ios: false,
+    nav: {
+      canShare: (data) => data.files?.[0] === file,
+      share: async (data) => {
+        shared.push(data.files ?? []);
+      },
+    },
+    download: (next) => downloads.push(next.name),
+  });
+  assert.equal(outcome, 'shared');
+  assert.equal(shareImageNoticeKey(outcome), 'shareImageShared');
+  assert.deepEqual(shared, [[file]]);
+  assert.deepEqual(downloads, []);
+});
+
+test('cancelling the share sheet stays quiet', async () => {
+  const downloads: string[] = [];
+  let previews = 0;
+  const outcome = await deliverSharePng(sampleFile(), {
+    ios: true,
+    nav: {
+      canShare: () => true,
+      share: async () => {
+        const err = new Error('cancelled');
+        err.name = 'AbortError';
+        throw err;
+      },
+    },
+    download: (next) => downloads.push(next.name),
+    openPreview: () => {
+      previews += 1;
+      return true;
+    },
+  });
+  assert.equal(outcome, 'cancelled');
+  assert.equal(shareImageNoticeKey(outcome), null);
+  assert.deepEqual(downloads, []);
+  assert.equal(previews, 0);
+});
+
+test('a blocked share waits for another tap instead of claiming a download', async () => {
+  const downloads: string[] = [];
+  const outcome = await deliverSharePng(sampleFile(), {
+    ios: false,
+    nav: {
+      canShare: () => true,
+      share: async () => {
+        const err = new DOMException('gesture', 'NotAllowedError');
+        throw err;
+      },
+    },
+    download: (next) => downloads.push(next.name),
+    openPreview: () => true,
+  });
+  assert.equal(outcome, 'needs-gesture');
+  assert.equal(shareImageNoticeKey(outcome), null);
+  assert.deepEqual(downloads, []);
+});
+
+test('desktop without a share sheet downloads the png', async () => {
+  const downloads: string[] = [];
+  const file = sampleFile();
+  const outcome = await deliverSharePng(file, {
+    ios: false,
+    nav: { canShare: () => false },
+    download: (next) => downloads.push(next.name),
+  });
+  assert.equal(outcome, 'downloaded');
+  assert.equal(shareImageNoticeKey(outcome), 'shareImageSaved');
+  assert.deepEqual(downloads, [file.name]);
+  assert.equal(canShareImageFile(file, null), false);
+  assert.equal(canShareImageFile(file, { canShare: () => { throw new Error('nope'); } }), false);
+});
+
+test('iOS without a share sheet opens a preview instead of a silent download', async () => {
+  const downloads: string[] = [];
+  const previews: string[] = [];
+  const file = sampleFile();
+  const outcome = await deliverSharePng(file, {
+    ios: true,
+    hint: '長按圖片儲存',
+    nav: { canShare: () => false },
+    download: (next) => downloads.push(next.name),
+    openPreview: (next, hint) => {
+      previews.push(`${next.name}:${hint}`);
+      return true;
+    },
+  });
+  assert.equal(outcome, 'preview');
+  assert.equal(shareImageNoticeKey(outcome), 'shareImageLongPress');
+  assert.deepEqual(downloads, []);
+  assert.deepEqual(previews, ['hokkaido-day-2-zh-Hant.png:長按圖片儲存']);
+});
+
+test('a blocked iOS preview also waits for another tap', async () => {
+  const outcome = await deliverSharePng(sampleFile(), {
+    ios: true,
+    nav: null,
+    openPreview: () => false,
+    download: () => {
+      throw new Error('should-not-download');
+    },
+  });
+  assert.equal(outcome, 'needs-gesture');
+  assert.equal(shareImageNoticeKey(outcome), null);
+});
+
+test('iOS includes iPadOS desktop mode and skips a normal computer', () => {
+  assert.equal(isIosDevice('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)'), true);
+  assert.equal(isIosDevice('Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X)'), true);
+  assert.equal(isIosDevice('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5), true);
+  assert.equal(isIosDevice('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 0), false);
+  assert.equal(isIosDevice('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'), false);
+});
+
+test('the preview page shows the hint and the picture', () => {
+  const html = shareImagePreviewHtml('blob:hokkaido', '長按圖片儲存<script>', 'day "2"');
+  assert.equal(html.includes('長按圖片儲存'), true);
+  assert.equal(html.includes('<script>'), false);
+  assert.equal(html.includes('blob:hokkaido'), true);
+  assert.equal(html.includes('day &quot;2&quot;'), true);
 });
 
 test('pdf export calls print and does not build an image', () => {
@@ -206,4 +338,26 @@ test('share actions are labeled in Traditional Chinese', () => {
     assert.ok(catalog[key].ja.length > 0);
     assert.ok(catalog[key].en.length > 0);
   }
+});
+
+test('image save copy matches the path that actually ran', () => {
+  assert.equal(catalog.shareImageSaved['zh-Hant'], '已下載圖片');
+  assert.equal(catalog.shareImageShared['zh-Hant'], '已開啟圖片分享');
+  assert.equal(catalog.shareImageLongPress['zh-Hant'], '長按圖片儲存');
+  assert.equal(catalog.shareImageReady['zh-Hant'], '圖片好了，按這裡儲存／分享');
+  assert.notEqual(catalog.shareImageLongPress['zh-Hant'], catalog.shareImageSaved['zh-Hant']);
+  assert.notEqual(catalog.shareImageReady['zh-Hant'], catalog.shareImageSaved['zh-Hant']);
+  assert.notEqual(catalog.shareImageShared['zh-Hant'], catalog.shareImageSaved['zh-Hant']);
+  for (const locale of ['zh-Hant', 'ja', 'en'] as const) {
+    assert.ok(catalog.shareImageSaved[locale].length > 0);
+    assert.ok(catalog.shareImageShared[locale].length > 0);
+    assert.ok(catalog.shareImageLongPress[locale].length > 0);
+    assert.ok(catalog.shareImageReady[locale].length > 0);
+    assert.notEqual(catalog.shareImageLongPress[locale], catalog.shareImageSaved[locale]);
+    assert.notEqual(catalog.shareImageReady[locale], catalog.shareImageSaved[locale]);
+  }
+  assert.equal(shareImageNoticeKey('downloaded'), 'shareImageSaved');
+  assert.equal(shareImageNoticeKey('preview'), 'shareImageLongPress');
+  assert.equal(shareImageNoticeKey('needs-gesture'), null);
+  assert.equal(shareImageNoticeKey('cancelled'), null);
 });

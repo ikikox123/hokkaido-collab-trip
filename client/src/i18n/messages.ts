@@ -99,6 +99,13 @@ export const catalog = {
   shareExportPdf: { 'zh-Hant': '匯出 PDF', ja: 'PDFを書き出す', en: 'Export PDF' },
   shareExporting: { 'zh-Hant': '正在匯出圖片…', ja: '画像を書き出しています…', en: 'Exporting image…' },
   shareImageSaved: { 'zh-Hant': '已下載圖片', ja: '画像を保存しました', en: 'Image downloaded' },
+  shareImageShared: { 'zh-Hant': '已開啟圖片分享', ja: '画像の共有を開きました', en: 'Opened image sharing' },
+  shareImageLongPress: { 'zh-Hant': '長按圖片儲存', ja: '画像を長押しして保存', en: 'Long-press the image to save it' },
+  shareImageReady: {
+    'zh-Hant': '圖片好了，按這裡儲存／分享',
+    ja: '画像の準備ができました。ここを押して保存／共有',
+    en: 'Image is ready. Tap here to save or share',
+  },
   shareExportFailed: { 'zh-Hant': '無法匯出，請再試一次', ja: '書き出せませんでした。もう一度お試しください', en: 'Could not export. Try again' },
   shareCopied: { 'zh-Hant': '已複製分享連結', ja: '共有リンクをコピーしました', en: 'Share link copied' },
   shareOpened: { 'zh-Hant': '已開啟分享', ja: '共有を開きました', en: 'Opened the share sheet' },
