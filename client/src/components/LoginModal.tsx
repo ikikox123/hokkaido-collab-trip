@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { useI18n } from '../i18n/I18nProvider';
 import { localizeError } from '../i18n/errors';
 import { loginRequest, registerRequest, saveAuth } from '../lib/auth';
+import { demoLoginFields } from '../lib/demoLogin';
 import type { User } from '../types/trip';
 
 type Props = {
@@ -24,9 +25,10 @@ function blankCredentialMessage(username: string, password: string): string | nu
 }
 
 export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) {
+  const demoLogin = demoLoginFields(import.meta.env.PROD);
   const [mode, setMode] = useState<Mode>('login');
-  const [username, setUsername] = useState('alice');
-  const [password, setPassword] = useState('demo1234');
+  const [username, setUsername] = useState(demoLogin.username);
+  const [password, setPassword] = useState(demoLogin.password);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { t } = useI18n();
@@ -38,8 +40,8 @@ export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) 
     setError(null);
     if (isRegister) {
       setMode('login');
-      setUsername('alice');
-      setPassword('demo1234');
+      setUsername(demoLogin.username);
+      setPassword(demoLogin.password);
       return;
     }
     setMode('register');
@@ -85,13 +87,15 @@ export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) 
         <p className="mt-1 text-sm text-slate-500">
           {isRegister ? (
             t('registerHint')
-          ) : (
+          ) : demoLogin.showDemoCredentials ? (
             <>
               {t('demoAccounts')} <code className="bg-snow-100 px-1 rounded">alice</code> /{' '}
               <code className="bg-snow-100 px-1 rounded">bob</code>
               {t('listSep')}
               {t('demoPasswordLabel')} <code className="bg-snow-100 px-1 rounded">demo1234</code>
             </>
+          ) : (
+            t('loginAccountHint')
           )}
         </p>
         <form className="mt-4 space-y-3" onSubmit={handleSubmit}>

@@ -64,6 +64,7 @@ export default function App() {
   );
   const [socket, setSocket] = useState<Socket | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [notCompanion, setNotCompanion] = useState(false);
   const [placeDialog, setPlaceDialog] = useState<
     { mode: 'add' } | { mode: 'edit'; stopId: string } | null
   >(null);
@@ -82,6 +83,7 @@ export default function App() {
     const s = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
     setSocket(s);
     s.on('trip:update', (state: TripState) => {
+      setNotCompanion(false);
       setTrip(state);
       if (state.fx) setFx(state.fx);
     });
@@ -99,8 +101,14 @@ export default function App() {
       const translate = tRef.current;
       showToast(localizeError(e.error || translate('cannotUpdate'), translate));
     });
+    s.on('companion:required', () => {
+      setNotCompanion(true);
+      setTrip(null);
+      setOnline([]);
+    });
     s.on('session:required', () => {
       clearAuth();
+      setNotCompanion(false);
       setUser(null);
       setToken(null);
       setTrip(null);
@@ -194,6 +202,7 @@ export default function App() {
   const isTripCompanion = Boolean(user?.id && trip?.members?.some((member) => member.id === user.id));
 
   function handleLogin(u: User, nextToken: string) {
+    setNotCompanion(false);
     setUser(u);
     setToken(nextToken);
     showToast(t('welcome', { name: u.displayName }));
@@ -201,6 +210,7 @@ export default function App() {
 
   function handleLogout() {
     clearAuth();
+    setNotCompanion(false);
     setUser(null);
     setToken(null);
     setTrip(null);
@@ -250,6 +260,36 @@ export default function App() {
             {t('shareOpen')}
           </a>
           <LoginModal embedded open onClose={() => {}} onLogin={handleLogin} />
+        </main>
+        {toastNode}
+      </div>
+    );
+  }
+
+  if (notCompanion) {
+    return (
+      <div className="min-h-full bg-snow-50 text-slate-800">
+        <header className="bg-ice-700 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-white">
+          <div className="flex items-center gap-2">
+            <h1 className="min-w-0 flex-1 truncate text-base font-bold">{pageHeading(locale)}</h1>
+            <LanguageMenu />
+          </div>
+        </header>
+        <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
+          <p className="text-sm leading-relaxed text-slate-600">{t('notCompanionYet')}</p>
+          <a
+            href={shareLocation({ kind: 'all' }, locale)}
+            className="flex min-h-touch items-center justify-center rounded-xl border border-ice-200 bg-white px-3 text-base font-bold text-ice-700"
+          >
+            {t('shareOpen')}
+          </a>
+          <button
+            type="button"
+            className="flex min-h-touch items-center justify-center rounded-xl bg-ice-600 px-3 text-base font-bold text-white"
+            onClick={handleLogout}
+          >
+            {t('logOut')}
+          </button>
         </main>
         {toastNode}
       </div>

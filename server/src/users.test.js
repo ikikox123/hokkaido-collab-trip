@@ -235,6 +235,228 @@ test('publicById returns the account id without a password hash', async () => {
   }
 });
 
+function productionStore() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hokkaido-users-prod-'));
+  const dataFile = path.join(dir, 'users.json');
+  const store = createUserStore({ dataFile, rounds: 4, nodeEnv: 'production' });
+  return { dir, dataFile, store };
+}
+
+function captureConsole(fn) {
+  const logs = [];
+  const warns = [];
+  const log = console.log;
+  const warn = console.warn;
+  console.log = (...args) => logs.push(args.map(String).join(' '));
+  console.warn = (...args) => warns.push(args.map(String).join(' '));
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      console.log = log;
+      console.warn = warn;
+    })
+    .then(() => ({ logs, warns }));
+}
+
+test('production boot does not create alice or bob', async () => {
+  const { dir, dataFile, store } = productionStore();
+  try {
+    await store.init();
+    assert.equal(fs.existsSync(dataFile), false);
+    assert.equal((await store.authenticate('alice', 'demo1234')).ok, false);
+    assert.equal((await store.authenticate('bob', 'demo1234')).ok, false);
+    assert.equal(store.publicById('u1'), null);
+    assert.equal(store.publicById('u2'), null);
+    await store.planProductionDemoRemoval([]).commit();
+    assert.equal(fs.existsSync(dataFile), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('production refuses registration of alice and bob; dev does not reserve them', async () => {
+  const { dir, dataFile, store } = productionStore();
+  const dev = tempStore();
+  try {
+    await store.init();
+    for (const username of ['alice', 'Alice', 'ALICE', 'bob', ' Bob ', 'BOB']) {
+      const blocked = await store.register({ username, password: 'fresh-pass' });
+      assert.equal(blocked.ok, false, username);
+      assert.equal(blocked.status, 400, username);
+      assert.equal(blocked.error, '這個帳號名稱不能使用', username);
+    }
+    assert.equal(fs.existsSync(dataFile), false);
+    const nearby = await store.register({ username: 'alice2', password: 'fresh-pass' });
+    assert.equal(nearby.ok, true);
+    assert.equal(nearby.user.username, 'alice2');
+
+    await dev.store.init();
+    const taken = await dev.store.register({ username: 'Alice', password: 'secret1' });
+    assert.equal(taken.ok, false);
+    assert.equal(taken.status, 409);
+    assert.equal(taken.error, '這個帳號已經有人使用');
+    const alice = await dev.store.authenticate('alice', 'demo1234');
+    const bob = await dev.store.authenticate('bob', 'demo1234');
+    assert.equal(alice.ok, true);
+    assert.equal(alice.user.id, 'u1');
+    assert.equal(bob.ok, true);
+    assert.equal(bob.user.id, 'u2');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dev.dir, { recursive: true, force: true });
+  }
+});
+
+test('production users.json drops only demo alice and bob', async () => {
+  const { dir, dataFile, store } = productionStore();
+  const hash = {
+    alice: 'HASHALICE-do-not-leak',
+    bob: 'HASHBOB-do-not-leak',
+    dagg: 'HASHDAGG-keep-me',
+    yutin: 'HASHYUTIN-keep-me',
+    shuiii: 'HASHSHUIII-keep-me',
+    alice2: 'HASHALICE2-keep-me',
+    aliceCase: 'HASHALICECASE-keep-me',
+    later: 'HASHLATER-keep-me',
+  };
+  const laterId = 'u_0123456789abcdef';
+  const original = {
+    users: [
+      { id: 'u1', username: 'alice', displayName: 'Alice', passwordHash: hash.alice },
+      { id: 'u2', username: 'bob', displayName: 'Bob', passwordHash: hash.bob },
+      { id: 'u_dagg', username: 'DAGG', displayName: 'DAGG', passwordHash: hash.dagg },
+      { id: 'u_yutin', username: 'yutin', displayName: 'yutin', passwordHash: hash.yutin },
+      { id: 'u_shuiii', username: 'shuiii', displayName: 'shuiii', passwordHash: hash.shuiii },
+      { id: 'not-reg', username: 'alice2', displayName: 'alice2', passwordHash: hash.alice2 },
+      { id: 'u-case', username: 'Alice', displayName: 'Alice Case', passwordHash: hash.aliceCase },
+      { id: laterId, username: 'bob', displayName: 'Later Bob', passwordHash: hash.later },
+    ],
+  };
+  try {
+    fs.writeFileSync(dataFile, `${JSON.stringify(original, null, 2)}\n`);
+    const { logs, warns } = await captureConsole(async () => {
+      await store.init();
+      const removal = store.planProductionDemoRemoval([]);
+      assert.equal((await store.authenticate('alice', 'demo1234')).ok, false);
+      assert.equal(fs.readFileSync(dataFile, 'utf8').includes(hash.alice), true);
+      await removal.commit();
+    });
+    const saved = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    assert.deepEqual(
+      saved.users.map((user) => user.username),
+      ['DAGG', 'yutin', 'shuiii', 'alice2', 'Alice', 'bob'],
+    );
+    const byId = Object.fromEntries(saved.users.map((user) => [user.id, user]));
+    assert.equal(byId.u_dagg.passwordHash, hash.dagg);
+    assert.equal(byId.u_dagg.id, 'u_dagg');
+    assert.equal(byId.u_dagg.username, 'DAGG');
+    assert.equal(byId.u_yutin.passwordHash, hash.yutin);
+    assert.equal(byId.u_yutin.id, 'u_yutin');
+    assert.equal(byId.u_shuiii.passwordHash, hash.shuiii);
+    assert.equal(byId.u_shuiii.id, 'u_shuiii');
+    assert.equal(byId['not-reg'].passwordHash, hash.alice2);
+    assert.equal(byId['u-case'].passwordHash, hash.aliceCase);
+    assert.equal(byId['u-case'].username, 'Alice');
+    assert.equal(byId[laterId].passwordHash, hash.later);
+    assert.equal(byId[laterId].id, laterId);
+    assert.equal(byId[laterId].username, 'bob');
+    assert.equal(saved.users.some((user) => user.id === 'u1' || user.id === 'u2'), false);
+    const joined = `${logs.join('\n')}\n${warns.join('\n')}`;
+    assert.match(logs.join('\n'), /removed 2: alice, bob/);
+    assert.equal(joined.includes(hash.dagg), false);
+    assert.equal(joined.includes(hash.alice), false);
+    assert.equal(joined.includes('DAGG'), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('production keeps alice when that account is already a companion', async () => {
+  const { dir, dataFile, store } = productionStore();
+  const hash = { alice: 'HASHALICE-companion', bob: 'HASHBOB-remove', dagg: 'HASHDAGG-stay' };
+  try {
+    fs.writeFileSync(
+      dataFile,
+      `${JSON.stringify({
+        users: [
+          { id: 'u1', username: 'alice', displayName: 'Alice', passwordHash: hash.alice },
+          { id: 'u2', username: 'bob', displayName: 'Bob', passwordHash: hash.bob },
+          { id: 'u_dagg', username: 'DAGG', displayName: 'DAGG', passwordHash: hash.dagg },
+        ],
+      }, null, 2)}\n`,
+    );
+    const { logs, warns } = await captureConsole(async () => {
+      await store.init();
+      await store.planProductionDemoRemoval(['u1']).commit();
+    });
+    const saved = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    assert.deepEqual(
+      saved.users.map((user) => user.id),
+      ['u1', 'u_dagg'],
+    );
+    assert.equal(saved.users[0].passwordHash, hash.alice);
+    assert.equal(saved.users[0].username, 'alice');
+    assert.equal(saved.users[1].passwordHash, hash.dagg);
+    assert.match(warns.join('\n'), /alice is on the companion list/);
+    assert.match(logs.join('\n'), /removed 1: bob/);
+    assert.equal(`${logs.join('\n')}\n${warns.join('\n')}`.includes(hash.alice), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('production does not rewrite users.json when nothing is removed or the file cannot be read', async () => {
+  const { dir, dataFile, store } = productionStore();
+  const intact = `${JSON.stringify({
+    users: [{ id: 'u_dagg', username: 'DAGG', displayName: 'DAGG', passwordHash: 'HASHDAGG-intact' }],
+  }, null, 2)}\n`;
+  try {
+    fs.writeFileSync(dataFile, intact);
+    await store.init();
+    await store.planProductionDemoRemoval([]).commit();
+    assert.equal(fs.readFileSync(dataFile, 'utf8'), intact);
+
+    fs.writeFileSync(dataFile, '{');
+    const broken = createUserStore({ dataFile, rounds: 4, nodeEnv: 'production' });
+    await broken.init();
+    await broken.planProductionDemoRemoval([]).commit();
+    assert.equal(fs.readFileSync(dataFile, 'utf8'), '{');
+
+    fs.rmSync(dataFile);
+    const missing = createUserStore({ dataFile, rounds: 4, nodeEnv: 'production' });
+    await missing.init();
+    await missing.planProductionDemoRemoval([]).commit();
+    assert.equal(fs.existsSync(dataFile), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('dev boot still seeds alice and bob and does not rewrite users.json', async () => {
+  const { dir, dataFile, store } = tempStore();
+  const raw = `${JSON.stringify({
+    users: [
+      { id: 'u1', username: 'alice', displayName: 'Hacker', passwordHash: 'HASHALICE-file' },
+      { id: 'u_dagg', username: 'DAGG', displayName: 'DAGG', passwordHash: 'HASHDAGG-file' },
+    ],
+  }, null, 2)}\n`;
+  try {
+    fs.writeFileSync(dataFile, raw);
+    await store.init();
+    await store.planProductionDemoRemoval([]).commit();
+    assert.equal(fs.readFileSync(dataFile, 'utf8'), raw);
+    const alice = await store.authenticate('alice', 'demo1234');
+    assert.equal(alice.ok, true);
+    assert.equal(alice.user.id, 'u1');
+    assert.equal(alice.user.displayName, 'Alice');
+    const bob = await store.authenticate('bob', 'demo1234');
+    assert.equal(bob.ok, true);
+    assert.equal(bob.user.id, 'u2');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('failed save does not leave a half-registered account', async () => {
   const { dir, dataFile, store } = tempStore();
   try {
