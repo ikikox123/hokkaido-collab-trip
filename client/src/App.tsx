@@ -13,7 +13,7 @@ import { useI18n } from './i18n/I18nProvider';
 import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
-import { ShareLinkButton } from './components/ShareLinkButton';
+import { ShareMenu } from './components/ShareMenu';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { emitAck } from './lib/bill';
 import { SAPPORO_BASE } from './lib/dayView';
@@ -247,7 +247,7 @@ export default function App() {
         <header className="bg-ice-700 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-white">
           <div className="flex items-center gap-2">
             <h1 className="min-w-0 flex-1 truncate text-base font-bold">{pageHeading(locale)}</h1>
-            <ShareLinkButton scope={{ kind: 'all' }} lang={locale} tone="onDark" />
+            <ShareMenu scope={{ kind: 'all' }} lang={locale} />
             <LanguageMenu />
           </div>
         </header>
@@ -299,7 +299,8 @@ export default function App() {
   if (!trip) {
     return (
       <div className="relative min-h-full flex items-center justify-center bg-snow-50 text-ice-700">
-        <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))]">
+        <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))] flex items-center gap-2">
+          <ShareMenu scope={{ kind: 'day', day: selectedDay }} lang={locale} tone="light" />
           <LanguageMenu tone="light" />
         </div>
         <div className="text-center px-6">
@@ -314,7 +315,7 @@ export default function App() {
     <div className="h-[100dvh] flex flex-col bg-snow-50 overflow-hidden pt-[var(--safe-top)]">
       {/* Top bar — compact on mobile, expandable */}
       <header className="shrink-0 bg-ice-700 text-white shadow-md z-20">
-        <div className="flex items-center gap-2 px-3 min-h-touch py-2">
+        <div className="flex items-center gap-1 px-2 min-h-touch py-2 sm:gap-2 sm:px-3">
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sm sm:text-base truncate leading-tight">
               {pageHeading(locale)}
@@ -323,7 +324,7 @@ export default function App() {
               {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
             </p>
           </div>
-          <ShareLinkButton scope={{ kind: 'day', day: selectedDay }} lang={locale} tone="onDark" />
+          <ShareMenu scope={{ kind: 'day', day: selectedDay }} lang={locale} />
           <LanguageMenu />
           <button
             type="button"
@@ -336,7 +337,8 @@ export default function App() {
           {user ? (
             <button
               type="button"
-              className="min-h-touch px-3 rounded-lg bg-white/20 text-sm font-semibold"
+              className="min-h-touch min-w-0 max-w-[3.5rem] truncate rounded-lg bg-white/20 px-2 text-sm font-semibold sm:max-w-[9rem] sm:px-3"
+              title={user.displayName}
               onClick={handleLogout}
             >
               {user.displayName}
