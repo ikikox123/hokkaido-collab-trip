@@ -87,6 +87,16 @@ export const catalog = {
   },
   shareBack: { 'zh-Hant': '回到行程', ja: '行程に戻る', en: 'Back to the trip' },
   shareOpen: { 'zh-Hant': '看行程表', ja: '行程表を見る', en: 'View the itinerary sheet' },
+  shareCanExport: {
+    'zh-Hant': '也可匯出圖片或 PDF。',
+    ja: '画像や PDF も書き出せます。',
+    en: 'You can also export an image or PDF.',
+  },
+  openInSafari: {
+    'zh-Hant': '請用 Safari 開啟',
+    ja: 'Safariで開いてください',
+    en: 'Open this page in Safari',
+  },
   shareLoadFailed: {
     'zh-Hant': '讀不到行程。請稍後再試。',
     ja: '行程を読み込めません。しばらくしてからもう一度お試しください。',

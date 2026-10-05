@@ -9,11 +9,17 @@ import { shareOrCopy, sharePageUrl } from '../lib/shareLink';
 import {
   captureSharePng,
   deliverSharePng,
-  pngFile,
+  inAppBrowserKind,
+  isIosDevice,
+  lineExternalBrowserUrl,
+  clickSharePdf,
   printSharePdf,
+  revokeSharePreviewUrls,
+  settleShareImageExport,
   shareExportFilename,
   shareImageNoticeKey,
   takeShareExport,
+  type ShareImageJobResult,
 } from '../lib/shareExport';
 import { parseShareLang, parseShareScope, shareLocation, type ShareScope } from '../lib/sharePath';
 import {
@@ -26,6 +32,27 @@ import {
   shareTripSubtitle,
   type ShareTrip,
 } from '../lib/shareView';
+
+function InAppSafariHint() {
+  const { t } = useI18n();
+  const kind = typeof navigator === 'undefined' ? null : inAppBrowserKind(navigator.userAgent || '');
+  if (!kind) return null;
+  const external = kind === 'line' ? lineExternalBrowserUrl(window.location.href) : null;
+  return (
+    <div
+      className="share-export-ignore mt-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-800 ring-1 ring-slate-200"
+      data-share-export-ignore="true"
+      role="status"
+    >
+      <p className="font-semibold leading-snug">{t('openInSafari')}</p>
+      {external && (
+        <a href={external} className="mt-1 inline-flex min-h-touch items-center font-bold text-ice-700">
+          {t('openInSafari')}
+        </a>
+      )}
+    </div>
+  );
+}
 
 function chipClass(active: boolean) {
   return `min-h-touch shrink-0 rounded-xl px-3 py-1 text-left text-sm font-semibold ${
@@ -45,10 +72,12 @@ export function SharePage() {
   const localeRef = useRef(locale);
   const { notice, flash, dismiss } = useTimedNotice();
   const flashRef = useRef(flash);
+  const dismissRef = useRef(dismiss);
   const tRef = useRef(t);
   scopeRef.current = scope;
   localeRef.current = locale;
   flashRef.current = flash;
+  dismissRef.current = dismiss;
   tRef.current = t;
 
   useEffect(() => {
@@ -98,6 +127,8 @@ export function SharePage() {
     if (failed) takeShareExport();
   }, [failed]);
 
+  useEffect(() => () => revokeSharePreviewUrls(), []);
+
   useEffect(() => {
     if (!trip) return;
     let cancelled = false;
@@ -116,16 +147,30 @@ export function SharePage() {
         return;
       }
       setBusy(true);
+      setReadyFile(null);
+      dismissRef.current();
       flashRef.current(translate('shareExporting'));
       const filename = shareExportFilename(scopeRef.current, localeRef.current);
-      void captureSharePng(node)
-        .then((blob) => {
-          setBusy(false);
-          if (cancelled) return null;
-          return handoffImage(pngFile(blob, filename));
+      const ios = isIosDevice(navigator.userAgent, navigator.maxTouchPoints || 0);
+      void settleShareImageExport({
+        canExport: true,
+        filename,
+        ios,
+        capture: () => captureSharePng(node),
+        deliver: (file) =>
+          deliverSharePng(file, { hint: translate('shareImageLongPress'), userGesture: false, ios: false }),
+      })
+        .then((result) => {
+          if (cancelled) {
+            setBusy(false);
+            setReadyFile(null);
+            return;
+          }
+          applyExportResult(result);
         })
         .catch(() => {
           if (!cancelled) flashRef.current(tRef.current('shareExportFailed'));
+          setReadyFile(null);
           setBusy(false);
         });
     }, 300);
@@ -134,6 +179,13 @@ export function SharePage() {
       window.clearTimeout(timer);
     };
   }, [trip]);
+
+  function applyExportResult(result: ShareImageJobResult) {
+    setBusy(false);
+    setReadyFile(result.ready ? result.file : null);
+    if (result.noticeKey) flashRef.current(tRef.current(result.noticeKey));
+    else dismissRef.current();
+  }
 
   function pickLang(next: Locale) {
     setDisplayLocale(next);
@@ -164,39 +216,57 @@ export function SharePage() {
     }
   }
 
-  async function handoffImage(file: File) {
-    const outcome = await deliverSharePng(file, { hint: t('shareImageLongPress') });
-    if (outcome === 'cancelled') return;
-    if (outcome === 'needs-gesture') {
+  async function onSaveReady(file: File) {
+    const outcome = await deliverSharePng(file, {
+      hint: t('shareImageLongPress'),
+      userGesture: true,
+      shareBlocked: 'fallback',
+    });
+    if (outcome === 'cancelled') {
       dismiss();
-      setReadyFile(file);
+      setBusy(false);
       return;
     }
+    if (outcome === 'needs-gesture') return;
     setReadyFile(null);
     const key = shareImageNoticeKey(outcome);
     if (key) flash(t(key));
+    else dismiss();
   }
 
   async function onImage() {
     const node = exportRootRef.current;
     if (!node || busy) return;
     setBusy(true);
-    dismiss();
     setReadyFile(null);
+    dismiss();
     flash(t('shareExporting'));
+    let keepReady = false;
     try {
-      const blob = await captureSharePng(node);
-      setBusy(false);
-      await handoffImage(pngFile(blob, shareExportFilename(scope, locale)));
+      const result = await settleShareImageExport({
+        canExport: true,
+        filename: shareExportFilename(scope, locale),
+        ios: isIosDevice(navigator.userAgent, navigator.maxTouchPoints || 0),
+        capture: () => captureSharePng(node),
+        deliver: (file) =>
+          deliverSharePng(file, { hint: t('shareImageLongPress'), userGesture: false, ios: false }),
+      });
+      keepReady = Boolean(result.ready && result.file);
+      setReadyFile(keepReady ? result.file : null);
+      if (result.noticeKey) flash(t(result.noticeKey));
+      else dismiss();
     } catch {
+      keepReady = false;
+      setReadyFile(null);
       flash(t('shareExportFailed'));
+    } finally {
       setBusy(false);
+      if (!keepReady) setReadyFile(null);
     }
   }
 
   function onPdf() {
-    if (!trip || busy) return;
-    printSharePdf();
+    clickSharePdf({ canExport: Boolean(trip), capturing: busy }, printSharePdf);
   }
 
   const lodging = shareLodgingDisplay(trip?.lodging);
@@ -228,6 +298,7 @@ export function SharePage() {
             </div>
             <LanguageMenu tone="light" onPick={pickLang} />
           </div>
+          <InAppSafariHint />
           {trip && (
             <nav aria-label={t('dayNav')} className="mt-2 flex gap-1 overflow-x-auto no-scrollbar pb-1">
               <button
@@ -381,7 +452,7 @@ export function SharePage() {
             className="min-h-touch w-full rounded-xl bg-ice-700 px-4 text-sm font-bold text-white shadow-lg"
             onClick={() => {
               if (!readyFile) return;
-              void handoffImage(readyFile);
+              void onSaveReady(readyFile);
             }}
           >
             {t('shareImageReady')}

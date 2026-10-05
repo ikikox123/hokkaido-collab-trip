@@ -1,26 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { catalog } from '../i18n/messages.ts';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { catalog, text } from '../i18n/messages.ts';
 import { shareLocation } from './sharePath.ts';
 import {
+  SHARE_CAPTURE_TIMEOUT_MS,
+  SHARE_CANVAS_EDGE_LIMIT,
+  SHARE_CANVAS_PIXEL_BUDGET,
   SHARE_EXPORT_IGNORE_ATTR,
   SHARE_EXPORT_INTENT_KEY,
   canShareImageFile,
   captureSharePng,
+  clickSharePdf,
   deliverSharePng,
+  inAppBrowserKind,
   includeInShareImage,
   isIosDevice,
   isShareExportKind,
+  lineExternalBrowserUrl,
+  loadCaptureImage,
   openShareExport,
+  openShareImagePreview,
   pngFile,
   printSharePdf,
   rememberShareExport,
+  revokeSharePreviewUrls,
+  settleShareImageExport,
+  shareExportControlState,
   shareExportFilename,
   shareImageCaptureOptions,
   shareImageNoticeKey,
+  shareImagePixelRatio,
   shareImagePreviewHtml,
   shareMenuPosition,
+  sharePreviewObjectUrls,
   takeShareExport,
+  type CaptureImage,
   type ExportStorage,
 } from './shareExport.ts';
 
@@ -217,6 +233,7 @@ test('cancelling the share sheet stays quiet', async () => {
   let previews = 0;
   const outcome = await deliverSharePng(sampleFile(), {
     ios: true,
+    userGesture: true,
     nav: {
       canShare: () => true,
       share: async () => {
@@ -277,6 +294,7 @@ test('iOS without a share sheet opens a preview instead of a silent download', a
   const file = sampleFile();
   const outcome = await deliverSharePng(file, {
     ios: true,
+    userGesture: true,
     hint: '長按圖片儲存',
     nav: { canShare: () => false },
     download: (next) => downloads.push(next.name),
@@ -294,6 +312,7 @@ test('iOS without a share sheet opens a preview instead of a silent download', a
 test('a blocked iOS preview also waits for another tap', async () => {
   const outcome = await deliverSharePng(sampleFile(), {
     ios: true,
+    userGesture: true,
     nav: null,
     openPreview: () => false,
     download: () => {
@@ -360,4 +379,400 @@ test('image save copy matches the path that actually ran', () => {
   assert.equal(shareImageNoticeKey('preview'), 'shareImageLongPress');
   assert.equal(shareImageNoticeKey('needs-gesture'), null);
   assert.equal(shareImageNoticeKey('cancelled'), null);
+});
+
+function scriptedImage(behavior: 'reject' | 'hang'): CaptureImage {
+  let src = '';
+  const img: CaptureImage = {
+    get src() {
+      return src;
+    },
+    set src(value: string) {
+      src = value;
+      queueMicrotask(() => {
+        img.onload?.();
+      });
+    },
+    onload: null,
+    onerror: null,
+    decode: () => (behavior === 'hang' ? new Promise<void>(() => {}) : Promise.reject(new Error('decode-fail'))),
+  };
+  return img;
+}
+
+test('a rejected decode falls back to the loaded image and continues', async () => {
+  const image = await loadCaptureImage('data:image/svg+xml,ok', {
+    create: () => scriptedImage('reject'),
+  });
+  assert.equal(image.src, 'data:image/svg+xml,ok');
+});
+
+test('a decode that never settles falls back to onload and continues', async () => {
+  const started = Date.now();
+  const image = await loadCaptureImage('data:image/svg+xml,hang', {
+    decodeTimeoutMs: 30,
+    create: () => scriptedImage('hang'),
+  });
+  assert.equal(image.src, 'data:image/svg+xml,hang');
+  assert.ok(Date.now() - started < 400);
+});
+
+test('decode fails: error hint within the timeout and both buttons return', async () => {
+  const during = shareExportControlState(true, true);
+  assert.equal(during.imageDisabled, true);
+  assert.equal(during.pdfDisabled, false);
+  const started = Date.now();
+  const result = await settleShareImageExport({
+    canExport: true,
+    filename: 'hokkaido-day-1-zh-Hant.png',
+    ios: false,
+    timeoutMs: 400,
+    capture: async () => {
+      await loadCaptureImage('data:image/svg+xml,bad', {
+        create: () => scriptedImage('reject'),
+      });
+      throw new Error('decode-fail');
+    },
+  });
+  assert.ok(Date.now() - started < 400);
+  assert.equal(result.timedOut, false);
+  assert.equal(result.noticeKey, 'shareExportFailed');
+  assert.equal(text('zh-Hant', result.noticeKey), '無法匯出，請再試一次');
+  assert.equal(text('ja', 'shareExportFailed').length > 0, true);
+  assert.equal(text('en', 'shareExportFailed').length > 0, true);
+  assert.equal(result.imageDisabled, false);
+  assert.equal(result.pdfDisabled, false);
+  assert.equal(result.ready, false);
+  assert.equal(result.file, null);
+});
+
+test('decode never responds: error hint within the timeout and both buttons return', async () => {
+  const started = Date.now();
+  const result = await settleShareImageExport({
+    canExport: true,
+    filename: 'hokkaido-trip-zh-Hant.png',
+    ios: true,
+    timeoutMs: 40,
+    capture: () =>
+      loadCaptureImage('data:image/svg+xml,hang', {
+        decodeTimeoutMs: 80,
+        create: () => scriptedImage('hang'),
+      }).then(() => new Blob(['png'], { type: 'image/png' })),
+  });
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed >= 30);
+  assert.ok(elapsed < 400);
+  assert.equal(result.timedOut, true);
+  assert.equal(result.noticeKey, 'shareExportFailed');
+  assert.equal(text('zh-Hant', 'shareExportFailed'), '無法匯出，請再試一次');
+  assert.equal(result.imageDisabled, false);
+  assert.equal(result.pdfDisabled, false);
+  assert.equal(result.ready, false);
+  assert.equal(result.file, null);
+  assert.equal(SHARE_CAPTURE_TIMEOUT_MS, 20_000);
+});
+
+test('a capture that never finishes rejects at the timeout and clears the capture class', async () => {
+  const marks: boolean[] = [];
+  const started = Date.now();
+  await assert.rejects(
+    () =>
+      captureSharePng({} as HTMLElement, {
+        timeoutMs: 30,
+        toBlob: () => new Promise(() => {}),
+        markCapturing: (active) => marks.push(active),
+      }),
+    (err: Error) => err.message === 'share-export-timeout',
+  );
+  assert.ok(Date.now() - started < 500);
+  assert.deepEqual(marks, [true, false]);
+});
+
+test('a desktop-wide full page auto-reduces the pixel ratio', async () => {
+  const width = 1280;
+  const height = 6000;
+  const ratio = shareImagePixelRatio(width, height);
+  assert.ok(ratio < 2);
+  assert.equal(
+    ratio,
+    Math.min(
+      2,
+      Math.sqrt(SHARE_CANVAS_PIXEL_BUDGET / (width * height)),
+      SHARE_CANVAS_EDGE_LIMIT / height,
+      SHARE_CANVAS_EDGE_LIMIT / width,
+    ),
+  );
+  const ratios: number[] = [];
+  await captureSharePng({} as HTMLElement, {
+    width,
+    height,
+    toBlob: async (_node, options) => {
+      ratios.push(options.pixelRatio ?? 0);
+      return new Blob(['png'], { type: 'image/png' });
+    },
+    markCapturing: () => {},
+  });
+  assert.deepEqual(ratios, [ratio]);
+});
+
+test('safari runs one empty warm-up before the real capture', async () => {
+  let warmups = 0;
+  const ratios: number[] = [];
+  await captureSharePng({} as HTMLElement, {
+    safari: true,
+    width: 320,
+    height: 480,
+    warmup: async () => {
+      warmups += 1;
+    },
+    toBlob: async (_node, options) => {
+      ratios.push(options.pixelRatio ?? 0);
+      return new Blob(['png'], { type: 'image/png' });
+    },
+    markCapturing: () => {},
+  });
+  assert.equal(warmups, 1);
+  assert.deepEqual(ratios, [2]);
+});
+
+test('iOS capture shows the save button and does not call share', async () => {
+  let shares = 0;
+  const result = await settleShareImageExport({
+    canExport: true,
+    filename: 'hokkaido-day-2-zh-Hant.png',
+    ios: true,
+    capture: async () => new Blob(['png'], { type: 'image/png' }),
+    deliver: async () => {
+      shares += 1;
+      return 'shared';
+    },
+  });
+  assert.equal(shares, 0);
+  assert.equal(result.ready, true);
+  assert.equal(result.noticeKey, null);
+  assert.equal(result.file?.name, 'hokkaido-day-2-zh-Hant.png');
+  assert.equal(catalog.shareImageReady['zh-Hant'], '圖片好了，按這裡儲存／分享');
+  assert.ok(catalog.shareImageReady.ja.length > 0);
+  assert.ok(catalog.shareImageReady.en.length > 0);
+});
+
+test('after capture, iOS does not call share until the tap', async () => {
+  let shares = 0;
+  const outcome = await deliverSharePng(sampleFile(), {
+    ios: true,
+    userGesture: false,
+    nav: {
+      canShare: () => true,
+      share: async () => {
+        shares += 1;
+      },
+    },
+    download: () => {
+      throw new Error('no-download');
+    },
+    openPreview: () => {
+      throw new Error('no-preview');
+    },
+  });
+  assert.equal(outcome, 'needs-gesture');
+  assert.equal(shares, 0);
+});
+
+test('a second blocked share falls back to preview instead of failing quietly', async () => {
+  const previews: string[] = [];
+  const outcome = await deliverSharePng(sampleFile(), {
+    ios: true,
+    userGesture: true,
+    hint: '長按圖片儲存',
+    nav: {
+      canShare: () => true,
+      share: async () => {
+        throw new DOMException('blocked', 'NotAllowedError');
+      },
+    },
+    download: () => {
+      throw new Error('should-preview');
+    },
+    openPreview: (_file, hint) => {
+      previews.push(hint);
+      return true;
+    },
+  });
+  assert.equal(outcome, 'preview');
+  assert.deepEqual(previews, ['長按圖片儲存']);
+});
+
+test('a second blocked share on desktop downloads instead of waiting again', async () => {
+  const downloads: string[] = [];
+  const outcome = await deliverSharePng(sampleFile(), {
+    ios: false,
+    userGesture: true,
+    nav: {
+      canShare: () => true,
+      share: async () => {
+        throw new DOMException('blocked', 'NotAllowedError');
+      },
+    },
+    download: (file) => downloads.push(file.name),
+  });
+  assert.equal(outcome, 'downloaded');
+  assert.deepEqual(downloads, ['hokkaido-day-2-zh-Hant.png']);
+});
+
+test('non-iOS download failure opens a preview', async () => {
+  const previews: string[] = [];
+  const outcome = await deliverSharePng(sampleFile(), {
+    ios: false,
+    hint: '長按圖片儲存',
+    nav: { canShare: () => false },
+    download: () => {
+      throw new Error('download-failed');
+    },
+    openPreview: (file, hint) => {
+      previews.push(`${file.name}:${hint}`);
+      return true;
+    },
+  });
+  assert.equal(outcome, 'preview');
+  assert.equal(shareImageNoticeKey(outcome), 'shareImageLongPress');
+  assert.deepEqual(previews, ['hokkaido-day-2-zh-Hant.png:長按圖片儲存']);
+});
+
+test('cancelling share drops the exporting result and the save button', async () => {
+  const result = await settleShareImageExport({
+    canExport: true,
+    filename: 'hokkaido-day-2-zh-Hant.png',
+    ios: false,
+    capture: async () => new Blob(['png'], { type: 'image/png' }),
+    deliver: async () => 'cancelled',
+  });
+  assert.equal(result.noticeKey, null);
+  assert.equal(result.ready, false);
+  assert.equal(result.file, null);
+  assert.equal(result.imageDisabled, false);
+  assert.equal(result.pdfDisabled, false);
+});
+
+test('a closed preview revokes its blob url', () => {
+  const revoked: string[] = [];
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+  let n = 0;
+  URL.createObjectURL = (() => {
+    n += 1;
+    return `blob:preview-${n}`;
+  }) as typeof URL.createObjectURL;
+  URL.revokeObjectURL = ((url: string) => {
+    revoked.push(url);
+  }) as typeof URL.revokeObjectURL;
+  try {
+    const listeners: Record<string, () => void> = {};
+    const opened = openShareImagePreview(sampleFile(), '長按', () => ({
+      document: {
+        open() {},
+        write() {},
+        close() {},
+      },
+      addEventListener(type: string, fn: () => void) {
+        listeners[type] = fn;
+      },
+    }));
+    assert.equal(opened, true);
+    assert.deepEqual(sharePreviewObjectUrls(), ['blob:preview-1']);
+    listeners.pagehide?.();
+    assert.deepEqual(sharePreviewObjectUrls(), []);
+    assert.deepEqual(revoked, ['blob:preview-1']);
+
+    const blocked = openShareImagePreview(sampleFile(), '長按', () => null);
+    assert.equal(blocked, false);
+    assert.deepEqual(revoked, ['blob:preview-1', 'blob:preview-2']);
+    assert.deepEqual(sharePreviewObjectUrls(), []);
+  } finally {
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+    revokeSharePreviewUrls();
+  }
+});
+
+const shareCaptureCss = readFileSync(fileURLToPath(new URL('../index.css', import.meta.url)), 'utf8');
+
+/** True when the capture stylesheet forces this node to display:none. */
+function hiddenByShareCapture(classes: string[], insideExportRoot: boolean) {
+  const globalHide = /html\.share-capturing \.print\\:hidden\s*\{[^}]*display:\s*none\s*!important/.test(shareCaptureCss);
+  const scopedHide =
+    /html\.share-capturing \[data-share-export-root\] \.print\\:hidden\s*\{[^}]*display:\s*none\s*!important/.test(
+      shareCaptureCss,
+    );
+  if (!classes.includes('print:hidden')) return false;
+  if (globalHide) return true;
+  return scopedHide && insideExportRoot;
+}
+
+test('during capture the action bar and notices stay visible', () => {
+  assert.match(
+    shareCaptureCss,
+    /html\.share-capturing \[data-share-export-root\] \.print\\:hidden \{\s*display: none !important;\s*\}/,
+  );
+  assert.equal(/html\.share-capturing \.print\\:hidden \{/.test(shareCaptureCss), false);
+
+  const actionBar = ['share-actionbar', 'share-export-ignore', 'print:hidden', 'md:hidden'];
+  const notice = ['share-export-ignore', 'print:hidden'];
+  const saveButton = ['share-export-ignore', 'print:hidden'];
+  assert.equal(hiddenByShareCapture(actionBar, false), false);
+  assert.equal(hiddenByShareCapture(notice, false), false);
+  assert.equal(hiddenByShareCapture(saveButton, false), false);
+  assert.equal(hiddenByShareCapture(['print:hidden'], true), true);
+
+  assert.equal(
+    includeInShareImage({
+      hasAttribute: (name: string) => name === 'data-share-export-ignore',
+      classList: { contains: (name: string) => actionBar.includes(name) },
+    }),
+    false,
+  );
+  assert.equal(
+    includeInShareImage({
+      hasAttribute: () => false,
+      classList: { contains: (name: string) => notice.includes(name) },
+    }),
+    false,
+  );
+});
+
+test('during capture, tapping PDF synchronously calls print', () => {
+  const controls = shareExportControlState(true, true);
+  assert.equal(controls.imageDisabled, true);
+  assert.equal(controls.pdfDisabled, false);
+  let printed = 0;
+  let sawMicrotask = false;
+  queueMicrotask(() => {
+    sawMicrotask = true;
+  });
+  const ran = clickSharePdf({ canExport: true, capturing: true }, () => {
+    printed += 1;
+    assert.equal(sawMicrotask, false);
+  });
+  assert.equal(ran, true);
+  assert.equal(printed, 1);
+  assert.equal(clickSharePdf({ canExport: false, capturing: true }, () => {
+    printed += 1;
+  }), false);
+  assert.equal(printed, 1);
+});
+
+test('in-app browsers ask for Safari, and LINE can open the same page outside', () => {
+  assert.equal(inAppBrowserKind('Mozilla/5.0 Line/14.0.0'), 'line');
+  assert.equal(inAppBrowserKind('FBAN/FBIOS'), 'facebook');
+  assert.equal(inAppBrowserKind('FBAV/1'), 'facebook');
+  assert.equal(inAppBrowserKind('Instagram 123'), 'instagram');
+  assert.equal(inAppBrowserKind('MicroMessenger/8'), 'wechat');
+  assert.equal(inAppBrowserKind('Mozilla/5.0 (iPhone) Safari/605'), null);
+  assert.equal(catalog.openInSafari['zh-Hant'], '請用 Safari 開啟');
+  assert.ok(catalog.openInSafari.ja.length > 0);
+  assert.ok(catalog.openInSafari.en.length > 0);
+  const href = lineExternalBrowserUrl('https://hokkaido.example/share?day=2&lang=ja');
+  assert.equal(href, 'https://hokkaido.example/share?day=2&lang=ja&openExternalBrowser=1');
+  assert.equal(href.includes('token'), false);
+  assert.equal(catalog.shareCanExport['zh-Hant'], '也可匯出圖片或 PDF。');
+  assert.notEqual(catalog.shareCanExport.ja, catalog.shareCanExport.en);
 });

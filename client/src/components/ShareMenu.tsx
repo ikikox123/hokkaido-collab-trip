@@ -129,7 +129,7 @@ export function ShareMenu({
       <button
         ref={buttonRef}
         type="button"
-        className={`inline-flex min-h-touch min-w-touch shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg px-2 text-sm font-bold sm:min-w-0 sm:px-2.5 ${face}`}
+        className={`inline-flex min-h-touch shrink-0 items-center justify-center gap-0.5 whitespace-nowrap rounded-lg px-1.5 text-sm font-bold sm:gap-1 sm:px-2.5 ${face}`}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={panelId}
@@ -137,7 +137,7 @@ export function ShareMenu({
         onClick={() => setOpen((value) => !value)}
       >
         <ShareGlyph />
-        <span className="hidden sm:inline">{t('share')}</span>
+        <span>{t('share')}</span>
       </button>
       {panel}
       <ShareNotice message={notice} />
