@@ -1,0 +1,2 @@
+# Live trip files stay out of the image. Bucket copies are not in this build context.
+data

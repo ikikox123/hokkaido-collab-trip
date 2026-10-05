@@ -32,7 +32,8 @@ RUN npm ci --omit=dev --prefix server
 COPY server/src ./server/src
 COPY --from=client-build /app/client/dist ./client/dist
 
-# Empty data dir only. state.json is not copied into the image.
+# Empty data dir only. state.json and users.json are not copied into the image.
+# Bucket copies are uploaded at runtime and are not part of this image.
 # Production exits if /app/data/state.json is missing; it does not seed.
 RUN mkdir -p /app/data
 
