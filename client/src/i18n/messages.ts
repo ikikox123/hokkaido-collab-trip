@@ -91,6 +91,15 @@ export const catalog = {
     ja: '行程を読み込めません。しばらくしてからもう一度お試しください。',
     en: 'Could not load the trip. Try again shortly.',
   },
+  shareLink: { 'zh-Hant': '分享連結', ja: 'リンクを共有', en: 'Share link' },
+  shareCopied: { 'zh-Hant': '已複製分享連結', ja: '共有リンクをコピーしました', en: 'Share link copied' },
+  shareOpened: { 'zh-Hant': '已開啟分享', ja: '共有を開きました', en: 'Opened the share sheet' },
+  shareCopyFailed: { 'zh-Hant': '無法複製連結', ja: 'リンクをコピーできませんでした', en: 'Could not copy the link' },
+  collabNeedsLogin: {
+    'zh-Hant': '協作頁要先登入。行程表不用登入，也不含帳號或帳務。',
+    ja: '共同編集ページはログインが必要です。行程表はログイン不要で、アカウントや会計は含みません。',
+    en: 'Log in to open the collaborative trip. The itinerary sheet needs no login and leaves out accounts and bills.',
+  },
   newStopPrompt: { 'zh-Hant': '新站點名稱？', ja: '新しい地点の名前は？', en: 'Name for the new stop?' },
   newStopDefault: { 'zh-Hant': '新景點', ja: '新しいスポット', en: 'New place' },
   tabNav: {
@@ -138,14 +147,19 @@ export const catalog = {
     en: 'Expenses stay in the currency they were paid in. Conversion uses only the current rate, so everyone can see the amount in TWD or yen.',
   },
   guestCanView: {
-    'zh-Hant': '還沒登入也可以看帳。登入後可以把自己加入這趟。加入別人、記下結算，要先是旅伴。',
-    ja: 'ログインしなくても帳面は見られます。ログイン後は自分をこの旅に加えられます。ほかの人を加える、精算を記録するには、先に同行者である必要があります。',
-    en: 'You can read the bill without logging in. After you log in, you can add yourself to this trip. Adding someone else or recording a settlement requires you to already be a traveler.',
+    'zh-Hant': '還沒登入也可以看帳。名單還是空的時候，登入後可以把自己加入。已經有旅伴時，要請旅伴把你加進去。',
+    ja: 'ログインしなくても帳面は見られます。名簿が空のときだけ、ログイン後に自分を加えられます。すでに同行者がいるときは、同行者に追加してもらってください。',
+    en: 'You can read the bill without logging in. You can add yourself only while the list is empty. Once someone is on the trip, ask a traveler to add you.',
   },
   loggedInNotMember: {
-    'zh-Hant': '你已登入，但還不是這趟的旅伴。先把自己加入，才能加入別人或記下結算。',
-    ja: 'ログイン済みですが、まだこの旅の同行者ではありません。ほかの人を加える、精算を記録するには、先に自分を加えてください。',
-    en: 'You are logged in, but you are not a traveler on this trip yet. Add yourself before you add someone else or record a settlement.',
+    'zh-Hant': '你已登入，但還不是這趟的旅伴。名單還是空的，可以先把自己加入。',
+    ja: 'ログイン済みですが、まだこの旅の同行者ではありません。名簿は空なので、先に自分を加えられます。',
+    en: 'You are logged in, but you are not a traveler on this trip yet. The list is empty, so you can add yourself.',
+  },
+  askCompanionToAdd: {
+    'zh-Hant': '你已登入，但還不是這趟的旅伴。請已經在名單上的人把你加進去。',
+    ja: 'ログイン済みですが、まだこの旅の同行者ではありません。名簿にいる人に追加してもらってください。',
+    en: 'You are logged in, but you are not a traveler on this trip yet. Ask someone already on the list to add you.',
   },
   onlyMembersAct: {
     'zh-Hant': '只有這趟行程的旅伴可以這樣做',

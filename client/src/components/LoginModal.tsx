@@ -8,6 +8,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onLogin: (user: User, token: string) => void;
+  /** Render the form in the page instead of a dialog. */
+  embedded?: boolean;
 };
 
 type Mode = 'login' | 'register';
@@ -21,7 +23,7 @@ function blankCredentialMessage(username: string, password: string): string | nu
   return null;
 }
 
-export function LoginModal({ open, onClose, onLogin }: Props) {
+export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) {
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('alice');
   const [password, setPassword] = useState('demo1234');
@@ -30,7 +32,7 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
   const { t } = useI18n();
   const isRegister = mode === 'register';
 
-  if (!open) return null;
+  if (!embedded && !open) return null;
 
   function switchMode() {
     setError(null);
@@ -68,19 +70,15 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
     }
   }
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="login-title"
-      onClick={onClose}
-    >
+  const card = (
       <div
-        className="max-h-[92dvh] w-full overflow-y-auto sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-white p-5 pb-[calc(1.25rem+var(--safe-bottom))] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+        role={embedded ? undefined : 'dialog'}
+        aria-modal={embedded ? undefined : true}
+        aria-labelledby="login-title"
+        onClick={embedded ? undefined : (e) => e.stopPropagation()}
       >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
+        {!embedded && <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />}
         <h2 id="login-title" className="text-lg font-bold text-ice-700">
           {isRegister ? t('registerTitle') : t('loginTitle')}
         </h2>
@@ -138,15 +136,27 @@ export function LoginModal({ open, onClose, onLogin }: Props) {
           >
             {isRegister ? t('haveAccount') : t('needAccount')}
           </button>
-          <button
-            type="button"
-            className="w-full min-h-touch rounded-xl text-slate-600"
-            onClick={onClose}
-          >
-            {t('browseAsGuest')}
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              className="w-full min-h-touch rounded-xl text-slate-600"
+              onClick={onClose}
+            >
+              {t('browseAsGuest')}
+            </button>
+          )}
         </form>
       </div>
+  );
+
+  if (embedded) return card;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      {card}
     </div>
   );
 }

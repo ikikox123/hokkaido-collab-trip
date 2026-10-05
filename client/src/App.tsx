@@ -13,10 +13,12 @@ import { useI18n } from './i18n/I18nProvider';
 import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
+import { ShareLinkButton } from './components/ShareLinkButton';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { emitAck } from './lib/bill';
 import { SAPPORO_BASE } from './lib/dayView';
 import { usesGoogleMaps } from './lib/mapProvider';
+import { shareLocation } from './lib/sharePath';
 import { isSplitPath, leaveSplit, openSplit } from './lib/splitLink';
 import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './types/trip';
 
@@ -97,10 +99,17 @@ export default function App() {
       const translate = tRef.current;
       showToast(localizeError(e.error || translate('cannotUpdate'), translate));
     });
+    s.on('session:required', () => {
+      clearAuth();
+      setUser(null);
+      setToken(null);
+      setTrip(null);
+      showToast(tRef.current('sessionExpired'));
+    });
     s.on('connect', () => {
       s.emit('room:join', {
         roomCode: roomCode || DEFAULT_ROOM,
-        user: getStoredUser(),
+        token: getToken(),
       });
     });
     return () => {
@@ -111,8 +120,8 @@ export default function App() {
   // re-join when user / room changes
   useEffect(() => {
     if (!socket) return;
-    socket.emit('room:join', { roomCode: roomCode || DEFAULT_ROOM, user });
-  }, [socket, user, roomCode]);
+    socket.emit('room:join', { roomCode: roomCode || DEFAULT_ROOM, token });
+  }, [socket, token, roomCode]);
 
   useEffect(() => {
     const onPop = () => setMobileTab(isSplitPath(window.location.pathname) ? 'split' : 'list');
@@ -194,6 +203,7 @@ export default function App() {
     clearAuth();
     setUser(null);
     setToken(null);
+    setTrip(null);
     showToast(t('loggedOut'));
   }
 
@@ -210,9 +220,40 @@ export default function App() {
   function joinRoom() {
     const code = (roomCode || DEFAULT_ROOM).toUpperCase();
     setRoomCode(code);
-    socket?.emit('room:join', { roomCode: code, user });
+    socket?.emit('room:join', { roomCode: code, token });
     showToast(t('joinedRoom', { code }));
     setHeaderOpen(false);
+  }
+
+  const toastNode = toast ? (
+    <div className="fixed left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2.5 text-sm text-white shadow-lg bottom-[calc(1rem+var(--safe-bottom))]">
+      {toast}
+    </div>
+  ) : null;
+
+  if (!user || !token) {
+    return (
+      <div className="min-h-full bg-snow-50 text-slate-800">
+        <header className="bg-ice-700 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-white">
+          <div className="flex items-center gap-2">
+            <h1 className="min-w-0 flex-1 truncate text-base font-bold">{pageHeading(locale)}</h1>
+            <ShareLinkButton scope={{ kind: 'all' }} lang={locale} tone="onDark" />
+            <LanguageMenu />
+          </div>
+        </header>
+        <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
+          <p className="text-sm leading-relaxed text-slate-600">{t('collabNeedsLogin')}</p>
+          <a
+            href={shareLocation({ kind: 'all' }, locale)}
+            className="flex min-h-touch items-center justify-center rounded-xl border border-ice-200 bg-white px-3 text-base font-bold text-ice-700"
+          >
+            {t('shareOpen')}
+          </a>
+          <LoginModal embedded open onClose={() => {}} onLogin={handleLogin} />
+        </main>
+        {toastNode}
+      </div>
+    );
   }
 
   if (!trip) {
@@ -242,6 +283,7 @@ export default function App() {
               {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
             </p>
           </div>
+          <ShareLinkButton scope={{ kind: 'day', day: selectedDay }} lang={locale} tone="onDark" />
           <LanguageMenu />
           <button
             type="button"
@@ -318,7 +360,7 @@ export default function App() {
             >
               {t('shareOpen')}
             </a>
-            {canEdit && (
+            {isTripCompanion && (
               <button
                 type="button"
                 className="min-h-touch w-full rounded-lg border border-white/30 text-white/90"
@@ -414,7 +456,7 @@ export default function App() {
             stops={dayStops}
             legs={dayLegs}
             selectedId={selectedId}
-            canEdit={canEdit}
+            canEdit={isTripCompanion}
             onSelect={(id) => {
               setSelectedId(id);
               if (window.matchMedia('(max-width: 767px)').matches) {
@@ -469,7 +511,7 @@ export default function App() {
             selectedId={selectedId}
             active={mapActive}
             lodging={trip.lodging}
-            canEdit={canEdit}
+            canEdit={isTripCompanion}
             onSelect={setSelectedId}
             onRename={(id, title) => emitAuth('trip:updateStop', { id, patch: { title } })}
           />
@@ -580,11 +622,7 @@ export default function App() {
         }}
       />
 
-      {toast && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(1rem+var(--safe-bottom))] z-[60] rounded-full bg-slate-900/90 text-white text-sm px-4 py-2.5 shadow-lg max-w-[90vw]">
-          {toast}
-        </div>
-      )}
+      {toastNode}
     </div>
   );
 }

@@ -33,16 +33,43 @@ export function renameStop(state, id, rawTitle) {
   };
 }
 
+/** Fields a stop edit may change. Anything else in the patch is ignored. */
+export const STOP_PATCH_KEYS = ['title', 'time', 'notes', 'lat', 'lng'];
+
+function whitelistStopPatch(patch) {
+  const source = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
+  const safe = {};
+  for (const key of STOP_PATCH_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const value = source[key];
+    if (key === 'lat' || key === 'lng') {
+      if (typeof value === 'number' && Number.isFinite(value)) safe[key] = value;
+      continue;
+    }
+    if (typeof value === 'string') safe[key] = value;
+  }
+  return safe;
+}
+
 /**
  * Apply a stop patch.
  * A patch that only sets `title` renames the stop and does not touch coordinates or legs.
  * Patches that also move lat/lng still drop route estimates, matching other place edits.
+ * Only title, time, notes, lat, and lng are copied onto the stop.
  */
 export function applyStopPatch(state, id, patch) {
-  const safe = patch && typeof patch === 'object' && !Array.isArray(patch) ? { ...patch } : {};
-  delete safe.id;
+  const safe = whitelistStopPatch(patch);
+  if (typeof safe.lat === 'number' && Math.abs(safe.lat) > 90) {
+    return { ok: false, error: '座標超出範圍' };
+  }
+  if (typeof safe.lng === 'number' && Math.abs(safe.lng) > 180) {
+    return { ok: false, error: '座標超出範圍' };
+  }
   const hasTitle = Object.prototype.hasOwnProperty.call(safe, 'title');
   const otherKeys = Object.keys(safe).filter((key) => key !== 'title');
+  if (!hasTitle && otherKeys.length === 0) {
+    return { ok: true, unchanged: true, titleOnly: true, state };
+  }
 
   if (hasTitle && otherKeys.length === 0) {
     return renameStop(state, id, safe.title);

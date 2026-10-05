@@ -171,7 +171,7 @@ hokkaido-collab-trip/
 - `GET /api/trip-alerts` 預報＋氣象廳警報＋JR 運行摘要（伺服器抓取並短快取；不含 tenki.jp）
 - `GET /api/health`
 - `GET /api/fx` 日圓兌新台幣。距上次嘗試超過 90 秒才會再打 Yahoo Finance，否則回傳目前這筆（含手動匯率、上次成功時間；沒有成功過則沒有數字）
-- `GET /api/places?q=`（需登入）先 Geocoding（北海道範圍），沒有結果再試 Places API (New)，最後才試舊版 Find Place。舊版回 `REQUEST_DENIED` 時視為沒找到，不會擋下 Geocoding。兩邊都失敗時回 502 與簡短原因（不含金鑰）。沒有 `GOOGLE_MAPS_SERVER_KEY` 時回 503。回應只有名稱、地址、座標
+- `GET /api/places?q=`（需登入，而且必須是這趟的旅伴）先 Geocoding（北海道範圍），沒有結果再試 Places API (New)，最後才試舊版 Find Place。舊版回 `REQUEST_DENIED` 時視為沒找到，不會擋下 Geocoding。兩邊都失敗時回 502 與簡短原因（不含金鑰）。沒有 `GOOGLE_MAPS_SERVER_KEY` 時回 503。回應只有名稱、地址、座標
 - `GET /api/route?fromLat=&fromLng=&toLat=&toLng=&mode=`  
   有 `GOOGLE_MAPS_SERVER_KEY` 時轉打 Google Directions，否則 OSRM（記憶體快取約 10 分鐘）。
   - `walk` → walking／OSRM walking
@@ -186,7 +186,7 @@ Socket.io（需登入 JWT，成功後廣播 `trip:update`）：
 
 - `trip:reorder` / `trip:add` / `trip:updateStop` / `trip:delete` / `trip:reset`
 - `trip:setLegMode` `{ fromStopId, toStopId, mode }` 改相鄰站交通方式並重新估算
-- `expense:upsert` / `expense:delete`、`member:add` / `member:remove`、`settlement:add` / `settlement:delete` 改分帳，同樣廣播整份行程（含 `expenses` 與 `settlements`）。不重算路線。旅伴 id 就是登入帳號 id（`alice` 是 `u1`，`bob` 是 `u2`，新註冊是 `u_` 加 16 個十六進位字）。`member:add` 傳已註冊的 `username`，把那個帳號加進這趟，不會為沒註冊的人發邀請，也不改註冊。一筆結算直接存 `payerId`、`payeeId` 與 `amount`（外加這筆金額的 `currency`）。訪客只讀。已登入的帳號可以把自己加入這趟，即使旅伴名單還是空的。加入別人仍要對方是已註冊帳號，而且操作者已經是旅伴。記下結算的付款人與收款人仍必須是旅伴 id
+- `expense:upsert` / `expense:delete`、`member:add` / `member:remove`、`settlement:add` / `settlement:delete` 改分帳，同樣廣播整份行程（含 `expenses` 與 `settlements`）。不重算路線。旅伴 id 就是登入帳號 id（`alice` 是 `u1`，`bob` 是 `u2`，新註冊是 `u_` 加 16 個十六進位字）。`member:add` 傳已註冊的 `username`，把那個帳號加進這趟，不會為沒註冊的人發邀請，也不改註冊。一筆結算直接存 `payerId`、`payeeId` 與 `amount`（外加這筆金額的 `currency`）。訪客只讀。名單是空的時候，已登入的帳號可以把自己加入；名單已有人時，只有現任旅伴可以加入帳號。加入的對象必須是已註冊帳號。改站點、交通方式、住宿、支出、結算、匯率，以及 `trip:reset`，都必須已經是旅伴。`trip:reset` 在 production，或行程是從已儲存的 `state.json` 讀進來時，仍不會用種子覆蓋。記下結算的付款人與收款人仍必須是旅伴 id
 - `fx:override` `{ basis: 'twdPerJpy' | 'jpyPerTwd', value, token }` 設定手動匯率；`fx:clearOverride` `{ token }` 改回即時。成功後廣播 `fx:update`
 
 ## 備份與還原

@@ -483,6 +483,7 @@ test('a companion is an existing account and the member id is that account id', 
   assert.equal(self.ok, true, self.error);
   assert.deepEqual(self.state.members, [{ id: 'u1' }]);
   assert.equal(memberAddAllowed(self.state, 'u1', 'u2').ok, true);
+  assert.equal(memberAddAllowed(self.state, 'u2', 'u2').ok, false);
   assert.equal(memberAddAllowed(self.state, 'u2', registeredId).ok, false);
 
   const added = addMember(state, { username: ' Bob ' }, accounts);

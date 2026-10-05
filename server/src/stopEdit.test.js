@@ -113,3 +113,47 @@ test('applyStopPatch rejects a blank title even when coordinates are included', 
   assert.equal(result.ok, false);
   assert.equal(before.lat, state.stops.find((stop) => stop.id === 's7').lat);
 });
+
+test('applyStopPatch copies only title, time, notes, and coordinates', () => {
+  const state = createSeedState();
+  const before = state.stops.find((stop) => stop.id === 's7');
+  const result = applyStopPatch(state, 's7', {
+    title: '新名稱',
+    time: '09:30',
+    notes: '門口集合',
+    id: 'hacked',
+    day: 9,
+    date: '1999-01-01',
+    secret: 'from-patch',
+    members: [{ id: 'u9', username: 'eve' }],
+    roomCode: 'LEAK',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.titleOnly, false);
+  const after = result.state.stops.find((stop) => stop.id === 's7');
+  assert.equal(after.id, 's7');
+  assert.equal(after.title, '新名稱');
+  assert.equal(after.time, '09:30');
+  assert.equal(after.notes, '門口集合');
+  assert.equal(after.day, before.day);
+  assert.equal(after.date, before.date);
+  assert.equal(after.lat, before.lat);
+  assert.equal(after.lng, before.lng);
+  assert.equal(after.secret, undefined);
+  assert.equal(after.members, undefined);
+  assert.equal(after.roomCode, undefined);
+  assert.equal(state.stops.find((stop) => stop.id === 's7').title, before.title);
+});
+
+test('applyStopPatch treats unknown fields as a no-op and rejects coordinates outside range', () => {
+  const state = createSeedState();
+  const before = state.stops.find((stop) => stop.id === 's7');
+  const ignored = applyStopPatch(state, 's7', { secret: 'x', members: [], id: 'other' });
+  assert.equal(ignored.ok, true);
+  assert.equal(ignored.unchanged, true);
+  assert.equal(ignored.state, state);
+  const range = applyStopPatch(state, 's7', { lat: 120, lng: 141 });
+  assert.equal(range.ok, false);
+  assert.equal(range.error, '座標超出範圍');
+  assert.equal(state.stops.find((stop) => stop.id === 's7').lat, before.lat);
+});

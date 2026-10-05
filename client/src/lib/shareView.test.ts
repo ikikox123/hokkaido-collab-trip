@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SAPPORO_BASE } from './dayView.ts';
-import { isSharePath, parseShareScope, shareLocation } from './sharePath.ts';
+import { isSharePath, parseShareLang, parseShareScope, shareLocation } from './sharePath.ts';
 import {
   formatLodgingPoint,
   formatShareDate,
@@ -49,6 +49,22 @@ test('day query selects one day and a blank query selects the whole trip', () =>
   assert.deepEqual(parseShareScope('?day=abc'), { kind: 'day', day: 0 });
   assert.equal(shareLocation({ kind: 'all' }), '/share');
   assert.equal(shareLocation({ kind: 'day', day: 3 }), '/share?day=3');
+});
+
+test('lang chooses the sheet language and stays out of the stored preference', () => {
+  assert.equal(parseShareLang(''), null);
+  assert.equal(parseShareLang('?day=2'), null);
+  assert.equal(parseShareLang('?lang=ja'), 'ja');
+  assert.equal(parseShareLang('?lang=zh-Hant'), 'zh-Hant');
+  assert.equal(parseShareLang('?lang=en'), 'en');
+  assert.equal(parseShareLang('?lang=fr'), null);
+  assert.equal(parseShareLang('?lang='), null);
+  assert.equal(shareLocation({ kind: 'day', day: 2 }, 'zh-Hant'), '/share?day=2&lang=zh-Hant');
+  assert.equal(shareLocation({ kind: 'all' }, 'en'), '/share?lang=en');
+  assert.equal(shareLocation({ kind: 'day', day: 0 }, 'ja'), '/share?lang=ja');
+  const href = shareLocation({ kind: 'day', day: 4 }, 'ja');
+  assert.equal(href.includes('token'), false);
+  assert.equal(href.includes('password'), false);
 });
 
 test('stop numbers follow list order inside each day, not clock time', () => {
