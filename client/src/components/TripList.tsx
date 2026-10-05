@@ -21,6 +21,7 @@ import type { Leg, Stop, TravelMode } from '../types/trip';
 import { useI18n } from '../i18n/I18nProvider';
 import { travelLabel } from '../i18n/labels';
 import { isTravelMode, MODE_COLORS, TRAVEL_MODES } from '../lib/travel';
+import { displayStopTitle } from '../i18n/stopNames';
 import { StopName } from './StopName';
 
 type Props = {
@@ -202,10 +203,12 @@ function LegConnector({
   canEdit: boolean;
   onSetMode: (mode: TravelMode) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const mode: TravelMode = leg?.mode && isTravelMode(leg.mode) ? leg.mode : 'walk';
+  const fromName = displayStopTitle(locale, from.title);
+  const toName = displayStopTitle(locale, to.title);
   return (
-    <li className="flex items-stretch gap-1" aria-label={t('toNextAria', { from: from.title, to: to.title })}>
+    <li className="flex items-stretch gap-1" aria-label={t('toNextAria', { from: fromName, to: toName })}>
       <div className="relative flex w-8 shrink-0 items-center justify-center self-stretch" aria-hidden>
         <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-ice-300" />
         <span
@@ -217,7 +220,7 @@ function LegConnector({
         <p className="text-sm font-bold text-ice-700">{t('toNext')}</p>
         {canEdit ? (
           <select
-            aria-label={t('toNextModeAria', { from: from.title, to: to.title })}
+            aria-label={t('toNextModeAria', { from: fromName, to: toName })}
             className="mt-1 min-h-touch w-full rounded-lg border border-slate-200 bg-white px-2 text-base text-slate-800"
             value={mode}
             onChange={(e) => {
@@ -254,7 +257,7 @@ export function TripList({
   onEditPlace,
 }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   // Touch: delay so vertical scroll still works; Pointer for mouse/stylus
   const sensors = useSensors(
@@ -344,7 +347,7 @@ export function TripList({
         <DragOverlay>
           {activeStop ? (
             <div className="drag-overlay rounded-xl border border-ice-400 bg-white p-3 font-semibold shadow-lg">
-              {activeStop.title}
+              {displayStopTitle(locale, activeStop.title)}
             </div>
           ) : null}
         </DragOverlay>

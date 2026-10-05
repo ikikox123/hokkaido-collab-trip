@@ -1,6 +1,7 @@
 import { FormEvent, useRef, useState } from 'react';
 import { localizeError } from '../i18n/errors';
 import { useI18n } from '../i18n/I18nProvider';
+import { displayStopTitle } from '../i18n/stopNames';
 
 const STOP_TITLE_MAX = 80;
 
@@ -15,7 +16,8 @@ export function StopName({ title, canEdit, onRename }: Props) {
   const [draft, setDraft] = useState(title);
   const [error, setError] = useState<string | null>(null);
   const skipCommit = useRef(false);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const shown = displayStopTitle(locale, title);
 
   function begin() {
     skipCommit.current = false;
@@ -61,7 +63,7 @@ export function StopName({ title, canEdit, onRename }: Props) {
   }
 
   if (!canEdit) {
-    return <span className="font-semibold text-[15px] leading-snug">{title}</span>;
+    return <span className="font-semibold text-[15px] leading-snug">{shown}</span>;
   }
 
   if (editing) {
@@ -104,13 +106,13 @@ export function StopName({ title, canEdit, onRename }: Props) {
       <button
         type="button"
         className="flex min-h-touch w-full items-center gap-2 rounded-lg px-0.5 text-left active:bg-snow-100"
-        aria-label={t('editPlaceName', { title })}
+        aria-label={t('editPlaceName', { title: shown })}
         onClick={(e) => {
           e.stopPropagation();
           begin();
         }}
       >
-        <span className="min-w-0 flex-1 font-semibold text-[15px] leading-snug">{title}</span>
+        <span className="min-w-0 flex-1 font-semibold text-[15px] leading-snug">{shown}</span>
         <span className="shrink-0 rounded-md bg-ice-600/10 px-2 py-1 text-sm font-semibold text-ice-700">
           {t('rename')}
         </span>

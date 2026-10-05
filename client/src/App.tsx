@@ -10,6 +10,7 @@ import { SplitBoard } from './components/SplitBoard';
 import { LanguageMenu } from './i18n/LanguageMenu';
 import { useI18n } from './i18n/I18nProvider';
 import { displayDayLabel, pageHeading } from './i18n/screen.ts';
+import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { usesGoogleMaps } from './lib/mapProvider';
@@ -19,7 +20,7 @@ import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './typ
 type MobileTab = 'list' | 'map' | 'split';
 
 function CurrentStopBar({ stop }: { stop: Stop | null }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return (
     <div className="z-20 shrink-0 border-b border-ice-100 bg-white px-3 py-2">
       <div className="flex min-h-touch items-center gap-2">
@@ -27,7 +28,7 @@ function CurrentStopBar({ stop }: { stop: Stop | null }) {
         {stop ? (
           <p className="min-w-0 truncate text-base font-bold text-slate-900">
             <span className="mr-2 font-semibold text-ice-700">{stop.time || t('timeUnset')}</span>
-            {stop.title}
+            {displayStopTitle(locale, stop.title)}
           </p>
         ) : (
           <p className="truncate text-base text-slate-500">{t('noStopsToday')}</p>
