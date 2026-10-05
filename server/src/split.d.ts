@@ -100,6 +100,15 @@ export interface RecordedTransfer {
   amountMinor: number;
 }
 
+/** Extra or opposite recorded money. It is not a new amount still owed. */
+export interface PayNotice {
+  kind: 'overpay' | 'reversed';
+  fromId: string;
+  toId: string;
+  amount: number;
+  amountMinor: number;
+}
+
 export interface CurrencyBook {
   currency: Currency;
   spentMinor: number;
@@ -115,6 +124,12 @@ export interface CurrencyBook {
   /** Null unless this currency has both expenses and recorded transfers. */
   remaining: Transfer[] | null;
   remainingSettled: boolean;
+  /**
+   * Overpay and reversed recorded payments for this currency.
+   * Empty when nothing is recorded, or when recorded payments only reduce same-direction suggestions.
+   * Empty for recorded-only books: those rows stay on `recorded` and are not treated as debts.
+   */
+  notices: PayNotice[];
   recorded: RecordedTransfer[];
 }
 

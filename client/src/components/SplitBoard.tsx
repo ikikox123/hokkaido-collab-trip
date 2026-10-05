@@ -294,6 +294,7 @@ export function SplitBoard({
         {(['JPY', 'TWD'] as Currency[]).map((currency) => {
           const book = books[currency];
           const mine = selfId && book.nets ? book.nets.find((net) => net.memberId === selfId) : undefined;
+          const still = book.remaining ?? book.suggested;
           return (
             <section
               key={currency}
@@ -308,62 +309,91 @@ export function SplitBoard({
                 </p>
               </div>
 
-              <h4 className="mt-3 text-sm font-bold text-slate-500">{t('expenseSettlement')}</h4>
-              {!book.hasExpenses && <p className="mt-1 text-sm text-slate-600">{t('noSpendCurrency')}</p>}
-              {mine && (
-                <p className="mt-2 rounded-xl bg-snow-100 px-3 py-2 text-base font-bold text-slate-900">
-                  {t('youNet', { phrase: netPhrase(mine.netMinor, currency, t) })}
-                </p>
-              )}
-              {book.suggested && (
+              {book.recordedOnly ? (
+                <p className="mt-2 text-sm font-semibold text-slate-700">{t('recordedNotDebt')}</p>
+              ) : (
                 <>
-                  <h4 className="mt-3 text-sm font-bold text-slate-500">{t('suggestedTransfers')}</h4>
-                  {book.suggested.length === 0 ? (
-                    <p className="mt-1 text-sm text-slate-600">{t('alreadyBalanced')}</p>
-                  ) : (
-                    <TransferList transfers={book.suggested} currency={currency} nameOf={nameOf} />
+                  <h4 className="mt-3 text-sm font-bold text-slate-500">{t('expenseSettlement')}</h4>
+                  {!book.hasExpenses && <p className="mt-1 text-sm text-slate-600">{t('noSpendCurrency')}</p>}
+                  {still && (
+                    <>
+                      <h4 className="mt-3 text-sm font-bold text-slate-500">
+                        {book.remaining ? t('stillNeedTransfer') : t('suggestedTransfers')}
+                      </h4>
+                      {book.remaining ? (
+                        book.remainingSettled ? (
+                          <p className="mt-1 rounded-xl bg-snow-100 px-3 py-2 text-base font-bold text-slate-900">
+                            {t('settled')}
+                          </p>
+                        ) : (
+                          <TransferList transfers={book.remaining} currency={currency} nameOf={nameOf} />
+                        )
+                      ) : still.length === 0 ? (
+                        <p className="mt-1 text-sm text-slate-600">{t('alreadyBalanced')}</p>
+                      ) : (
+                        <TransferList transfers={still} currency={currency} nameOf={nameOf} />
+                      )}
+                    </>
                   )}
-                </>
-              )}
-              {book.nets && (
-                <>
-                  <h4 className="mt-3 text-sm font-bold text-slate-500">{t('netEach')}</h4>
-                  <ul>
-                    {book.nets.map((net) => (
-                      <li
-                        key={net.memberId}
-                        className="flex min-h-touch items-center justify-between gap-3 border-t border-slate-100 text-base"
-                      >
-                        <span className="min-w-0 truncate font-semibold">
-                          {nameOf(net.memberId)}
-                          {net.memberId === selfId ? t('youSuffix') : ''}
-                        </span>
-                        <span
-                          className={`shrink-0 font-bold ${
-                            net.netMinor > 0 ? 'text-ice-700' : net.netMinor < 0 ? 'text-sakura-500' : 'text-slate-400'
-                          }`}
-                        >
-                          {netPhrase(net.netMinor, currency, t)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-
-              {book.remaining && (
-                <>
-                  <h4 className="mt-3 text-sm font-bold text-slate-500">{t('stillNeedTransfer')}</h4>
-                  {book.remainingSettled ? (
-                    <p className="mt-1 text-sm text-slate-600">{t('settled')}</p>
-                  ) : (
-                    <TransferList transfers={book.remaining} currency={currency} nameOf={nameOf} />
+                  {book.notices.length > 0 && (
+                    <>
+                      <h4 className="mt-3 text-sm font-bold text-slate-500">{t('overpayOrReversed')}</h4>
+                      <ul className="mt-1 space-y-2">
+                        {book.notices.map((notice) => (
+                          <li
+                            key={`${notice.kind}-${notice.fromId}-${notice.toId}`}
+                            className="rounded-xl bg-snow-50 px-3 py-2 text-base font-semibold text-slate-800"
+                          >
+                            {notice.kind === 'overpay'
+                              ? t('overpaid', {
+                                  from: nameOf(notice.fromId),
+                                  to: nameOf(notice.toId),
+                                  amount: formatMinor(notice.amountMinor, currency),
+                                })
+                              : t('reversedPay', {
+                                  from: nameOf(notice.fromId),
+                                  to: nameOf(notice.toId),
+                                  amount: formatMinor(notice.amountMinor, currency),
+                                })}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {mine && (
+                    <p className="mt-2 rounded-xl bg-snow-100 px-3 py-2 text-base font-bold text-slate-900">
+                      {t('youNet', { phrase: netPhrase(mine.netMinor, currency, t) })}
+                    </p>
+                  )}
+                  {book.nets && (
+                    <>
+                      <h4 className="mt-3 text-sm font-bold text-slate-500">{t('netEach')}</h4>
+                      <ul>
+                        {book.nets.map((net) => (
+                          <li
+                            key={net.memberId}
+                            className="flex min-h-touch items-center justify-between gap-3 border-t border-slate-100 text-base"
+                          >
+                            <span className="min-w-0 truncate font-semibold">
+                              {nameOf(net.memberId)}
+                              {net.memberId === selfId ? t('youSuffix') : ''}
+                            </span>
+                            <span
+                              className={`shrink-0 font-bold ${
+                                net.netMinor > 0 ? 'text-ice-700' : net.netMinor < 0 ? 'text-sakura-500' : 'text-slate-400'
+                              }`}
+                            >
+                              {netPhrase(net.netMinor, currency, t)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
                   )}
                 </>
               )}
 
               <h4 className="mt-3 text-sm font-bold text-slate-500">{t('recordedTransfers')}</h4>
-              {book.recordedOnly && <p className="mt-1 text-sm text-slate-600">{t('recordedNotDebt')}</p>}
               {book.recorded.length === 0 ? (
                 <p className="mt-1 text-sm text-slate-600">{t('noRecordedCurrency')}</p>
               ) : (

@@ -320,10 +320,15 @@ export function settlementOf(state) {
 
 /**
  * One book per currency.
- * Expense nets and suggested transfers come only from expenses.
- * Recorded rows sum payer → payee in that currency.
- * When both exist, remaining transfers are the expense balances after those payments.
+ * Expense nets come only from expenses. Recorded transfers never rewrite them.
+ * Suggested transfers are those expense nets, and only while nothing is recorded yet.
+ * After a payment is recorded, remaining is what the same payer → payee suggestion still needs.
+ * A recorded amount only reduces that same direction. Anything past it is an overpay notice.
+ * A recorded direction with nothing left to reduce is a reversed notice.
+ * Notices are not folded back into remaining, so an overpay or a reversed payment
+ * cannot silently grow what is still owed or flip a new debt the other way.
  * Recorded payments alone do not become debts, and they do not count as settled.
+ * Exchange rates are not applied to nets, remaining, notices, or recorded amounts.
  */
 export function currencyBooks(state) {
   const base = ensureBill(state);
@@ -339,13 +344,11 @@ export function currencyBooks(state) {
       .reduce((sum, expense) => sum + expenseAmountMinor(expense), 0);
     let remaining = null;
     let remainingSettled = false;
+    let notices = [];
     if (hasExpenses && hasRecorded) {
-      const minor = new Map(settled.nets.map((net) => [net.memberId, net.netMinor]));
-      for (const row of recorded) {
-        minor.set(row.payerId, (minor.get(row.payerId) || 0) + row.amountMinor);
-        minor.set(row.payeeId, (minor.get(row.payeeId) || 0) - row.amountMinor);
-      }
-      remaining = transfersFromMinorMap(minor, currency);
+      const progress = progressAgainstSuggestions(settled.transfers, recorded, currency);
+      remaining = progress.remaining;
+      notices = progress.notices;
       remainingSettled = remaining.length === 0;
     }
     books[currency] = {
@@ -359,10 +362,63 @@ export function currencyBooks(state) {
       expenseBalanced: hasExpenses && !hasRecorded && settled.transfers.length === 0,
       remaining,
       remainingSettled,
+      notices,
       recorded,
     };
   }
   return books;
+}
+
+/**
+ * Match recorded payments to open suggestions in the same direction only.
+ * Extra in that direction is overpay. Every other direction is reversed.
+ */
+function progressAgainstSuggestions(transfers, recorded, currency) {
+  const open = new Map();
+  const order = [];
+  for (const transfer of transfers) {
+    const key = `${transfer.fromId}\0${transfer.toId}`;
+    if (!open.has(key)) {
+      open.set(key, { fromId: transfer.fromId, toId: transfer.toId, amountMinor: 0 });
+      order.push(key);
+    }
+    open.get(key).amountMinor += transfer.amountMinor;
+  }
+  const notices = [];
+  for (const row of recorded) {
+    const key = `${row.payerId}\0${row.payeeId}`;
+    const slot = open.get(key);
+    if (slot && slot.amountMinor > 0) {
+      const used = Math.min(slot.amountMinor, row.amountMinor);
+      slot.amountMinor -= used;
+      const extra = row.amountMinor - used;
+      if (extra > 0) notices.push(payNotice('overpay', row.payerId, row.payeeId, extra, currency));
+    } else {
+      notices.push(payNotice('reversed', row.payerId, row.payeeId, row.amountMinor, currency));
+    }
+  }
+  const remaining = [];
+  for (const key of order) {
+    const slot = open.get(key);
+    if (!slot || slot.amountMinor <= 0) continue;
+    remaining.push({
+      fromId: slot.fromId,
+      toId: slot.toId,
+      amountMinor: slot.amountMinor,
+      amount: fromMinor(slot.amountMinor, currency),
+    });
+  }
+  return { remaining, notices };
+}
+
+function payNotice(kind, fromId, toId, amountMinor, currency) {
+  return {
+    kind,
+    fromId,
+    toId,
+    amountMinor,
+    amount: fromMinor(amountMinor, currency),
+  };
 }
 
 function sumRecordedTransfers(settlements, currency) {
@@ -383,17 +439,6 @@ function sumRecordedTransfers(settlements, currency) {
     const row = totals.get(key);
     return { ...row, amount: fromMinor(row.amountMinor, currency) };
   });
-}
-
-function transfersFromMinorMap(minor, currency) {
-  return minTransfers(
-    [...minor.entries()].filter(([, amount]) => amount !== 0).map(([id, amount]) => ({ id, amount })),
-  ).map((transfer) => ({
-    fromId: transfer.fromId,
-    toId: transfer.toId,
-    amountMinor: transfer.amount,
-    amount: fromMinor(transfer.amount, currency),
-  }));
 }
 
 const RATE_SCALE = 100_000_000n;
