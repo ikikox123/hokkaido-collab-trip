@@ -18,6 +18,7 @@ import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { emitAck } from './lib/bill';
 import { SAPPORO_BASE } from './lib/dayView';
 import { usesGoogleMaps } from './lib/mapProvider';
+import { openShareExport } from './lib/shareExport';
 import { shareLocation } from './lib/sharePath';
 import { isSplitPath, leaveSplit, openSplit } from './lib/splitLink';
 import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './types/trip';
@@ -259,6 +260,7 @@ export default function App() {
           >
             {t('shareOpen')}
           </a>
+          <p className="text-sm leading-relaxed text-slate-600">{t('shareCanExport')}</p>
           <LoginModal embedded open onClose={() => {}} onLogin={handleLogin} />
         </main>
         {toastNode}
@@ -283,6 +285,7 @@ export default function App() {
           >
             {t('shareOpen')}
           </a>
+          <p className="text-sm leading-relaxed text-slate-600">{t('shareCanExport')}</p>
           <button
             type="button"
             className="flex min-h-touch items-center justify-center rounded-xl bg-ice-600 px-3 text-base font-bold text-white"
@@ -315,7 +318,7 @@ export default function App() {
     <div className="h-[100dvh] flex flex-col bg-snow-50 overflow-hidden pt-[var(--safe-top)]">
       {/* Top bar — compact on mobile, expandable */}
       <header className="shrink-0 bg-ice-700 text-white shadow-md z-20">
-        <div className="flex items-center gap-1 px-2 min-h-touch py-2 sm:gap-2 sm:px-3">
+        <div className="flex items-center gap-1 px-1.5 min-h-touch py-2 sm:gap-2 sm:px-3">
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sm sm:text-base truncate leading-tight">
               {pageHeading(locale)}
@@ -328,7 +331,7 @@ export default function App() {
           <LanguageMenu />
           <button
             type="button"
-            className="min-h-touch min-w-touch rounded-lg bg-white/15 px-2 text-sm font-medium"
+            className="min-h-touch shrink-0 rounded-lg bg-white/15 px-1.5 text-sm font-medium sm:px-2"
             onClick={() => setHeaderOpen((v) => !v)}
             aria-expanded={headerOpen}
           >
@@ -337,7 +340,7 @@ export default function App() {
           {user ? (
             <button
               type="button"
-              className="min-h-touch min-w-0 max-w-[3.5rem] truncate rounded-lg bg-white/20 px-2 text-sm font-semibold sm:max-w-[9rem] sm:px-3"
+              className="min-h-touch min-w-0 max-w-[2.6rem] truncate rounded-lg bg-white/20 px-1.5 text-sm font-semibold min-[360px]:max-w-[3.5rem] sm:max-w-[9rem] sm:px-3"
               title={user.displayName}
               onClick={handleLogout}
             >
@@ -397,11 +400,25 @@ export default function App() {
               <div>{t('inboundLine', { text: trip.flights.inbound })}</div>
             </div>
             <a
-              href="/share"
+              href={shareLocation({ kind: 'day', day: selectedDay }, locale)}
               className="flex min-h-touch items-center justify-center rounded-lg border border-white/30 px-3 font-semibold text-white/90"
             >
               {t('shareOpen')}
             </a>
+            <button
+              type="button"
+              className="flex min-h-touch w-full items-center justify-center rounded-lg border border-white/30 px-3 font-semibold text-white/90"
+              onClick={() => openShareExport('image', { kind: 'day', day: selectedDay }, locale)}
+            >
+              {t('shareExportImage')}
+            </button>
+            <button
+              type="button"
+              className="flex min-h-touch w-full items-center justify-center rounded-lg border border-white/30 px-3 font-semibold text-white/90"
+              onClick={() => openShareExport('pdf', { kind: 'day', day: selectedDay }, locale)}
+            >
+              {t('shareExportPdf')}
+            </button>
             {isTripCompanion && (
               <button
                 type="button"

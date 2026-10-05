@@ -7,6 +7,13 @@ const OPTIONS: { value: Locale; label: string }[] = [
   { value: 'en', label: 'English' },
 ];
 
+/** Short labels so the header still fits beside 「分享」 below the sm breakpoint. */
+export const COMPACT_LANGUAGE_OPTIONS: { value: Locale; label: string }[] = [
+  { value: 'zh-Hant', label: '中' },
+  { value: 'ja', label: '日' },
+  { value: 'en', label: 'EN' },
+];
+
 export function LanguageMenu({
   tone = 'onDark',
   onPick,
@@ -20,19 +27,32 @@ export function LanguageMenu({
     tone === 'light'
       ? 'border border-slate-200 bg-white text-ice-700'
       : 'border border-white/30 bg-white text-ice-700';
+  const onChange = (event: { target: { value: string } }) => {
+    const next = event.target.value;
+    if (next !== 'zh-Hant' && next !== 'ja' && next !== 'en') return;
+    if (onPick) onPick(next);
+    else setLocale(next);
+  };
   return (
     <label className="shrink-0">
       <span className="sr-only">{t('language')}</span>
       <select
-        className={`min-h-touch max-w-[9rem] rounded-lg px-2 text-sm font-bold ${face}`}
+        className={`min-h-touch rounded-lg px-1 text-sm font-bold sm:hidden ${face}`}
         value={locale}
         aria-label={t('language')}
-        onChange={(event) => {
-          const next = event.target.value;
-          if (next !== 'zh-Hant' && next !== 'ja' && next !== 'en') return;
-          if (onPick) onPick(next);
-          else setLocale(next);
-        }}
+        onChange={onChange}
+      >
+        {COMPACT_LANGUAGE_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <select
+        className={`hidden min-h-touch max-w-[9rem] rounded-lg px-2 text-sm font-bold sm:block ${face}`}
+        value={locale}
+        aria-label={t('language')}
+        onChange={onChange}
       >
         {OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

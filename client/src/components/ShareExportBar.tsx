@@ -1,4 +1,5 @@
 import { useI18n } from '../i18n/I18nProvider';
+import { shareExportControlState } from '../lib/shareExport';
 
 export function ShareExportBar({
   canExport,
@@ -18,6 +19,7 @@ export function ShareExportBar({
   onPdf: () => void;
 }) {
   const { t } = useI18n();
+  const controls = shareExportControlState(canExport, busy);
   const item =
     placement === 'bottom'
       ? 'min-h-touch min-w-0 flex-1 rounded-xl px-2 py-1 text-center text-sm font-bold leading-tight'
@@ -34,10 +36,10 @@ export function ShareExportBar({
       <button type="button" className={`${item} ${face}`} onClick={onCopy}>
         {t('copyLink')}
       </button>
-      <button type="button" className={`${item} ${face}`} disabled={!canExport || busy} onClick={onImage}>
+      <button type="button" className={`${item} ${face}`} disabled={controls.imageDisabled} onClick={onImage}>
         {t('shareExportImage')}
       </button>
-      <button type="button" className={`${item} ${face}`} disabled={!canExport || busy} onClick={onPdf}>
+      <button type="button" className={`${item} ${face}`} disabled={controls.pdfDisabled} onClick={onPdf}>
         {t('shareExportPdf')}
       </button>
     </div>
