@@ -6,6 +6,9 @@ import type { Leg, Stop, TravelMode } from '../types/trip';
 import { dayCamera, fitKeyFor, SAPPORO_BASE, type LodgingPoint } from '../lib/dayView';
 import { useI18n } from '../i18n/I18nProvider';
 import { travelLabel } from '../i18n/labels';
+import { displayStopTitle } from '../i18n/stopNames';
+import { stopMarkerHtml, stopMarkerKind, stopMarkerTitle } from '../lib/stopMarker';
+import { stopNumberById } from '../lib/stopNumbers';
 import { MODE_COLORS } from '../lib/travel';
 import { StopName } from './StopName';
 
@@ -13,27 +16,6 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
-
-const nextIcon = new L.DivIcon({
-  className: '',
-  html: `<div style="width:28px;height:28px;border-radius:50%;background:#ec4899;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
-
-const selectedIcon = new L.DivIcon({
-  className: '',
-  html: `<div style="width:28px;height:28px;border-radius:50%;background:#2563a8;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
-
-const normalIcon = new L.DivIcon({
-  className: '',
-  html: `<div style="width:20px;height:20px;border-radius:50%;background:#64748b;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
 });
 
 function mapHasSize(map: L.Map) {
@@ -245,8 +227,27 @@ export function LeafletMapView({
   onRename,
 }: Props) {
   const nextId = stops[0]?.id ?? null;
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const fitKey = fitKeyFor(stops);
+  const markerIcons = useMemo(() => {
+    const numbers = stopNumberById(stops);
+    const icons = new Map<string, { icon: L.DivIcon; number: number }>();
+    stops.forEach((stop, index) => {
+      const number = numbers.get(stop.id) ?? index + 1;
+      const kind = stopMarkerKind(stop.id, selectedId, nextId);
+      const { html, size } = stopMarkerHtml(kind, number);
+      icons.set(stop.id, {
+        number,
+        icon: new L.DivIcon({
+          className: '',
+          html,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        }),
+      });
+    });
+    return icons;
+  }, [stops, selectedId, nextId]);
   const seed = useRef<{ center: [number, number]; zoom: number } | null>(null);
   if (!seed.current) {
     const camera = dayCamera(stops, lodging);
@@ -316,15 +317,19 @@ export function LeafletMapView({
           : positions.length >= 2 && (
               <Polyline positions={positions} pathOptions={{ color: '#2563a8', weight: 4, opacity: 0.75 }} />
             )}
-        {stops.map((s) => {
+        {stops.map((s, index) => {
           const isNext = s.id === nextId;
-          const isSel = s.id === selectedId;
-          const icon = isSel ? selectedIcon : isNext ? nextIcon : normalIcon;
+          const marker = markerIcons.get(s.id);
+          const number = marker?.number ?? index + 1;
+          const icon = marker?.icon;
+          if (!icon) return null;
           return (
             <Marker
-              key={s.id}
+              key={`${s.id}:${number}:${locale}`}
               position={[s.lat, s.lng]}
               icon={icon}
+              title={stopMarkerTitle(number, displayStopTitle(locale, s.title))}
+              zIndexOffset={s.id === selectedId ? 300 : isNext ? 200 : 0}
               eventHandlers={{ click: () => onSelect(s.id) }}
             >
               <Popup minWidth={220}>

@@ -8,7 +8,7 @@
     "build": "npm run build --prefix client",
     "start": "node server/src/index.js",
     "start:prod": "npm run build && NODE_ENV=production node server/src/index.js",
-    "test": "npm test --prefix server && node --experimental-strip-types --test client/src/lib/placeLabel.test.ts client/src/lib/alertSummary.test.ts client/src/lib/splitLink.test.ts client/src/i18n/locale.test.ts client/src/i18n/screen.test.ts client/src/i18n/stopNames.test.ts"
+    "test": "npm test --prefix server && node --experimental-strip-types --test client/src/lib/placeLabel.test.ts client/src/lib/alertSummary.test.ts client/src/lib/splitLink.test.ts client/src/lib/stopNumbers.test.ts client/src/lib/stopMarker.test.ts client/src/i18n/locale.test.ts client/src/i18n/screen.test.ts client/src/i18n/stopNames.test.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
