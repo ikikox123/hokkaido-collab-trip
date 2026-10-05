@@ -3,8 +3,10 @@ import type { Leg, Stop, TravelMode } from '../types/trip';
 import { dayCamera, fitKeyFor, SAPPORO_BASE, type LodgingPoint } from '../lib/dayView';
 import { useI18n } from '../i18n/I18nProvider';
 import { displayStopTitle } from '../i18n/stopNames';
+import { stopMarkerIconUrl, stopMarkerKind, stopMarkerTitle } from '../lib/stopMarker';
+import { stopNumberById } from '../lib/stopNumbers';
 import { MODE_COLORS } from '../lib/travel';
-import { loadGoogleMaps, markerIconUrl, type GoogleMap, type GoogleMapsNS } from '../lib/googleLoader';
+import { loadGoogleMaps, type GoogleMap, type GoogleMapsNS } from '../lib/googleLoader';
 import { MapChrome } from './MapChrome';
 
 type Props = {
@@ -319,6 +321,8 @@ export function GoogleMapView({
     overlaysRef.current = [];
     const info = new g.maps.InfoWindow();
     const nextId = stops[0]?.id ?? null;
+    const numbers = stopNumberById(stops);
+    const labelFor = (stored: string) => displayStopTitle(locale, stored);
 
     const lines =
       legLines.length > 0
@@ -362,18 +366,21 @@ export function GoogleMapView({
       overlaysRef.current.push(line);
     }
 
-    stops.forEach((stop) => {
+    stops.forEach((stop, index) => {
       const isNext = stop.id === nextId;
       const isSel = stop.id === selectedId;
-      const color = isSel ? '#2563a8' : isNext ? '#ec4899' : '#64748b';
-      const size = isSel || isNext ? 28 : 20;
+      const number = numbers.get(stop.id) ?? index + 1;
+      const kind = stopMarkerKind(stop.id, selectedId, nextId);
+      const { url, size } = stopMarkerIconUrl(kind, number);
       const marker = new g.maps.Marker({
         map,
         position: { lat: stop.lat, lng: stop.lng },
-        title: displayStopTitle(locale, stop.title),
+        title: stopMarkerTitle(number, labelFor(stop.title)),
         zIndex: isSel ? 3 : isNext ? 2 : 1,
+        // Keep each icon as its own image so the numeral painted into the SVG stays visible.
+        optimized: false,
         icon: {
-          url: markerIconUrl(color, size),
+          url,
           scaledSize: new g.maps.Size(size, size),
           anchor: new g.maps.Point(size / 2, size / 2),
         },
@@ -381,16 +388,10 @@ export function GoogleMapView({
       marker.addListener('click', () => {
         onSelectRef.current(stop.id);
         info.setContent(
-          popupNode(
-            stop,
-            isNext,
-            copyRef.current,
-            (stored) => displayStopTitle(locale, stored),
-            {
-              canEdit: canEditRef.current,
-              onRename: (title) => onRenameRef.current?.(stop.id, title),
-            },
-          ),
+          popupNode(stop, isNext, copyRef.current, labelFor, {
+            canEdit: canEditRef.current,
+            onRename: (title) => onRenameRef.current?.(stop.id, title),
+          }),
         );
         info.open({ map, anchor: marker });
       });
