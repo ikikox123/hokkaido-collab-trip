@@ -20,6 +20,7 @@ import {
 import { lookupPlace, placeFailureMessage, redactSecrets, serverMapsKey } from './googleMaps.js';
 import { correctSeedState } from './seedGeocode.js';
 import { applyStopPatch } from './stopEdit.js';
+import { applyLodgingPatch } from './lodgingEdit.js';
 import { getWeather } from './weather.js';
 import { getJmaWarnings } from './jmaWarnings.js';
 import { getJrStatus } from './jrStatus.js';
@@ -471,6 +472,23 @@ io.on('connection', (socket) => {
     if (!next.changed) return;
     tripState = next.state;
     publish(joinedRoom || ROOM_CODE);
+  });
+
+  socket.on('trip:setLodging', ({ lodging, token }, ack) => {
+    if (!requireTripMember(socket, token, ack)) return;
+    const result = applyLodgingPatch(tripState, lodging);
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    if (result.unchanged) {
+      ackResult(ack, { ok: true, unchanged: true });
+      return;
+    }
+    tripState = result.state;
+    publish(joinedRoom || ROOM_CODE, { enrich: false });
+    ackResult(ack, { ok: true });
   });
 
   socket.on('trip:reset', ({ token }) => {

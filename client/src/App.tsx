@@ -5,6 +5,7 @@ import { LoginModal } from './components/LoginModal';
 import { TripAlerts } from './components/TripAlerts';
 import { TripList } from './components/TripList';
 import { MapView } from './components/MapView';
+import { LodgingDialog, type LodgingDraft } from './components/LodgingDialog';
 import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
 import { SplitBoard } from './components/SplitBoard';
 import { LanguageMenu } from './i18n/LanguageMenu';
@@ -13,6 +14,8 @@ import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
+import { emitAck } from './lib/bill';
+import { SAPPORO_BASE } from './lib/dayView';
 import { usesGoogleMaps } from './lib/mapProvider';
 import { isSplitPath, leaveSplit, openSplit } from './lib/splitLink';
 import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './types/trip';
@@ -62,6 +65,7 @@ export default function App() {
   const [placeDialog, setPlaceDialog] = useState<
     { mode: 'add' } | { mode: 'edit'; stopId: string } | null
   >(null);
+  const [lodgingOpen, setLodgingOpen] = useState(false);
   const googlePlaces = usesGoogleMaps();
   const { locale, t } = useI18n();
   const tRef = useRef(t);
@@ -178,6 +182,7 @@ export default function App() {
   }, [dayStops, selectedId]);
 
   const canEdit = Boolean(user && token);
+  const isTripCompanion = Boolean(user?.id && trip?.members?.some((member) => member.id === user.id));
 
   function handleLogin(u: User, nextToken: string) {
     setUser(u);
@@ -290,7 +295,20 @@ export default function App() {
               </span>
             </div>
             <div className="space-y-0.5 text-sm text-white/80">
-              <div>{t('lodgingLine', { name: trip.lodging.name })}</div>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1 truncate">
+                  {t('lodgingLine', { name: trip.lodging?.name?.trim() || t('lodgingUnset') })}
+                </div>
+                {canEdit && isTripCompanion && (
+                  <button
+                    type="button"
+                    className="min-h-touch shrink-0 rounded-lg bg-white/15 px-3 text-sm font-semibold text-white"
+                    onClick={() => setLodgingOpen(true)}
+                  >
+                    {t('editLodging')}
+                  </button>
+                )}
+              </div>
               <div>{t('outboundLine', { text: trip.flights.outbound })}</div>
               <div>{t('inboundLine', { text: trip.flights.inbound })}</div>
             </div>
@@ -422,8 +440,8 @@ export default function App() {
                   date: dayMeta?.date,
                   title,
                   time: '12:00',
-                  lat: dayStops[0]?.lat ?? trip.lodging.lat,
-                  lng: dayStops[0]?.lng ?? trip.lodging.lng,
+                  lat: dayStops[0]?.lat ?? trip.lodging?.lat ?? SAPPORO_BASE.lat,
+                  lng: dayStops[0]?.lng ?? trip.lodging?.lng ?? SAPPORO_BASE.lng,
                   notes: '',
                 },
               });
@@ -499,6 +517,26 @@ export default function App() {
             setMobileTab('split');
             setComposeToken((current) => current + 1);
           }
+        }}
+      />
+
+      <LodgingDialog
+        open={lodgingOpen}
+        lodging={trip.lodging}
+        stops={trip.stops}
+        token={token}
+        onClose={() => setLodgingOpen(false)}
+        onSave={async (lodging: LodgingDraft) => {
+          if (!socket || !token) {
+            showToast(t('loginToEdit'));
+            setLoginOpen(true);
+            return { ok: false, error: '請先登入才能編輯' };
+          }
+          const result = await emitAck(socket, 'trip:setLodging', { lodging, token });
+          if (!result.ok) return result;
+          showToast(t('lodgingSaved'));
+          setLodgingOpen(false);
+          return result;
         }}
       />
 

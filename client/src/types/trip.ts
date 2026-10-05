@@ -46,10 +46,17 @@ export type Leg = {
   approximate?: boolean;
 };
 
+export type Lodging = {
+  name: string;
+  address?: string;
+  lat: number;
+  lng: number;
+};
+
 export type TripState = {
   roomCode: string;
   tripName: string;
-  lodging: { name: string; address: string; lat: number; lng: number };
+  lodging?: Lodging;
   flights: { outbound: string; inbound: string };
   days: DayInfo[];
   stops: Stop[];
