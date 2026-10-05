@@ -112,6 +112,15 @@ html:has(.share-root) #root {
   overflow-wrap: anywhere;
 }
 
+/* Image export reuses the print sheet: show the title, drop chrome. No remote fonts are fetched. */
+html.share-capturing .share-print-title {
+  display: block !important;
+}
+
+html.share-capturing .print\:hidden {
+  display: none !important;
+}
+
 /* Named page so A4 margins apply only while printing the share sheet. */
 @page share-sheet {
   size: A4 portrait;
@@ -134,6 +143,11 @@ html:has(.share-root) #root {
 
   html:has(.share-root) .share-root {
     background: #fff !important;
+  }
+
+  html:has(.share-root) [data-share-export-ignore],
+  html:has(.share-root) .share-export-ignore {
+    display: none !important;
   }
 
   html:has(.share-root) .share-sheet {

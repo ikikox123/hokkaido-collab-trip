@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LanguageMenu } from '../i18n/LanguageMenu';
 import { useI18n } from '../i18n/I18nProvider';
 import { pageHeading } from '../i18n/screen.ts';
 import type { Locale } from '../i18n/messages.ts';
-import { ShareLinkButton } from './ShareLinkButton';
+import { ShareExportBar } from './ShareExportBar';
+import { ShareNotice, useTimedNotice } from './ShareNotice';
+import { shareOrCopy, sharePageUrl } from '../lib/shareLink';
+import {
+  captureSharePng,
+  printSharePdf,
+  shareExportFilename,
+  takeShareExport,
+} from '../lib/shareExport';
 import { parseShareLang, parseShareScope, shareLocation, type ShareScope } from '../lib/sharePath';
 import {
   formatLodgingPoint,
@@ -27,6 +35,17 @@ export function SharePage() {
   const [scope, setScope] = useState<ShareScope>(() => parseShareScope(window.location.search));
   const [trip, setTrip] = useState<ShareTrip | null>(null);
   const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const exportRootRef = useRef<HTMLDivElement>(null);
+  const scopeRef = useRef(scope);
+  const localeRef = useRef(locale);
+  const { notice, flash } = useTimedNotice();
+  const flashRef = useRef(flash);
+  const tRef = useRef(t);
+  scopeRef.current = scope;
+  localeRef.current = locale;
+  flashRef.current = flash;
+  tRef.current = t;
 
   useEffect(() => {
     const sync = () => {
@@ -71,6 +90,46 @@ export function SharePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (failed) takeShareExport();
+  }, [failed]);
+
+  useEffect(() => {
+    if (!trip) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      const kind = takeShareExport();
+      if (!kind) return;
+      if (kind === 'pdf') {
+        printSharePdf();
+        return;
+      }
+      const node = exportRootRef.current;
+      const translate = tRef.current;
+      if (!node) {
+        flashRef.current(translate('shareExportFailed'));
+        return;
+      }
+      setBusy(true);
+      flashRef.current(translate('shareExporting'));
+      void captureSharePng(node, shareExportFilename(scopeRef.current, localeRef.current))
+        .then(() => {
+          if (!cancelled) flashRef.current(tRef.current('shareImageSaved'));
+        })
+        .catch(() => {
+          if (!cancelled) flashRef.current(tRef.current('shareExportFailed'));
+        })
+        .finally(() => {
+          setBusy(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [trip]);
+
   function pickLang(next: Locale) {
     setDisplayLocale(next);
     const href = shareLocation(scope, next);
@@ -88,23 +147,66 @@ export function SharePage() {
     window.scrollTo({ top: 0 });
   }
 
+  async function onCopy() {
+    const url = sharePageUrl(window.location.origin, scope, locale);
+    try {
+      const mode = await shareOrCopy(url);
+      flash(mode === 'copied' ? t('shareCopied') : t('shareOpened'));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
+      flash(t('shareCopyFailed'));
+    }
+  }
+
+  async function onImage() {
+    const node = exportRootRef.current;
+    if (!node || busy) return;
+    setBusy(true);
+    flash(t('shareExporting'));
+    try {
+      await captureSharePng(node, shareExportFilename(scope, locale));
+      flash(t('shareImageSaved'));
+    } catch {
+      flash(t('shareExportFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onPdf() {
+    if (!trip || busy) return;
+    printSharePdf();
+  }
+
   const lodging = shareLodgingDisplay(trip?.lodging);
   const subtitle = shareTripSubtitle(trip?.tripName);
   const viewed = trip ? shareDays(trip, scope) : { days: [], unknownDay: false };
+  const bar = (
+    <ShareExportBar
+      canExport={Boolean(trip)}
+      busy={busy}
+      placement="top"
+      onCopy={() => void onCopy()}
+      onImage={() => void onImage()}
+      onPdf={onPdf}
+    />
+  );
 
   return (
     <div className="share-root min-h-full bg-snow-50 text-slate-800">
-      <div className="share-sheet mx-auto min-h-full max-w-2xl px-4 pb-[max(2.5rem,var(--safe-bottom))]">
-        <div className="share-toolbar sticky top-0 z-20 -mx-4 mb-4 border-b border-slate-200 bg-snow-50/95 px-4 pb-2 pt-[max(0.75rem,var(--safe-top))] shadow-sm backdrop-blur print:hidden">
+      <div className="share-sheet mx-auto min-h-full max-w-2xl px-4 pb-[calc(5.75rem+var(--safe-bottom))] md:pb-[max(2.5rem,var(--safe-bottom))]">
+        <div
+          className="share-toolbar share-export-ignore sticky top-0 z-20 -mx-4 mb-4 border-b border-slate-200 bg-snow-50/95 px-4 pb-2 pt-[max(0.75rem,var(--safe-top))] shadow-sm backdrop-blur print:hidden"
+          data-share-export-ignore="true"
+        >
+          <div className="mb-2 hidden md:block">{bar}</div>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-bold tracking-wide text-ice-700">{t('shareReadOnly')}</p>
               <h1 className="text-lg font-bold leading-snug text-slate-900">{pageHeading(locale)}</h1>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <ShareLinkButton scope={scope} lang={locale} tone="light" />
-              <LanguageMenu tone="light" onPick={pickLang} />
-            </div>
+            <LanguageMenu tone="light" onPick={pickLang} />
           </div>
           {trip && (
             <nav aria-label={t('dayNav')} className="mt-2 flex gap-1 overflow-x-auto no-scrollbar pb-1">
@@ -146,7 +248,7 @@ export function SharePage() {
         )}
 
         {trip && (
-          <>
+          <div ref={exportRootRef} data-share-export-root="true" className="share-export-root bg-snow-50">
             <header className="share-mast">
               <p className="share-print-title hidden text-[1.35rem] font-bold leading-tight text-slate-900 print:block">
                 {pageHeading(locale)}
@@ -231,9 +333,25 @@ export function SharePage() {
                 </section>
               );
             })}
-          </>
+          </div>
         )}
       </div>
+
+      <div
+        className="share-actionbar share-export-ignore fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur print:hidden md:hidden"
+        style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
+        data-share-export-ignore="true"
+      >
+        <ShareExportBar
+          canExport={Boolean(trip)}
+          busy={busy}
+          placement="bottom"
+          onCopy={() => void onCopy()}
+          onImage={() => void onImage()}
+          onPdf={onPdf}
+        />
+      </div>
+      <ShareNotice message={notice} lift />
     </div>
   );
 }
