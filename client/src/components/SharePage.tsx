@@ -33,6 +33,14 @@ export function SharePage() {
   }, []);
 
   useEffect(() => {
+    const active = document.querySelector<HTMLButtonElement>('.share-toolbar nav button[aria-pressed="true"]');
+    const nav = active?.parentElement;
+    if (!active || !nav) return;
+    const target = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+    nav.scrollTo({ left: Math.max(0, target) });
+  }, [scope, trip, locale]);
+
+  useEffect(() => {
     let cancelled = false;
     const ctrl = new AbortController();
     setFailed(false);
