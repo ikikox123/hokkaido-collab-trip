@@ -41,6 +41,7 @@ import { BUCKET_ENV_VARS, startPeriodicBackup } from './backup.js';
 import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
 import { createUserStore } from './users.js';
 import { collaborativeTripReadable, NOT_COMPANION_ERROR, tripMemberAddAllowed } from './memberAccess.js';
+import { createRegisterRateLimiter } from './registerRateLimit.js';
 import { toPublicShare } from './shareTrip.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -87,11 +88,18 @@ function signUser(user) {
 }
 
 function saveState(state) {
+  const tmp = `${STATE_FILE}.${process.pid}.tmp`;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+    fs.renameSync(tmp, STATE_FILE);
   } catch (e) {
     console.warn('saveState failed', e.message);
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      /* the previous state.json is left in place */
+    }
   }
 }
 
@@ -129,17 +137,78 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+const registerRateLimiter = createRegisterRateLimiter();
+const REGISTER_RATE_ERROR = '註冊太多次，請一小時後再試';
+
+function clientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  let ip = '';
+  if (typeof forwarded === 'string') {
+    const parts = forwarded.split(',').map((part) => part.trim()).filter(Boolean);
+    if (parts.length) ip = parts[parts.length - 1];
+  }
+  if (!ip) {
+    const address = req.socket && req.socket.remoteAddress;
+    ip = typeof address === 'string' ? address : '';
+  }
+  if (ip.startsWith('::ffff:')) ip = ip.slice('::ffff:'.length);
+  return ip || 'unknown';
+}
+
+/**
+ * Add a registered account to HOKKAIDO2027.
+ * Uses addMember so the stored record is `{ id }` only, the same shape as a
+ * self-add. The original stops, ledger, and existing member entries are kept.
+ * Already-present accounts are left untouched.
+ */
+function autoJoinCompanion(user) {
+  if (!user || typeof user.id !== 'string' || !user.id.trim()) return { ok: false, added: false };
+  if (isTripMember(tripState, user.id)) return { ok: true, added: false };
+  const roster = [{ id: user.id, username: user.username, displayName: user.displayName }];
+  const result = addMember(tripState, { username: user.username }, roster);
+  if (!result.ok) {
+    console.warn(`[members] auto-join skipped: ${result.error}`);
+    return { ok: false, added: false, error: result.error };
+  }
+  const created = result.state.members.find((member) => member.id === user.id);
+  if (!created) return { ok: false, added: false };
+  const members = Array.isArray(tripState.members) ? tripState.members : [];
+  tripState = {
+    ...tripState,
+    members: [...members, { id: created.id }],
+    updatedAt: new Date().toISOString(),
+  };
+  publishAutoJoin();
+  return { ok: true, added: true };
+}
+
+function publishAutoJoin() {
+  saveState(tripState);
+  const codes = new Set([ROOM_CODE]);
+  for (const code of roomPresence.keys()) codes.add(code);
+  const payload = tripForClient();
+  for (const code of codes) {
+    evictBlockedCompanions(code);
+    io.to(code).emit('trip:update', payload);
+  }
+}
+
 app.post('/api/login', async (req, res) => {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const result = await userStore.authenticate(body.username, body.password);
   if (!result.ok) return res.status(result.status).json({ error: result.error });
+  if (!userStore.isDemoAccount(result.user.id)) autoJoinCompanion(result.user);
   res.json(signUser(result.user));
 });
 
 app.post('/api/register', async (req, res) => {
+  if (!registerRateLimiter.attempt(clientIp(req))) {
+    return res.status(429).json({ error: REGISTER_RATE_ERROR });
+  }
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const result = await userStore.register({ username: body.username, password: body.password });
   if (!result.ok) return res.status(result.status).json({ error: result.error });
+  autoJoinCompanion(result.user);
   res.status(201).json(signUser(result.user));
 });
 

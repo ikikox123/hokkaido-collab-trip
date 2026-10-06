@@ -15,6 +15,7 @@ export const KNOWN_ERRORS: Record<string, MessageKey> = {
   這個帳號已經有人使用: 'usernameTaken',
   這個帳號名稱不能使用: 'usernameReserved',
   '註冊沒有成功，請稍後再試': 'registerNotSaved',
+  '註冊太多次，請一小時後再試': 'registerRateLimited',
   帳號含有無法使用的字元: 'usernameBadChars',
   帳號不能包含空白: 'usernameNoSpace',
   '帳號請勿超過 32 個字': 'usernameTooLong',

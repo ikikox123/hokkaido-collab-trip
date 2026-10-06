@@ -172,15 +172,14 @@ test('public share, private trip, sealed sockets, and member adds', { timeout: 3
 
   const alice = await postJson(`${base}/api/login`, { username: 'alice', password: 'demo1234' });
   const bob = await postJson(`${base}/api/login`, { username: 'bob', password: 'demo1234' });
-  const cara = await postJson(`${base}/api/register`, { username: 'cara', password: 'secret123' });
   assert.equal(alice.status, 200);
   assert.equal(bob.status, 200);
-  assert.equal(cara.status, 201);
 
   const authed = await fetch(`${base}/api/trip`, { headers: { authorization: `Bearer ${alice.data.token}` } });
   assert.equal(authed.status, 200);
   const privateTrip = await authed.json();
   assert.ok(Array.isArray(privateTrip.members));
+  assert.equal(privateTrip.members.length, 0);
   assert.ok(Array.isArray(privateTrip.expenses));
 
   const guestEvents = [];
@@ -198,35 +197,70 @@ test('public share, private trip, sealed sockets, and member adds', { timeout: 3
 
   const aliceSock = io(base, { transports: ['websocket'], reconnection: false });
   const bobSock = io(base, { transports: ['websocket'], reconnection: false });
-  const caraSock = io(base, { transports: ['websocket'], reconnection: false });
-  sockets.push(aliceSock, bobSock, caraSock);
+  sockets.push(aliceSock, bobSock);
   const aliceTrip = waitEvent(aliceSock, 'trip:update');
   const bobTrip = waitEvent(bobSock, 'trip:update');
-  const caraTrip = waitEvent(caraSock, 'trip:update');
-  await Promise.all([onceConnected(aliceSock), onceConnected(bobSock), onceConnected(caraSock)]);
+  await Promise.all([onceConnected(aliceSock), onceConnected(bobSock)]);
   aliceSock.emit('room:join', { roomCode: 'HOKKAIDO2027', token: alice.data.token });
   bobSock.emit('room:join', { roomCode: 'HOKKAIDO2027', token: bob.data.token });
-  caraSock.emit('room:join', { roomCode: 'HOKKAIDO2027', token: cara.data.token });
   const visible = await aliceTrip;
   assert.ok(Array.isArray(visible.members));
   assert.ok(Array.isArray(visible.expenses));
   await bobTrip;
-  await caraTrip;
   assert.deepEqual(guestEvents, []);
 
-  const denied = waitEvent(caraSock, 'error:auth');
-  caraSock.emit('trip:updateStop', { id: 's1', patch: { title: '被改掉', secret: 'nope' }, token: cara.data.token });
+  const kicked = waitEvent(bobSock, 'companion:required');
+  const self = await emitAck(aliceSock, 'trip:addMember', { username: 'alice', token: alice.data.token });
+  assert.equal(self.ok, true);
+  const kick = await kicked;
+  assert.equal(kick.error, '你還不是這趟行程的旅伴');
+
+  const bobDenied = await fetch(`${base}/api/trip`, { headers: { authorization: `Bearer ${bob.data.token}` } });
+  assert.equal(bobDenied.status, 403);
+  const denied = waitEvent(bobSock, 'error:auth');
+  bobSock.emit('trip:updateStop', { id: 's1', patch: { title: '被改掉', secret: 'nope' }, token: bob.data.token });
   const deniedBody = await denied;
   assert.equal(deniedBody.error, '只有這趟行程的旅伴可以這樣做');
   const still = await (await fetch(`${base}/api/share`)).json();
   assert.equal(still.stops[0].title, '札幌時計台');
 
-  const outsider = await emitAck(bobSock, 'trip:addMember', { username: 'cara', token: bob.data.token });
+  const outsider = await emitAck(bobSock, 'trip:addMember', { username: 'alice', token: bob.data.token });
   assert.equal(outsider.ok, false);
   assert.equal(outsider.error, '只有這趟行程的旅伴可以這樣做');
 
-  const self = await emitAck(aliceSock, 'trip:addMember', { username: 'alice', token: alice.data.token });
-  assert.equal(self.ok, true);
+  const fxDenied = await emitAck(bobSock, 'fx:override', {
+    basis: 'twdPerJpy',
+    value: '0.22',
+    token: bob.data.token,
+  });
+  assert.equal(fxDenied.ok, false);
+  assert.equal(fxDenied.error, '只有這趟行程的旅伴可以這樣做');
+  const clearDenied = await emitAck(bobSock, 'fx:clearOverride', { token: bob.data.token });
+  assert.equal(clearDenied.ok, false);
+  const expenseDenied = await emitAck(bobSock, 'expense:upsert', {
+    expense: { note: 'outsider', amount: 100, currency: 'JPY' },
+    token: bob.data.token,
+  });
+  assert.equal(expenseDenied.ok, false);
+  assert.equal(expenseDenied.error, '只有這趟行程的旅伴可以這樣做');
+  const deleteDenied = await emitAck(bobSock, 'expense:delete', { id: 'e1', token: bob.data.token });
+  assert.equal(deleteDenied.ok, false);
+  const legDenied = await emitAck(bobSock, 'trip:setLegMode', {
+    fromStopId: 's1',
+    toStopId: 's2',
+    mode: 'walk',
+    token: bob.data.token,
+  });
+  assert.equal(legDenied.ok, false);
+  assert.equal(legDenied.error, '只有這趟行程的旅伴可以這樣做');
+  const resetDenied = await emitAck(bobSock, 'trip:reset', { token: bob.data.token });
+  assert.equal(resetDenied.ok, false);
+  assert.equal(resetDenied.error, '只有這趟行程的旅伴可以這樣做');
+  const places = await fetch(`${base}/api/places?q=sapporo`, {
+    headers: { authorization: `Bearer ${bob.data.token}` },
+  });
+  assert.equal(places.status, 403);
+
   const addedBob = await emitAck(aliceSock, 'trip:addMember', { username: 'bob', token: alice.data.token });
   assert.equal(addedBob.ok, true);
   await delay(200);
@@ -235,55 +269,24 @@ test('public share, private trip, sealed sockets, and member adds', { timeout: 3
   const after = await (await fetch(`${base}/api/trip`, {
     headers: { authorization: `Bearer ${alice.data.token}` },
   })).json();
-  const names = after.members.map((member) => member.username).sort();
-  assert.deepEqual(names, ['alice', 'bob']);
-  const publicAfter = JSON.stringify(await (await fetch(`${base}/api/share`)).json());
-  assert.equal(publicAfter.includes('alice'), false);
-  assert.equal(publicAfter.includes('bob'), false);
-  assert.equal(publicAfter.includes('cara'), false);
+  assert.deepEqual(after.members.map((member) => member.username).sort(), ['alice', 'bob']);
 
+  const cara = await postJson(`${base}/api/register`, { username: 'cara', password: 'secret123' });
+  assert.equal(cara.status, 201);
+  const caraAgain = await postJson(`${base}/api/register`, { username: 'cara', password: 'secret123' });
+  assert.equal(caraAgain.status, 409);
+  const caraSock = io(base, { transports: ['websocket'], reconnection: false });
+  sockets.push(caraSock);
+  await onceConnected(caraSock);
   const caraSelf = await emitAck(caraSock, 'member:add', { username: 'cara', token: cara.data.token });
   assert.equal(caraSelf.ok, false);
-  assert.equal(caraSelf.error, '只有這趟行程的旅伴可以這樣做');
+  assert.equal(caraSelf.error, '這位旅伴已經在行程裡');
   const dave = await postJson(`${base}/api/register`, { username: 'dave', password: 'secret123' });
   assert.equal(dave.status, 201);
   const daveSelf = await emitAck(caraSock, 'member:add', { username: 'dave', token: dave.data.token });
   assert.equal(daveSelf.ok, false);
-  assert.equal(daveSelf.error, '只有這趟行程的旅伴可以這樣做');
+  assert.equal(daveSelf.error, '這位旅伴已經在行程裡');
 
-  const fxDenied = await emitAck(caraSock, 'fx:override', {
-    basis: 'twdPerJpy',
-    value: '0.22',
-    token: cara.data.token,
-  });
-  assert.equal(fxDenied.ok, false);
-  assert.equal(fxDenied.error, '只有這趟行程的旅伴可以這樣做');
-  const clearDenied = await emitAck(caraSock, 'fx:clearOverride', { token: cara.data.token });
-  assert.equal(clearDenied.ok, false);
-  const expenseDenied = await emitAck(caraSock, 'expense:upsert', {
-    expense: { note: 'outsider', amount: 100, currency: 'JPY' },
-    token: cara.data.token,
-  });
-  assert.equal(expenseDenied.ok, false);
-  assert.equal(expenseDenied.error, '只有這趟行程的旅伴可以這樣做');
-  const deleteDenied = await emitAck(caraSock, 'expense:delete', { id: 'e1', token: cara.data.token });
-  assert.equal(deleteDenied.ok, false);
-  const legDenied = await emitAck(caraSock, 'trip:setLegMode', {
-    fromStopId: 's1',
-    toStopId: 's2',
-    mode: 'walk',
-    token: cara.data.token,
-  });
-  assert.equal(legDenied.ok, false);
-  assert.equal(legDenied.error, '只有這趟行程的旅伴可以這樣做');
-  const resetDenied = await emitAck(caraSock, 'trip:reset', { token: cara.data.token });
-  assert.equal(resetDenied.ok, false);
-  assert.equal(resetDenied.error, '只有這趟行程的旅伴可以這樣做');
-
-  const places = await fetch(`${base}/api/places?q=sapporo`, {
-    headers: { authorization: `Bearer ${cara.data.token}` },
-  });
-  assert.equal(places.status, 403);
   const health = await (await fetch(`${base}/api/health`)).json();
   assert.equal(health.ok, true);
   assert.equal(Object.hasOwn(health, 'room'), false);
@@ -300,15 +303,16 @@ test('public share, private trip, sealed sockets, and member adds', { timeout: 3
     token: alice.data.token,
   });
   assert.equal(renamed.ok, true);
-  const addedCara = await emitAck(aliceSock, 'member:add', { username: 'cara', token: alice.data.token });
-  assert.equal(addedCara.ok, true);
 
   const roster = await (await fetch(`${base}/api/trip`, {
-    headers: { authorization: `Bearer ${alice.data.token}` },
+    headers: { authorization: `Bearer ${cara.data.token}` },
   })).json();
-  assert.deepEqual(roster.members.map((member) => member.username).sort(), ['alice', 'bob', 'cara']);
+  assert.deepEqual(roster.members.map((member) => member.username).sort(), ['alice', 'bob', 'cara', 'dave']);
   assert.equal(roster.stops.find((stop) => stop.id === 's1').title, '改過的時計台');
   const sealed = JSON.stringify(await (await fetch(`${base}/api/share`)).json());
+  assert.equal(sealed.includes('alice'), false);
+  assert.equal(sealed.includes('bob'), false);
   assert.equal(sealed.includes('cara'), false);
   assert.equal(sealed.includes('dave'), false);
+  assert.deepEqual(guestEvents, []);
 });

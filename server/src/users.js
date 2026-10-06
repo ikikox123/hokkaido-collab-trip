@@ -310,5 +310,12 @@ export function createUserStore({ dataFile, demoPassword = 'demo1234', rounds = 
     return user ? publicUser(user) : null;
   }
 
-  return { init, authenticate, register, findByUsername, publicById, planProductionDemoRemoval };
+  /** Dev alice/bob live only in memory. Accounts written by register() are not demos. */
+  function isDemoAccount(id) {
+    if (typeof id !== 'string' || !id) return false;
+    const user = users.find((item) => item.id === id);
+    return Boolean(user && user.demo);
+  }
+
+  return { init, authenticate, register, findByUsername, publicById, isDemoAccount, planProductionDemoRemoval };
 }
