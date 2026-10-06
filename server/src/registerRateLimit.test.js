@@ -13,3 +13,14 @@ test('one IP can register five times per hour and a sixth waits', () => {
   now += HOUR_MS;
   assert.equal(limiter.attempt('203.0.113.10'), true);
 });
+
+test('checking the limit drops expired IP entries', () => {
+  let now = 5_000;
+  const limiter = createRegisterRateLimiter({ now: () => now });
+  assert.equal(limiter.attempt('203.0.113.10'), true);
+  assert.equal(limiter.attempt('203.0.113.11'), true);
+  assert.equal(limiter.size(), 2);
+  now += HOUR_MS;
+  assert.equal(limiter.attempt('203.0.113.12'), true);
+  assert.equal(limiter.size(), 1);
+});

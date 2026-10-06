@@ -41,8 +41,11 @@ import { BUCKET_ENV_VARS, startPeriodicBackup } from './backup.js';
 import { loadPersistedTrip, shouldApplySeedCorrection } from './persist.js';
 import { createUserStore } from './users.js';
 import { collaborativeTripReadable, NOT_COMPANION_ERROR, tripMemberAddAllowed } from './memberAccess.js';
+import { clientIp } from './clientIp.js';
 import { createRegisterRateLimiter } from './registerRateLimit.js';
 import { toPublicShare } from './shareTrip.js';
+
+export { clientIp };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Production and local dev keep data/ next to the repo. TRIP_DATA_DIR is only for isolated tests.
@@ -139,21 +142,6 @@ app.get('/api/health', (_req, res) => {
 
 const registerRateLimiter = createRegisterRateLimiter();
 const REGISTER_RATE_ERROR = '註冊太多次，請一小時後再試';
-
-function clientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  let ip = '';
-  if (typeof forwarded === 'string') {
-    const parts = forwarded.split(',').map((part) => part.trim()).filter(Boolean);
-    if (parts.length) ip = parts[parts.length - 1];
-  }
-  if (!ip) {
-    const address = req.socket && req.socket.remoteAddress;
-    ip = typeof address === 'string' ? address : '';
-  }
-  if (ip.startsWith('::ffff:')) ip = ip.slice('::ffff:'.length);
-  return ip || 'unknown';
-}
 
 /**
  * Add a registered account to HOKKAIDO2027.

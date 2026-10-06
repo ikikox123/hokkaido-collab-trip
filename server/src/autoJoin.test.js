@@ -271,7 +271,7 @@ test('production rejects alice and bob and still auto-joins other accounts', { t
     const blocked = await postJson(
       `${server.base}/api/register`,
       { username, password: 'fresh-pass' },
-      { 'x-forwarded-for': '198.51.100.10' },
+      { 'x-real-ip': '198.51.100.10' },
     );
     assert.equal(blocked.status, 400, username);
     assert.equal(blocked.data.error, '這個帳號名稱不能使用');
@@ -282,7 +282,7 @@ test('production rejects alice and bob and still auto-joins other accounts', { t
   const created = await postJson(
     `${server.base}/api/register`,
     { username: 'mika', password: 'trip2027' },
-    { 'x-forwarded-for': '198.51.100.20' },
+    { 'x-real-ip': '198.51.100.20' },
   );
   assert.equal(created.status, 201);
   const view = await fetch(`${server.base}/api/trip`, {
@@ -292,13 +292,13 @@ test('production rejects alice and bob and still auto-joins other accounts', { t
   const again = await postJson(
     `${server.base}/api/login`,
     { username: 'mika', password: 'trip2027' },
-    { 'x-forwarded-for': '198.51.100.20' },
+    { 'x-real-ip': '198.51.100.20' },
   );
   assert.equal(again.status, 200);
   const duplicate = await postJson(
     `${server.base}/api/register`,
     { username: 'mika', password: 'trip2027' },
-    { 'x-forwarded-for': '198.51.100.20' },
+    { 'x-real-ip': '198.51.100.20' },
   );
   assert.equal(duplicate.status, 409);
   const saved = server.saved();
@@ -315,7 +315,7 @@ test('the same IP can register five accounts an hour and the sixth is refused', 
     nodeEnv: 'development',
     members: [{ id: HOST_ID, displayName: '主辦' }],
   });
-  const ip = { 'x-forwarded-for': '203.0.113.10' };
+  const ip = { 'x-real-ip': '203.0.113.10' };
   const ids = [];
   for (let i = 1; i <= 5; i += 1) {
     const created = await postJson(
@@ -329,14 +329,14 @@ test('the same IP can register five accounts an hour and the sixth is refused', 
   const blocked = await postJson(
     `${server.base}/api/register`,
     { username: 'traveler6', password: 'trip2027' },
-    ip,
+    { 'x-real-ip': '203.0.113.10', 'x-forwarded-for': '198.51.100.99' },
   );
   assert.equal(blocked.status, 429);
   assert.equal(blocked.data.error, '註冊太多次，請一小時後再試');
   const other = await postJson(
     `${server.base}/api/register`,
     { username: 'traveler7', password: 'trip2027' },
-    { 'x-forwarded-for': '203.0.113.11' },
+    { 'x-real-ip': '203.0.113.11', 'x-forwarded-for': '203.0.113.10' },
   );
   assert.equal(other.status, 201);
   const saved = server.saved();
