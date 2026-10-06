@@ -37,7 +37,7 @@ npm run dev
 - 未登入：可瀏覽行程、地圖、各段交通估算與分帳（支出、淨額、建議轉帳、匯率）
 - 已登入：可拖曳排序、加入、刪除、改時間、改地點名稱（只改顯示名稱，座標與路段不變）、改相鄰站交通方式，以及新增／修改／刪除支出、旅伴，與設定手動匯率。從 `state.json` 讀入的行程，重置不會改寫站點
 
-朋友可在登入視窗點「還沒有帳號？註冊」，用帳號＋密碼建立帳號。註冊成功會直接登入，並加入目前房間（預設 `HOKKAIDO2027`）。回傳的帳號有穩定的 `id`、`username`、`displayName`；這個 `id` 就是之後分帳成員的 id。`alice`／`bob` 固定是 `u1`／`u2`。新帳號的 id 寫進 `data/users.json` 後，重新啟動不會重算。註冊不開啟結算畫面，也不改分帳。帳號檔只存 bcrypt 雜湊（已 gitignore）。註冊不讀、不寫 `data/state.json`。`alice` / `bob` 不能被註冊蓋掉。帳號或密碼沒填、或帳號重複，會在畫面上顯示中文錯誤。
+朋友可在登入視窗點「還沒有帳號？註冊」，用帳號＋密碼建立帳號。註冊成功會直接登入，並加入目前房間（預設 `HOKKAIDO2027`）。回傳的帳號有穩定的 `id`、`username`、`displayName`；這個 `id` 就是之後分帳成員的 id。`alice`／`bob` 固定是 `u1`／`u2`。新帳號的 id 寫進 `data/users.json` 後，重新啟動不會重算。註冊不開啟結算畫面，也不改支出或結算。帳號檔只存 bcrypt 雜湊（已 gitignore）。註冊寫入 `users.json` 成功後，會用跟自行加入旅伴相同的 `{ id }` 記在 `HOKKAIDO2027` 名單末尾，並廣播給已在房間裡的人。站點、支出、結算與原本的旅伴不會被改掉或刪掉。這個註冊帳號若已經在名單上，再次登入不會再加一筆。同一 `X-Real-IP`（沒有這個標頭才用連線位址，不看 `X-Forwarded-For`）一小時最多註冊 5 次。次數只留在記憶體，過期的位址會清掉。`alice` / `bob` 不能被註冊蓋掉。帳號或密碼沒填、或帳號重複，會在畫面上顯示中文錯誤。
 
 ## 房間碼
 
@@ -165,7 +165,7 @@ hokkaido-collab-trip/
 ## API 摘要
 
 - `POST /api/login` `{ username, password }` → `{ token, user }`
-- `POST /api/register` `{ username, password }` → `201 { token, user }`（帳號重複回 409，帳號或密碼沒填回 400 與中文錯誤）
+- `POST /api/register` `{ username, password }` → `201 { token, user }`（帳號重複回 409，帳號或密碼沒填回 400 與中文錯誤）。成功後把新帳號加入 `HOKKAIDO2027` 旅伴。同一 `X-Real-IP` 一小時超過 5 次回 429（不看 `X-Forwarded-For`）
 - `GET /api/trip` 目前行程
 - `GET /api/weather` 三城市天氣（伺服器轉打 Open-Meteo）
 - `GET /api/trip-alerts` 預報＋氣象廳警報＋JR 運行摘要（伺服器抓取並短快取；不含 tenki.jp）

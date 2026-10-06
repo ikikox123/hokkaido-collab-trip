@@ -36,6 +36,7 @@ test('known interface errors follow the language and saved trip text does not', 
   assert.equal(localizeError('請先登入才能編輯', translate), 'Log in to edit');
   assert.equal(localizeError('帳號或密碼錯誤', translate), 'Wrong username or password');
   assert.equal(localizeError('這個帳號名稱不能使用', translate), 'This account name cannot be used');
+  assert.equal(localizeError('註冊太多次，請一小時後再試', translate), 'Too many registration attempts. Try again in an hour');
   assert.equal(text('ja', 'usernameReserved'), 'このアカウント名は使えません');
   assert.equal(localizeError('小樽運河', translate), '小樽運河');
   assert.equal(localizeError('Alice', translate), 'Alice');
