@@ -6,6 +6,9 @@
  * /webunkou/ and only disallows retired paths. This module does not scrape HTML.
  * Area JSON is requested only when a status code is 1 (a disruption), and the
  * official honbun is shown verbatim. Cache is at least 5 minutes.
+ * The Hokkaido Shinkansen has no area JSON (area_06_tc.json now redirects to a
+ * 404 page). The official senku_tc.html?id=24 page loads
+ * ./json/senku/senku_24_tc.json instead, with the same today.gaikyo list.
  *
  * If the JSON cannot be read, callers still get the official page URL.
  */
@@ -64,8 +67,8 @@ const AREAS = [
   {
     id: 'shin',
     name: '北海道新幹線',
-    href: 'https://www3.jrhokkaido.co.jp/webunkou/senku.html?id=24',
-    file: '06',
+    href: 'https://www3.jrhokkaido.co.jp/webunkou/senku_tc.html?id=24',
+    senku: '24',
     primary: false,
   },
 ];
@@ -105,7 +108,7 @@ export function plainJrText(value) {
     .trim();
 }
 
-export function extractJrNotes(data, areaId) {
+export function extractJrNotes(data, areaId, { lineOnly = false } = {}) {
   const list = data?.today?.gaikyo;
   if (!Array.isArray(list)) return [];
   const notes = [];
@@ -114,7 +117,9 @@ export function extractJrNotes(data, areaId) {
     const honbun = plainJrText(item?.honbun || '');
     if (!title && !honbun) continue;
     const eikyo = item?.eikyo && typeof item.eikyo === 'object' ? item.eikyo : null;
-    if (eikyo) {
+    // Line JSON (Shinkansen) is about that line already. Its eikyo only covers
+    // the five conventional areas, so it cannot name the Shinkansen.
+    if (eikyo && !lineOnly) {
       const flagged = Object.entries(eikyo).filter(([, value]) => value === 1 || value === '1');
       const mine = eikyo[areaId] === 1 || eikyo[areaId] === '1';
       if (flagged.length && !mine) continue;
@@ -175,6 +180,17 @@ function areaJsonUrl(file) {
   return `https://www3.jrhokkaido.co.jp/webunkou/json/area/area_${file}_tc.json`;
 }
 
+function senkuJsonUrl(id) {
+  if (!/^\d{1,2}$/.test(id)) throw new Error('bad senku id');
+  return `https://www3.jrhokkaido.co.jp/webunkou/json/senku/senku_${id}_tc.json`;
+}
+
+/** Detail JSON for one area: area_NN_tc.json, or senku_NN_tc.json for the Shinkansen. */
+export function jrDetailUrl(area) {
+  if (area?.senku) return senkuJsonUrl(area.senku);
+  return areaJsonUrl(area?.file);
+}
+
 async function readJson(url, options, etag) {
   const res = await fetchRemote(url, {
     fetchImpl: options.fetchImpl,
@@ -215,8 +231,8 @@ async function refreshJr(cache, options) {
       if (area.status === 1) {
         const meta = AREAS.find((item) => item.id === area.id);
         try {
-          const detail = await readJson(areaJsonUrl(meta.file), options);
-          notes = extractJrNotes(detail.data, area.id);
+          const detail = await readJson(jrDetailUrl(meta), options);
+          notes = extractJrNotes(detail.data, area.id, { lineOnly: Boolean(meta.senku) });
         } catch (err) {
           warn(`[jr] area ${area.id} detail failed: ${err.message || err}`);
         }

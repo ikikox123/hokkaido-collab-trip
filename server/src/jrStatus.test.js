@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   JR_OFFICIAL_URL,
   JR_TOP_JSON,
@@ -7,8 +8,23 @@ import {
   createJrCache,
   extractJrNotes,
   getJrStatus,
+  jrDetailUrl,
   jrStatusLabel,
 } from './jrStatus.js';
+
+const SENKU_24_URL = 'https://www3.jrhokkaido.co.jp/webunkou/json/senku/senku_24_tc.json';
+/** Saved from the official senku_tc.html?id=24 data on 2026-10-19 (no delays at the time). */
+// Stored byte-for-byte, including the UTF-8 BOM the official server sends.
+const SENKU_24_RAW = fs.readFileSync(new URL('./fixtures/jr-senku-24-tc-2026-10-19.json', import.meta.url), 'utf8');
+const SENKU_24_FIXTURE = JSON.parse(SENKU_24_RAW.trim());
+
+const SHIN_DOWN_TOP = {
+  time: '2026年10月18日09點00分現在',
+  today: { status: { spo: 0, doo: 0, donan: 0, dohoku: 0, doto: 0, shin: 1 } },
+  tomorrow: { status: { spo: 0, doo: 0, donan: 0, dohoku: 0, doto: 0, shin: 0 } },
+};
+
+
 
 function jsonResponse(body, { status = 200, etag, url } = {}) {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
@@ -170,4 +186,72 @@ test('non-json and upstream failure do not look like a calm service', async () =
   assert.equal(stale.ok, true);
   assert.equal(stale.stale, true);
   assert.equal(stale.officialTime, TOP.time);
+});
+
+test('the Shinkansen detail comes from senku_24_tc.json, not the retired area_06', () => {
+  assert.equal(jrDetailUrl({ senku: '24' }), SENKU_24_URL);
+  assert.equal(jrDetailUrl({ file: '01' }), 'https://www3.jrhokkaido.co.jp/webunkou/json/area/area_01_tc.json');
+});
+
+test('the saved official Shinkansen json parses and its calm text adds no note', () => {
+  assert.ok(Array.isArray(SENKU_24_FIXTURE.today.gaikyo));
+  assert.deepEqual(extractJrNotes(SENKU_24_FIXTURE, 'shin', { lineOnly: true }), []);
+});
+
+test('the raw official Shinkansen json, BOM included, is read through getJrStatus', async () => {
+  const warnings = [];
+  const result = await getJrStatus({
+    cache: createJrCache(),
+    warn: (message) => warnings.push(message),
+    now: () => new Date('2026-10-19T08:00:00.000Z'),
+    fetchImpl: async (url) =>
+      url.endsWith('top_tc.json') ? jsonResponse(SHIN_DOWN_TOP, { url }) : jsonResponse(SENKU_24_RAW, { url }),
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.areas.find((area) => area.id === 'shin').notes, []);
+  assert.deepEqual(warnings, []);
+});
+
+test('a Shinkansen disruption reads the line json and keeps its notes', async () => {
+  const calls = [];
+  const detail = structuredClone(SENKU_24_FIXTURE);
+  detail.today.gaikyo = [
+    { time: '2026年10月18日08點40分現在', title: '原因：強風', honbun: '新函館北斗～新青森間 部分列車停駛', eikyo: { spo: 0, doo: 0, donan: 1, dohoku: 0, doto: 0 } },
+  ];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.endsWith('top_tc.json')) return jsonResponse(SHIN_DOWN_TOP, { url });
+    return jsonResponse(detail, { url });
+  };
+  const result = await getJrStatus({
+    cache: createJrCache(),
+    fetchImpl,
+    warn: quiet,
+    now: () => new Date('2026-10-18T00:00:00.000Z'),
+  });
+  assert.equal(result.ok, true);
+  const shin = result.areas.find((area) => area.id === 'shin');
+  assert.equal(shin.status, 1);
+  assert.equal(shin.href, 'https://www3.jrhokkaido.co.jp/webunkou/senku_tc.html?id=24');
+  assert.deepEqual(shin.notes, ['原因：強風　新函館北斗～新青森間 部分列車停駛']);
+  assert.deepEqual(calls, [JR_TOP_JSON, SENKU_24_URL]);
+});
+
+test('a Shinkansen detail that redirects off www3 still returns the area status', async () => {
+  const warnings = [];
+  const fetchImpl = async (url) => {
+    if (url.endsWith('top_tc.json')) return jsonResponse(SHIN_DOWN_TOP, { url });
+    return jsonResponse('<html>404</html>', { url: 'https://www.jrhokkaido.co.jp/jrherror/404-jrhp.html' });
+  };
+  const result = await getJrStatus({
+    cache: createJrCache(),
+    fetchImpl,
+    warn: (message) => warnings.push(message),
+    now: () => new Date('2026-10-18T00:00:00.000Z'),
+  });
+  assert.equal(result.ok, true);
+  const shin = result.areas.find((area) => area.id === 'shin');
+  assert.equal(shin.status, 1);
+  assert.deepEqual(shin.notes, []);
+  assert.deepEqual(warnings, ['[jr] area shin detail failed: unexpected host www.jrhokkaido.co.jp']);
 });
