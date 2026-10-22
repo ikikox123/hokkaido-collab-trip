@@ -44,9 +44,9 @@ npm test               # 單元測試
 
 ## Google 地圖建置設定
 
-前端是在建置時（`npm run build:client`，也就是 `wrangler.jsonc` 的 `build.command`）把 Google 地圖設定編進去的。Vite 會讀 `client/.env.production.local` 和環境變數裡的 `VITE_*`。兩種方式擇一：
+前端是在建置時（`npm run build:client`，也就是 `wrangler.jsonc` 的 `build.command`）把 Google 地圖設定編進去的。`client/vite.config.ts` 設了 `envDir: '..'`，所以 Vite 讀的是 **repo 根目錄**的 `.env.production.local`（不是 `client/` 底下），以及環境變數裡的 `VITE_*`。兩種方式擇一：
 
-1. **本機檔案**：在 `client/.env.production.local` 放這兩行（這個檔案已被 `.gitignore` 忽略，不會進 git）：
+1. **本機檔案**：在 repo 根目錄的 `.env.production.local` 放這兩行（已被 `.gitignore` 的 `.env.*.local` 忽略，不會進 git）：
    ```
    VITE_MAP_PROVIDER=google
    VITE_GOOGLE_MAPS_API_KEY=<瀏覽器金鑰>
