@@ -133,7 +133,7 @@ export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) 
           <button
             type="submit"
             disabled={loading}
-            className="cute-pop w-full min-h-touch rounded-full border-2 border-ink bg-sakura-500 text-ink font-semibold active:bg-sakura-400 disabled:opacity-60 shadow-sticker"
+            className="cute-pop w-full min-h-touch rounded-full border-2 border-ink bg-lavender-300 text-ink font-semibold active:bg-lavender-200 disabled:opacity-60 shadow-sticker"
           >
             {loading ? (isRegister ? t('registering') : t('loggingIn')) : isRegister ? t('registerAndLogin') : t('login')}
           </button>

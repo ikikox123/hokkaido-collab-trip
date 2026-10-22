@@ -18,6 +18,13 @@ export function DayTimeline({ days, selectedDay, onSelect }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<number, HTMLButtonElement>());
   const [geo, setGeo] = useState<Geometry | null>(null);
+  const [facing, setFacing] = useState<'left' | 'right'>('right');
+  const lastDay = useRef(selectedDay);
+
+  useLayoutEffect(() => {
+    if (selectedDay !== lastDay.current) setFacing(selectedDay < lastDay.current ? 'left' : 'right');
+    lastDay.current = selectedDay;
+  }, [selectedDay]);
 
   useLayoutEffect(() => {
     const track = trackRef.current;
@@ -51,7 +58,7 @@ export function DayTimeline({ days, selectedDay, onSelect }: Props) {
   }, [selectedDay]);
 
   return (
-    <nav aria-label={t('dayNav')} className="z-20 shrink-0 border-b-2 border-ink bg-snow-50">
+    <nav aria-label={t('dayNav')} className="z-20 shrink-0 border-b-2 border-ink bg-snow-50 bg-gradient-to-b from-snow-50 to-bluebell-100/60">
       <div className="overflow-x-auto no-scrollbar px-1">
         <div ref={trackRef} className="relative flex min-w-full pt-8">
           {geo && (
@@ -63,11 +70,14 @@ export function DayTimeline({ days, selectedDay, onSelect }: Props) {
               />
               <span
                 className="day-mascot pointer-events-none absolute left-0 top-0 z-10"
+                data-facing={facing}
                 style={{ transform: `translateX(${geo.x - 18}px)` }}
                 aria-hidden
               >
                 <span key={selectedDay} className="mascot-hop block">
-                  <Mascot size={36} />
+                  <span className="mascot-face">
+                    <Mascot size={36} />
+                  </span>
                 </span>
               </span>
             </>
@@ -87,14 +97,14 @@ export function DayTimeline({ days, selectedDay, onSelect }: Props) {
                 className="cute-press flex min-h-touch min-w-[4.4rem] flex-1 flex-col items-center px-0.5 pb-2"
               >
                 <span
-                  className={`relative z-[1] mt-1 h-3.5 w-3.5 rounded-full border-[2.5px] border-ink transition-colors ${
-                    active ? 'bg-sakura-500' : 'bg-white'
+                  className={`relative z-[1] mt-1 h-3.5 w-3.5 rounded-full border-[2.5px] border-ink ${
+                    active ? 'bg-crab-500' : 'bg-white'
                   }`}
                   aria-hidden
                 />
                 <span
-                  className={`mt-1.5 rounded-full border-2 px-2 text-sm font-bold leading-6 tracking-wide transition-colors ${
-                    active ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent text-ink'
+                  className={`mt-1.5 rounded-full border-2 px-2 text-sm font-bold leading-6 tracking-wide ${
+                    active ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-transparent text-ink'
                   }`}
                 >
                   {d.date.slice(5).replace('-', '/')}

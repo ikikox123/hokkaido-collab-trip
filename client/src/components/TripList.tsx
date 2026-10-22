@@ -53,9 +53,9 @@ function TimelineDot({
 }) {
   const dot =
     accent === 'next'
-      ? 'bg-sakura-500 shadow-sticker-sm'
+      ? 'bg-crab-300 shadow-sticker-sm'
       : accent === 'selected'
-        ? 'bg-mint-300 shadow-sticker-sm'
+        ? 'bg-ice-300 shadow-sticker-sm'
         : 'bg-white';
   return (
     <div className="relative flex w-8 shrink-0 flex-col items-center self-stretch" aria-hidden>
@@ -112,10 +112,10 @@ function SortableItem({
     <li ref={setNodeRef} style={style} className="flex items-stretch gap-1.5">
       <TimelineDot index={index} continued={hasNext} fromPrevious={index > 0} accent={accent} />
       <div
-        className={`cute-enter cute-pop mb-1 flex min-w-0 flex-1 items-stretch gap-1 rounded-2xl border-2 border-ink p-1.5 ${
-          selected ? 'bg-ice-50 shadow-sticker' : 'shadow-sticker-sm'
-        } ${isNext ? 'bg-sakura-100' : selected ? '' : 'bg-white'}`}
-        style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+        data-reveal
+        className={`cute-pop mb-1 flex min-w-0 flex-1 items-stretch gap-1 rounded-2xl border-2 border-ink p-1.5 ${
+          selected ? 'bg-bluebell-100 shadow-sticker' : 'shadow-sticker-sm'
+        } ${isNext ? 'bg-crab-100' : selected ? '' : 'bg-white'}`}
       >
         {canEdit && (
           <button
@@ -139,7 +139,7 @@ function SortableItem({
           <div className="flex items-center gap-2">
             <StopName title={stop.title} canEdit={canEdit} onRename={onRename} />
             {isNext && (
-              <span className="shrink-0 rounded-full border-2 border-ink bg-sakura-500 px-2 text-sm font-bold leading-6 text-ink">
+              <span className="shrink-0 rounded-full border-2 border-ink bg-crab-300 px-2 text-sm font-bold leading-6 text-ink">
                 {t('nextStop')}
               </span>
             )}
@@ -222,7 +222,7 @@ function LegConnector({
           style={{ background: MODE_COLORS[mode] }}
         />
       </div>
-      <div className="min-w-0 flex-1 py-1.5 pr-1">
+      <div className="min-w-0 flex-1 py-1.5 pr-1" data-reveal>
         <p className="text-xs font-bold text-slate-500">{t('toNext')}</p>
         {canEdit ? (
           <select
@@ -307,7 +307,7 @@ export function TripList({
           <button
             type="button"
             onClick={onAdd}
-            className="cute-pop min-h-touch min-w-touch rounded-full border-2 border-ink bg-sakura-500 px-4 text-sm font-bold text-ink shadow-sticker"
+            className="cute-pop min-h-touch min-w-touch rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker"
           >
             {t('addStopButton')}
           </button>

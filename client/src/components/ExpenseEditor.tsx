@@ -211,7 +211,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                   key={currency}
                   type="button"
                   className={`min-h-touch cute-press rounded-full border-2 text-base font-bold ${
-                    draft.currency === currency ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
+                    draft.currency === currency ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                   }`}
                   onClick={() => setDraft((current) => ({ ...current, currency }))}
                 >
@@ -256,7 +256,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                   key={mode}
                   type="button"
                   className={`min-h-touch cute-press rounded-full border-2 px-2 text-base font-bold ${
-                    draft.mode === mode ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
+                    draft.mode === mode ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                   }`}
                   onClick={() => setMode(mode)}
                 >
@@ -426,7 +426,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
             <button
               type="submit"
               disabled={!preview.ok || pending}
-              className="cute-pop min-h-touch rounded-full border-2 border-ink bg-sakura-500 text-base font-bold text-ink disabled:opacity-50 shadow-sticker"
+              className="cute-pop min-h-touch rounded-full border-2 border-ink bg-lavender-300 text-base font-bold text-ink disabled:opacity-50 shadow-sticker"
             >
               {t('save')}
             </button>

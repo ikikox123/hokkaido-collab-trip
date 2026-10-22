@@ -260,7 +260,7 @@ export function LodgingDialog({ open, lodging, stops, token, onClose, onSave }: 
           </button>
           <button
             type="submit"
-            className="cute-pop min-h-touch flex-1 rounded-full border-2 border-ink bg-sakura-500 font-semibold text-ink disabled:opacity-50 shadow-sticker"
+            className="cute-pop min-h-touch flex-1 rounded-full border-2 border-ink bg-lavender-300 font-semibold text-ink disabled:opacity-50 shadow-sticker"
             disabled={saving || searching}
           >
             {t('save')}

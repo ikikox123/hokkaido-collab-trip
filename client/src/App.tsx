@@ -14,7 +14,7 @@ import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
 import { ShareMenu } from './components/ShareMenu';
-import { DayScene, FlightCard, Mascot, Snowfall } from './components/Cute';
+import { DayScene, FlightCard, Fox, HokkaidoBand, Mascot, Snowfall } from './components/Cute';
 import { DayTimeline } from './components/DayTimeline';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { emitAck } from './lib/bill';
@@ -43,7 +43,7 @@ function CurrentStopBar({
     <div className="z-20 shrink-0 bg-snow-50 px-3 py-2">
       <div
         key={`${day}-${stop?.id ?? 'none'}`}
-        className="cute-enter cute-pop flex min-h-touch items-center gap-3 rounded-2xl border-2 border-ink bg-sakura-100 p-2 shadow-sticker"
+        className="cute-enter cute-pop flex min-h-touch items-center gap-3 rounded-2xl border-2 border-ink bg-lavender-100 p-2 shadow-sticker"
       >
         <DayScene day={day} className="h-12 w-[4.25rem] shrink-0" />
         <div className="min-w-0 flex-1">
@@ -55,7 +55,7 @@ function CurrentStopBar({
           </p>
           {stop ? (
             <p className="truncate text-base font-bold leading-snug text-ink">
-              <span className="mr-1.5 text-ice-600">{stop.time || t('timeUnset')}</span>
+              <span className="mr-1.5 text-crab-600">{stop.time || t('timeUnset')}</span>
               {displayStopTitle(locale, stop.title)}
             </p>
           ) : (
@@ -269,7 +269,7 @@ export default function App() {
   if (!user || !token) {
     return (
       <div className="cute-paper min-h-full text-ink">
-        <header className="relative overflow-hidden border-b-2 border-ink bg-snow-50 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
+        <header className="relative overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
           <Snowfall />
           <div className="relative flex items-center gap-2">
             <span className="mascot-bob shrink-0">
@@ -281,7 +281,16 @@ export default function App() {
           </div>
         </header>
         <main className="cute-enter mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
-          <p className="text-sm leading-relaxed text-slate-600">{t('collabNeedsLogin')}</p>
+          <div className="relative mt-7" data-reveal>
+            <HokkaidoBand />
+            <div className="pointer-events-none absolute -top-8 right-3 flex items-end gap-0.5" aria-hidden>
+              <span className="mascot-bob block">
+                <Mascot size={44} />
+              </span>
+              <Fox size={52} />
+            </div>
+          </div>
+          <p className="text-sm leading-relaxed text-slate-600" data-reveal>{t('collabNeedsLogin')}</p>
           <a
             href={shareLocation({ kind: 'all' }, locale)}
             className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-mint-200 px-3 text-base font-bold text-ink shadow-sticker"
@@ -299,7 +308,7 @@ export default function App() {
   if (notCompanion) {
     return (
       <div className="cute-paper min-h-full text-ink">
-        <header className="relative overflow-hidden border-b-2 border-ink bg-snow-50 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
+        <header className="relative overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
           <Snowfall />
           <div className="relative flex items-center gap-2">
             <span className="mascot-bob shrink-0">
@@ -310,7 +319,16 @@ export default function App() {
           </div>
         </header>
         <main className="cute-enter mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
-          <p className="text-sm leading-relaxed text-slate-600">{t('notCompanionYet')}</p>
+          <div className="relative mt-7" data-reveal>
+            <HokkaidoBand />
+            <div className="pointer-events-none absolute -top-8 right-3 flex items-end gap-0.5" aria-hidden>
+              <span className="mascot-bob block">
+                <Mascot size={44} />
+              </span>
+              <Fox size={52} />
+            </div>
+          </div>
+          <p className="text-sm leading-relaxed text-slate-600" data-reveal>{t('notCompanionYet')}</p>
           <a
             href={shareLocation({ kind: 'all' }, locale)}
             className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-mint-200 px-3 text-base font-bold text-ink shadow-sticker"
@@ -320,7 +338,7 @@ export default function App() {
           <p className="text-sm leading-relaxed text-slate-600">{t('shareCanExport')}</p>
           <button
             type="button"
-            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-sakura-500 px-3 text-base font-bold text-ink shadow-sticker"
+            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-lavender-300 px-3 text-base font-bold text-ink shadow-sticker"
             onClick={handleLogout}
           >
             {t('logOut')}
@@ -338,20 +356,24 @@ export default function App() {
           <ShareMenu scope={{ kind: 'day', day: selectedDay }} lang={locale} tone="light" />
           <LanguageMenu tone="light" />
         </div>
-        <div className="text-center px-6">
-          <div className="mascot-hop mb-3 flex justify-center">
-            <Mascot size={72} />
+        <div className="w-full max-w-xs text-center px-6">
+          <div className="mb-1 flex items-end justify-center gap-1">
+            <span className="mascot-bob block">
+              <Mascot size={64} />
+            </span>
+            <Fox size={70} />
           </div>
-          <p className="font-semibold">{t('loadingTrip')}</p>
+          <HokkaidoBand />
+          <p className="mt-3 font-semibold">{t('loadingTrip')}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-snow-50 text-ink overflow-hidden pt-[var(--safe-top)]">
+    <div className="app-enter h-[100dvh] flex flex-col bg-snow-50 text-ink overflow-hidden pt-[var(--safe-top)]">
       {/* Top bar — compact on mobile, expandable */}
-      <header className="relative shrink-0 overflow-hidden border-b-2 border-ink bg-snow-50 text-ink z-20">
+      <header className="relative shrink-0 overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 text-ink z-20">
         <Snowfall />
         <div className="relative flex items-center gap-1 px-1.5 min-h-touch py-2 sm:gap-2 sm:px-3">
           <span className="mascot-bob hidden shrink-0 min-[400px]:block sm:block">
@@ -370,7 +392,7 @@ export default function App() {
           <button
             type="button"
             className={`cute-press min-h-touch shrink-0 rounded-full border-2 border-ink px-2 text-sm font-bold sm:px-3 ${
-              headerOpen ? 'bg-sakura-500' : 'bg-mint-200'
+              headerOpen ? 'bg-lavender-300' : 'bg-mint-200'
             }`}
             onClick={() => setHeaderOpen((v) => !v)}
             aria-expanded={headerOpen}
@@ -389,7 +411,7 @@ export default function App() {
           ) : (
             <button
               type="button"
-              className="cute-press min-h-touch px-3 rounded-full border-2 border-ink bg-sakura-500 text-sm font-bold"
+              className="cute-press min-h-touch px-3 rounded-full border-2 border-ink bg-lavender-300 text-sm font-bold"
               onClick={() => setLoginOpen(true)}
             >
               {t('login')}
@@ -409,7 +431,7 @@ export default function App() {
               />
               <button
                 type="button"
-                className="cute-pop min-h-touch px-4 rounded-full border-2 border-ink bg-sakura-500 text-ink font-bold shadow-sticker-sm"
+                className="cute-pop min-h-touch px-4 rounded-full border-2 border-ink bg-lavender-300 text-ink font-bold shadow-sticker-sm"
                 onClick={joinRoom}
               >
                 {t('join')}
@@ -506,7 +528,7 @@ export default function App() {
               style={{ '--tab-count': 2, '--tab-index': mobileTab === 'split' ? 1 : 0, '--tab-gap': '0.25rem' } as CSSProperties}
             >
               <span className="pointer-events-none absolute inset-1" aria-hidden>
-                <span className="tab-slider rounded-full border-2 border-ink bg-sakura-500" />
+                <span className="tab-slider rounded-full border-2 border-ink bg-lavender-300" />
               </span>
               {(
                 [
@@ -631,7 +653,7 @@ export default function App() {
           }
         >
           <span className="pointer-events-none absolute inset-1" aria-hidden>
-            <span className="tab-slider rounded-full border-2 border-ink bg-sakura-500" />
+            <span className="tab-slider rounded-full border-2 border-ink bg-lavender-300" />
           </span>
           {(
             [

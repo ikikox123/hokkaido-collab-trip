@@ -45,7 +45,7 @@ export function FxCard({ fx, canEdit, pending, onOverride, onClear }: Props) {
   const manual = effective?.source === 'manual';
 
   return (
-    <section className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
+    <section data-reveal className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-base font-bold text-ice-700">{t('fxTitle')}</h3>
         {effective && (
@@ -72,7 +72,7 @@ export function FxCard({ fx, canEdit, pending, onOverride, onClear }: Props) {
             <p className="text-sm text-slate-600">{t('marketTime', { time: formatWhen(effective.marketTime, dateLocale) })}</p>
           )}
           {manual && (
-            <p className="text-sm font-semibold text-sakura-500">
+            <p className="text-sm font-semibold text-lavender-300">
               {effective.by || effective.at
                 ? t('usingManualMeta', {
                     meta: [effective.by, effective.at ? formatWhen(effective.at, dateLocale) : ''].filter(Boolean).join(t('metaSep')),
@@ -121,7 +121,7 @@ export function FxCard({ fx, canEdit, pending, onOverride, onClear }: Props) {
                 <button
                   type="button"
                   className={`min-h-touch cute-press rounded-full border-2 px-3 text-left text-sm font-bold ${
-                    basis === 'twdPerJpy' ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
+                    basis === 'twdPerJpy' ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                   }`}
                   onClick={() => setBasis('twdPerJpy')}
                 >
@@ -130,7 +130,7 @@ export function FxCard({ fx, canEdit, pending, onOverride, onClear }: Props) {
                 <button
                   type="button"
                   className={`min-h-touch cute-press rounded-full border-2 px-3 text-left text-sm font-bold ${
-                    basis === 'jpyPerTwd' ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
+                    basis === 'jpyPerTwd' ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                   }`}
                   onClick={() => setBasis('jpyPerTwd')}
                 >
@@ -148,7 +148,7 @@ export function FxCard({ fx, canEdit, pending, onOverride, onClear }: Props) {
               <button
                 type="submit"
                 disabled={pending || !value.trim()}
-                className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-sakura-500 text-base font-bold text-ink disabled:opacity-50 shadow-sticker"
+                className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 text-base font-bold text-ink disabled:opacity-50 shadow-sticker"
               >
                 {t('applyManual')}
               </button>

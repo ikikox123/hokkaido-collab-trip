@@ -170,7 +170,7 @@ export function TripAlerts() {
       aria-labelledby="trip-alerts-heading"
       className="shrink-0 border-b-2 border-ink bg-snow-50 px-3 pb-2"
     >
-      <div className="flex items-stretch gap-1 rounded-2xl border-2 border-ink bg-bluebell-100 px-1 py-0.5 shadow-sticker-sm">
+      <div data-reveal className="flex items-stretch gap-1 rounded-2xl border-2 border-ink bg-bluebell-100 px-1 py-0.5 shadow-sticker-sm">
         <button
           type="button"
           className="cute-press flex min-h-touch min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-1 text-left"
@@ -232,7 +232,7 @@ export function TripAlerts() {
 
       {expanded && (
         <div id="trip-alerts-details" className="cute-enter max-h-[42vh] space-y-3 overflow-y-auto pt-2">
-          <div className="rounded-2xl border-2 border-ink bg-sky-50 p-3 shadow-sticker-sm">
+          <div data-reveal className="rounded-2xl border-2 border-ink bg-sky-50 p-3 shadow-sticker-sm">
             <h3 className="text-base font-bold text-sky-950">{t('forecastTitle')}</h3>
             <p className="mt-0.5 text-sm leading-snug text-sky-900">{t('forecastHint')}</p>
             <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
@@ -264,7 +264,7 @@ export function TripAlerts() {
             {weather?.warning && <p className="mt-2 text-sm text-slate-600">{weather.warning}</p>}
           </div>
 
-          <div className="rounded-2xl border-2 border-ink bg-amber-50/60 p-3 shadow-sticker-sm">
+          <div data-reveal className="rounded-2xl border-2 border-ink bg-amber-50/60 p-3 shadow-sticker-sm">
             <h3 className="text-base font-bold text-amber-950">{t('statusNow')}</h3>
             <p className="mt-0.5 text-sm leading-snug text-amber-950">{t('statusHint')}</p>
 
@@ -365,7 +365,7 @@ export function TripAlerts() {
             href={jrUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-sakura-500 px-3 text-center text-base font-semibold text-ink active:bg-sakura-400 shadow-sticker"
+            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-lavender-300 px-3 text-center text-base font-semibold text-ink active:bg-lavender-200 shadow-sticker"
           >
             {t('viewJrOfficial')}
           </a>

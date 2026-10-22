@@ -236,7 +236,7 @@ export function SplitBoard({
           <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t('askCompanionToAdd')}</p>
         )}
         {shareFallback && (
-          <label className="block rounded-2xl border-2 border-ink bg-white p-3 text-sm shadow-sticker-sm">
+          <label data-reveal className="block rounded-2xl border-2 border-ink bg-white p-3 text-sm shadow-sticker-sm">
             <span className="font-bold text-slate-700">{t('copyYourself')}</span>
             <textarea
               readOnly
@@ -257,7 +257,7 @@ export function SplitBoard({
           onClear={() => void send('fx:clearOverride', {})}
         />
 
-        <section className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
+        <section data-reveal className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-base font-bold text-ice-700">{t('crossTitle')}</h3>
           </div>
@@ -272,7 +272,7 @@ export function SplitBoard({
                 key={currency}
                 type="button"
                 className={`min-h-touch cute-press rounded-full border-2 text-base font-bold ${
-                  settleIn === currency ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
+                  settleIn === currency ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                 }`}
                 onClick={() => setSettleIn(currency)}
               >
@@ -307,8 +307,9 @@ export function SplitBoard({
           return (
             <section
               key={currency}
+              data-reveal
               className={`rounded-2xl border-2 border-ink p-3 shadow-sticker-sm ${
-                currency === 'JPY' ? 'bg-white' : 'bg-butter-100'
+                currency === 'JPY' ? 'bg-white' : 'bg-mint-50'
               }`}
             >
               <div className="flex items-baseline justify-between gap-2">
@@ -389,7 +390,7 @@ export function SplitBoard({
                             </span>
                             <span
                               className={`shrink-0 font-bold ${
-                                net.netMinor > 0 ? 'text-ice-700' : net.netMinor < 0 ? 'text-sakura-500' : 'text-slate-400'
+                                net.netMinor > 0 ? 'text-ice-700' : net.netMinor < 0 ? 'text-lavender-300' : 'text-slate-400'
                               }`}
                             >
                               {netPhrase(net.netMinor, currency, t)}
@@ -435,7 +436,7 @@ export function SplitBoard({
               key={value}
               type="button"
               className={`min-h-touch cute-press rounded-full border-2 text-sm font-bold ${
-                filter === value ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-slate-300 bg-white text-slate-700'
+                filter === value ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-slate-300 bg-white text-slate-700'
               }`}
               onClick={() => setFilter(value)}
             >
@@ -464,7 +465,7 @@ export function SplitBoard({
               const other = expense.currency === 'JPY' ? 'TWD' : 'JPY';
               const converted = rate ? convertMinor(minorOf(expense), expense.currency, other, rate) : NaN;
               return (
-                <li key={expense.id} className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
+                <li key={expense.id} data-reveal className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`rounded-md px-2 py-0.5 text-sm font-bold text-white ${
@@ -523,7 +524,7 @@ export function SplitBoard({
           </ul>
         )}
 
-        <section className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
+        <section data-reveal className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
           <h3 className="text-base font-bold text-ice-700">{t('companions')}</h3>
           <p className="mt-1 text-sm text-slate-500">{t('companionsHint')}</p>
           {members.length === 0 ? (
@@ -569,7 +570,7 @@ export function SplitBoard({
           {canEdit && !isMember && members.length === 0 && (
             <button
               type="button"
-              className="cute-pop mt-2 min-h-touch w-full rounded-full border-2 border-ink bg-sakura-500 text-base font-bold text-ink shadow-sticker"
+              className="cute-pop mt-2 min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 text-base font-bold text-ink shadow-sticker"
               onClick={() => {
                 if (!username) {
                   onNeedLogin();
@@ -601,14 +602,14 @@ export function SplitBoard({
                 autoCorrect="off"
                 onChange={(event) => setAccountName(event.target.value)}
               />
-              <button type="submit" className="cute-pop min-h-touch shrink-0 rounded-full border-2 border-ink bg-sakura-500 px-4 text-sm font-bold text-ink shadow-sticker">
+              <button type="submit" className="cute-pop min-h-touch shrink-0 rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker">
                 {t('join')}
               </button>
             </form>
           )}
         </section>
 
-        <section className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
+        <section data-reveal className="rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm">
           <h3 className="text-base font-bold text-ice-700">{t('recordedSettlements')}</h3>
           <p className="mt-1 text-sm text-slate-500">{t('recordedSettlementsHint')}</p>
           {canSettle && members.length < 2 && <p className="mt-2 text-sm text-slate-600">{t('needTwoCompanions')}</p>}
@@ -665,7 +666,7 @@ export function SplitBoard({
                     key={currency}
                     type="button"
                     className={`min-h-touch cute-press rounded-full border-2 text-base font-bold ${
-                      settleCurrency === currency ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
+                      settleCurrency === currency ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                     }`}
                     onClick={() => setSettleCurrency(currency)}
                   >
@@ -681,7 +682,7 @@ export function SplitBoard({
                 value={settleAmount}
                 onChange={(event) => setSettleAmount(event.target.value)}
               />
-              <button type="submit" className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-sakura-500 text-base font-bold text-ink shadow-sticker">
+              <button type="submit" className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 text-base font-bold text-ink shadow-sticker">
                 {t('recordSettlement')}
               </button>
             </form>
@@ -726,7 +727,7 @@ export function SplitBoard({
       <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-2">
         <button
           type="button"
-          className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-sakura-500 text-lg font-bold text-ink active:bg-sakura-400 shadow-sticker"
+          className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 text-lg font-bold text-ink active:bg-lavender-200 shadow-sticker"
           onClick={startAdd}
         >
           {t('addExpense')}

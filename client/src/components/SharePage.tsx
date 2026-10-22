@@ -57,7 +57,7 @@ function InAppSafariHint() {
 
 function chipClass(active: boolean) {
   return `cute-press min-h-touch shrink-0 rounded-2xl border-2 px-3 py-1 text-left text-sm font-bold ${
-    active ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-ink/25 bg-white text-slate-600'
+    active ? 'border-ink bg-lavender-300 text-ink shadow-sticker-sm' : 'border-ink/25 bg-white text-slate-600'
   }`;
 }
 
@@ -401,7 +401,7 @@ export function SharePage() {
                                 className={`w-0 shrink-0 border-l-2 ${index > 0 ? 'h-3 border-dotted border-ink/60 print:border-solid print:border-slate-500' : 'h-3 border-transparent'}`}
                                 aria-hidden
                               />
-                              <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink bg-sakura-100 text-sm font-bold text-ink print:border-black print:bg-white print:text-black">
+                              <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink bg-lavender-100 text-sm font-bold text-ink print:border-black print:bg-white print:text-black">
                                 {shown.number}
                               </span>
                               <span
@@ -453,7 +453,7 @@ export function SharePage() {
         >
           <button
             type="button"
-            className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-sakura-500 px-4 text-sm font-bold text-ink shadow-sticker"
+            className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker"
             onClick={() => {
               if (!readyFile) return;
               void onSaveReady(readyFile);

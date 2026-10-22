@@ -107,16 +107,16 @@ export function ShareMenu({
             className="share-export-ignore cute-enter fixed z-40 overflow-hidden rounded-2xl border-2 border-ink bg-white py-1 text-ink shadow-sticker"
             style={{ top: pos.top, left: pos.left, width: pos.width }}
           >
-            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-sakura-100" onClick={() => void onCopy()}>
+            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-lavender-100" onClick={() => void onCopy()}>
               {t('copyLink')}
             </button>
-            <a role="menuitem" href={href} className="flex min-h-touch items-center px-3 text-sm font-semibold hover:bg-sakura-100">
+            <a role="menuitem" href={href} className="flex min-h-touch items-center px-3 text-sm font-semibold hover:bg-lavender-100">
               {t('shareOpenPage')}
             </a>
-            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-sakura-100" onClick={() => onExport('image')}>
+            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-lavender-100" onClick={() => onExport('image')}>
               {t('shareExportImage')}
             </button>
-            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-sakura-100" onClick={() => onExport('pdf')}>
+            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-lavender-100" onClick={() => onExport('pdf')}>
               {t('shareExportPdf')}
             </button>
           </div>,
