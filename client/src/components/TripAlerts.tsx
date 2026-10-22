@@ -188,7 +188,7 @@ export function TripAlerts() {
                 <span className="rounded-full border-2 border-ink bg-butter-300 px-2 text-sm font-bold leading-5 text-ink">
                   {t('hasWarnings')}
                 </span>
-                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-ink bg-red-600 px-1.5 text-sm font-bold text-white">
+                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-circle border-2 border-ink bg-red-600 px-1.5 text-sm font-bold text-white">
                   {warningSummary.count}
                 </span>
                 <span className="min-w-0 text-sm font-medium leading-snug text-slate-800">

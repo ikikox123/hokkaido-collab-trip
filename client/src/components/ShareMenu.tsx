@@ -16,6 +16,82 @@ function ShareGlyph() {
   );
 }
 
+/** Copy / open / export handlers shared by the share popover and the header sheet. */
+export function useShareActions(scope: ShareScope, lang: ShareLang) {
+  const { t } = useI18n();
+  const { notice, flash } = useTimedNotice();
+  const href = shareLocation(scope, lang);
+
+  async function onCopy() {
+    const url = sharePageUrl(window.location.origin, scope, lang);
+    try {
+      const mode = await shareOrCopy(url);
+      flash(mode === 'copied' ? t('shareCopied') : t('shareOpened'));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
+      flash(t('shareCopyFailed'));
+    }
+  }
+
+  function onExport(kind: 'image' | 'pdf') {
+    openShareExport(kind, scope, lang);
+  }
+
+  return { href, notice, onCopy, onExport };
+}
+
+/** The four share actions as a plain list, for the header sheet. */
+export function ShareActionList({
+  scope,
+  lang,
+  onBeforeExport,
+  itemClassName,
+}: {
+  scope: ShareScope;
+  lang: ShareLang;
+  onBeforeExport?: () => void;
+  itemClassName: string;
+}) {
+  const { t } = useI18n();
+  const { href, notice, onCopy, onExport } = useShareActions(scope, lang);
+  return (
+    <>
+      <button type="button" className={itemClassName} onClick={() => void onCopy()}>
+        <ShareGlyph />
+        <span>{t('copyLink')}</span>
+      </button>
+      <a href={href} className={itemClassName}>
+        <span aria-hidden className="w-5 text-center">↗</span>
+        <span>{t('shareOpenPage')}</span>
+      </a>
+      <button
+        type="button"
+        className={itemClassName}
+        onClick={() => {
+          onBeforeExport?.();
+          onExport('image');
+        }}
+      >
+        <span aria-hidden className="w-5 text-center">▣</span>
+        <span>{t('shareExportImage')}</span>
+      </button>
+      <button
+        type="button"
+        className={itemClassName}
+        onClick={() => {
+          onBeforeExport?.();
+          onExport('pdf');
+        }}
+      >
+        <span aria-hidden className="w-5 text-center">⎙</span>
+        <span>{t('shareExportPdf')}</span>
+      </button>
+      <ShareNotice message={notice} />
+    </>
+  );
+}
+
 /**
  * Header share control. It stays in the top row at every width
  * and is not placed inside the collapsible menu.
@@ -36,8 +112,7 @@ export function ShareMenu({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
-  const { notice, flash } = useTimedNotice();
-  const href = shareLocation(scope, lang);
+  const { href, notice, onCopy, onExport: exportAs } = useShareActions(scope, lang);
   const face =
     tone === 'light'
       ? 'border-2 border-ink bg-white text-ink'
@@ -78,21 +153,9 @@ export function ShareMenu({
     };
   }, [open]);
 
-  async function onCopy() {
-    const url = sharePageUrl(window.location.origin, scope, lang);
-    try {
-      const mode = await shareOrCopy(url);
-      flash(mode === 'copied' ? t('shareCopied') : t('shareOpened'));
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      if (err instanceof Error && err.name === 'AbortError') return;
-      flash(t('shareCopyFailed'));
-    }
-  }
-
   function onExport(kind: 'image' | 'pdf') {
     setOpen(false);
-    openShareExport(kind, scope, lang);
+    exportAs(kind);
   }
 
   const panel =

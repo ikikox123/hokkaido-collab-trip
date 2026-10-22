@@ -93,7 +93,7 @@ type BadgeIcon = 'calendar' | 'pin' | 'yen' | 'snow';
 export function SectionBadge({ icon = 'calendar', className = '' }: { icon?: BadgeIcon; className?: string }) {
   return (
     <span
-      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-lavender-300 ${className}`}
+      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-circle border-2 border-ink bg-lavender-300 ${className}`}
       aria-hidden
     >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={INK} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -125,7 +125,7 @@ export function SectionBadge({ icon = 'calendar', className = '' }: { icon?: Bad
 export function DayScene({ day, className = '' }: { day: number; className?: string }) {
   const scene = ((day - 1) % 4 + 4) % 4;
   return (
-    <svg className={className} viewBox="0 0 80 56" aria-hidden focusable="false">
+    <svg className={`day-scene ${className}`} viewBox="0 0 80 56" aria-hidden focusable="false">
       <defs>
         <clipPath id={`scene-clip-${scene}`}>
           <rect x="1.5" y="1.5" width="77" height="53" rx="10" />
@@ -212,6 +212,33 @@ export function Snowfall({ className = '' }: { className?: string }) {
   );
 }
 
+const STARS = Array.from({ length: 14 }, (_, i) => ({
+  left: `${(i * 37 + 11) % 100}%`,
+  top: `${(i * 53 + 9) % 86}%`,
+  delay: `${-((i * 0.7) % 3.6)}s`,
+  size: i % 4 === 0 ? 3 : 2,
+}));
+
+/**
+ * Header backdrop for every theme. CSS shows the part that belongs to the active theme:
+ * snow and petals (cute), nothing (minimal), twinkling stars over a drifting aurora (night).
+ */
+export function HeaderSky() {
+  return (
+    <>
+      <Snowfall />
+      <div className="aurora pointer-events-none" aria-hidden>
+        <span className="aurora-band" />
+      </div>
+      <div className="stars pointer-events-none" aria-hidden>
+        {STARS.map((s, i) => (
+          <span key={i} className="star" style={{ left: s.left, top: s.top, animationDelay: s.delay, width: s.size, height: s.size }} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** Scenery strip for the welcome and loading pages: snowy peaks, lavender rows and a JR train rolling by. */
 export function HokkaidoBand({ className = '' }: { className?: string }) {
   return (
@@ -252,7 +279,7 @@ const FLIGHT_RE = /^\s*([A-Za-z0-9]{2,4})\s+(\d{1,2}:\d{2})\s*(?:→|->|-)\s*([A
 export function FlightCard({ title, text }: { title: string; text: string }) {
   const m = FLIGHT_RE.exec(text || '');
   return (
-    <div data-reveal className="cute-pop overflow-hidden rounded-2xl border-2 border-ink bg-white text-ink shadow-sticker-sm">
+    <div className="cute-pop overflow-hidden rounded-2xl border-2 border-ink bg-white text-ink shadow-sticker-sm">
       <div className="flex items-center justify-between border-b-2 border-ink bg-bluebell-200 px-3 py-1 text-sm font-bold">
         <span>{title}</span>
         <span aria-hidden>❄</span>

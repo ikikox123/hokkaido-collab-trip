@@ -19,8 +19,8 @@ body {
   margin: 0;
   font-family: 'Zen Maru Gothic', 'Huninn', 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Noto Sans TC', 'Noto Sans JP', 'PingFang TC', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Microsoft JhengHei', system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
-  background-color: #fffcf5;
-  color: #2d2a4a;
+  background-color: rgb(var(--c-snow-50));
+  color: rgb(var(--c-ink));
 }
 
 /* ---------- Hokkaido sticker theme: outlines, pops, mascot, snow ----------
@@ -28,7 +28,7 @@ body {
 
 /* Milk paper with a faint snow-dot pattern behind scrolling content. */
 .cute-paper {
-  background-color: #fffcf5;
+  background-color: rgb(var(--c-snow-50));
   background-image: radial-gradient(rgba(82, 184, 223, 0.16) 1.3px, transparent 1.4px),
     radial-gradient(rgba(155, 127, 219, 0.12) 1.1px, transparent 1.2px);
   background-size: 22px 22px, 22px 22px;
@@ -40,9 +40,9 @@ body {
   border-width: 2px;
 }
 :is(input, select, textarea).border:focus {
-  border-color: #2d2a4a;
+  border-color: rgb(var(--c-ink));
   outline: none;
-  box-shadow: 0 0 0 3px rgba(155, 127, 219, 0.4);
+  box-shadow: 0 0 0 3px rgb(var(--c-lavender-500) / 0.4);
 }
 
 /* Press and hover: a springy curve so the release overshoots into a small bounce. */
@@ -302,6 +302,411 @@ html.share-capturing [data-reveal] {
   }
 }
 
+/* ---------- Header menu (all themes) ---------- */
+.menu-heading {
+  margin-bottom: 0.375rem;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgb(var(--c-slate-500));
+}
+.menu-backdrop {
+  background: rgb(15 14 35 / 0.38);
+}
+.menu-layer[data-state='closed'] {
+  pointer-events: none;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+@keyframes drop-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+}
+.menu-layer[data-state='open'] .menu-backdrop {
+  animation: fade-in 240ms ease-out both;
+}
+.menu-layer[data-state='closed'] .menu-backdrop {
+  animation: fade-out 220ms ease-in both;
+}
+.menu-layer[data-state='open'] .menu-sheet {
+  animation: sheet-up 380ms cubic-bezier(0.22, 1.15, 0.36, 1) both;
+}
+.menu-layer[data-state='closed'] .menu-sheet {
+  animation: sheet-down 230ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+@media (min-width: 768px) {
+  .menu-sheet {
+    transform-origin: 92% 0;
+  }
+  .menu-layer[data-state='open'] .menu-sheet {
+    animation: drop-in 280ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  }
+  .menu-layer[data-state='closed'] .menu-sheet {
+    animation: drop-out 180ms ease-in both;
+  }
+}
+.menu-layer[data-state='open'] .menu-section {
+  animation: cute-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.menu-layer[data-state='open'] .menu-section:nth-child(2) {
+  animation-delay: 60ms;
+}
+.menu-layer[data-state='open'] .menu-section:nth-child(3) {
+  animation-delay: 120ms;
+}
+.menu-layer[data-state='open'] .menu-section:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+/* Burger morphs into a cross while the menu is open. */
+.burger {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 14px;
+}
+.burger span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2.4px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 300ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 180ms ease;
+}
+.burger span:nth-child(1) {
+  top: 0;
+}
+.burger span:nth-child(2) {
+  top: 5.8px;
+}
+.burger span:nth-child(3) {
+  top: 11.6px;
+}
+.header-menu-trigger[data-open] .burger span:nth-child(1) {
+  transform: translateY(5.8px) rotate(45deg);
+}
+.header-menu-trigger[data-open] .burger span:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0.2);
+}
+.header-menu-trigger[data-open] .burger span:nth-child(3) {
+  transform: translateY(-5.8px) rotate(-45deg);
+}
+
+/* Theme-only decorations start hidden; each theme turns its own on. */
+.aurora,
+.stars,
+.brand-mark {
+  display: none;
+}
+
+/* Theme switch: View Transitions cross-fade, or a short colour fade where unsupported. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 420ms;
+}
+html.theme-fade,
+html.theme-fade * {
+  transition: background-color 380ms ease, color 380ms ease, border-color 380ms ease !important;
+}
+
+@media screen {
+  /* ---------- Theme B: snow-country minimal stationery ---------- */
+  html[data-theme='b']:not(.share-capturing) body {
+    font-family: 'Noto Sans TC', 'Noto Sans JP', 'Hiragino Sans', 'PingFang TC', 'Yu Gothic', 'Microsoft JhengHei', system-ui, sans-serif;
+    letter-spacing: 0.02em;
+  }
+  html[data-theme='b']:not(.share-capturing) :is(h1, h2, h3, .header-title) {
+    font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', 'Noto Serif TC', 'Noto Serif JP', 'Noto Serif CJK TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+  html[data-theme='b']:not(.share-capturing) .font-bold {
+    font-weight: 600;
+  }
+  html[data-theme='b']:not(.share-capturing) .cute-paper {
+    background-image: none;
+  }
+  html[data-theme='b']:not(.share-capturing) .app-header {
+    background-image: none;
+    background-color: rgb(var(--c-snow-50));
+  }
+  html[data-theme='b']:not(.share-capturing) :is(.mascot, .snowfall, .hokkaido-band, .day-scene, .brand-mascot, .hero-art) {
+    display: none !important;
+  }
+  html[data-theme='b']:not(.share-capturing) .brand-mark {
+    display: flex;
+    height: 2rem;
+    width: 2rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(var(--c-crab-500));
+    color: rgb(var(--c-crab-500));
+    font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif TC', serif;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  /* A thin chevron marks the chosen day instead of the mascot. */
+  html[data-theme='b']:not(.share-capturing) .day-mascot {
+    transition: transform 420ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-theme='b']:not(.share-capturing) .day-mascot::after {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 18px;
+    width: 8px;
+    height: 8px;
+    border-right: 1.5px solid rgb(var(--c-lavender-600));
+    border-bottom: 1.5px solid rgb(var(--c-lavender-600));
+    transform: rotate(45deg);
+  }
+  html[data-theme='b']:not(.share-capturing) :is(.mascot-hop, .mascot-bob, .plane-float) {
+    animation: none;
+  }
+  /* Quiet feedback: opacity only, no bounce. */
+  html[data-theme='b']:not(.share-capturing) :is(.cute-press, .cute-pop) {
+    transition: opacity 180ms ease;
+  }
+  html[data-theme='b']:not(.share-capturing) :is(.cute-press, .cute-pop):is(:hover, :active) {
+    transform: none !important;
+  }
+  html[data-theme='b']:not(.share-capturing) :is(.cute-press, .cute-pop):active {
+    opacity: 0.62;
+  }
+  html[data-theme='b']:not(.share-capturing) .tab-slider {
+    transition: transform 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-theme='b']:not(.share-capturing) :is([data-reveal][data-shown], .cute-enter, .menu-layer[data-state='open'] .menu-section) {
+    animation-name: fade-slide;
+  }
+  html[data-theme='b']:not(.share-capturing) .menu-layer[data-state='open'] .menu-sheet {
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  html[data-theme='b']:not(.share-capturing) .burger span {
+    height: 1.5px;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ---------- Theme C: aurora night ---------- */
+  html[data-theme='c']:not(.share-capturing) {
+    color-scheme: dark;
+  }
+  html[data-theme='c']:not(.share-capturing) .cute-paper {
+    background-color: rgb(var(--c-snow-50));
+    background-image: radial-gradient(900px 420px at 0% -10%, rgb(61 255 168 / 0.09), transparent 60%),
+      radial-gradient(700px 420px at 100% 0%, rgb(123 92 240 / 0.16), transparent 60%),
+      radial-gradient(rgb(255 255 255 / 0.2) 1px, transparent 1.3px);
+    background-size: auto, auto, 46px 46px;
+    background-position: 0 0, 0 0, 0 0;
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-white {
+    background-color: rgb(26 33 84 / 0.8);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 60%);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-white\/95 {
+    background-color: rgb(18 25 66 / 0.9);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-white\/70 {
+    background-color: rgb(255 255 255 / 0.1);
+  }
+  html[data-theme='c']:not(.share-capturing) .border-ink {
+    border-color: rgb(160 178 255 / 0.3);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-ink {
+    background-color: rgb(160 178 255 / 0.45);
+  }
+  html[data-theme='c']:not(.share-capturing) :is(input, select, textarea) {
+    background-color: rgb(255 255 255 / 0.06);
+    color: inherit;
+  }
+  html[data-theme='c']:not(.share-capturing) option {
+    background-color: #121a42;
+    color: #e9ecff;
+  }
+  /* Status panels: Tailwind's light tints become soft glows, dark text becomes light. */
+  html[data-theme='c']:not(.share-capturing) :is(.bg-amber-50, .bg-amber-50\/60) {
+    background-color: rgb(245 200 76 / 0.12);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-sky-50 {
+    background-color: rgb(91 224 255 / 0.1);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-emerald-50 {
+    background-color: rgb(61 255 168 / 0.1);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-red-50 {
+    background-color: rgb(255 79 139 / 0.12);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-orange-50 {
+    background-color: rgb(255 150 80 / 0.12);
+  }
+  html[data-theme='c']:not(.share-capturing) :is(.text-amber-950, .text-amber-900, .text-amber-700) {
+    color: #ffe08a;
+  }
+  html[data-theme='c']:not(.share-capturing) :is(.text-sky-950, .text-sky-900, .text-sky-800) {
+    color: #9fe7ff;
+  }
+  html[data-theme='c']:not(.share-capturing) :is(.text-emerald-950, .text-emerald-900) {
+    color: #9effd0;
+  }
+  html[data-theme='c']:not(.share-capturing) :is(.text-red-950, .text-red-700, .text-red-600) {
+    color: #ff9bb8;
+  }
+  html[data-theme='c']:not(.share-capturing) .text-orange-950 {
+    color: #ffc29a;
+  }
+  html[data-theme='c']:not(.share-capturing) .text-pink-600 {
+    color: #ff8fc0;
+  }
+  html[data-theme='c']:not(.share-capturing) :is(.border-amber-300, .border-sky-200, .border-red-200, .border-red-300, .border-orange-300, .border-emerald-200) {
+    border-color: rgb(255 255 255 / 0.18);
+  }
+  /* Blur only on a few large surfaces to stay light on phones. */
+  html[data-theme='c']:not(.share-capturing) .th-glass {
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px) saturate(140%);
+  }
+  html[data-theme='c']:not(.share-capturing) .menu-sheet {
+    background-color: rgb(14 20 56 / 0.86);
+  }
+  html[data-theme='c']:not(.share-capturing) .app-header {
+    background-image: linear-gradient(120deg, rgb(11 16 48 / 0.94), rgb(28 27 84 / 0.9));
+  }
+  html[data-theme='c']:not(.share-capturing) :is(.aurora, .stars) {
+    display: block;
+  }
+  html[data-theme='c']:not(.share-capturing) .snowfall {
+    display: none;
+  }
+  html[data-theme='c']:not(.share-capturing) .hokkaido-band {
+    filter: brightness(0.72) saturate(1.15);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-lavender-300 {
+    box-shadow: 0 0 0 1px rgb(185 163 255 / 0.55), 0 0 18px -2px rgb(123 92 240 / 0.7);
+  }
+  html[data-theme='c']:not(.share-capturing) .bg-crab-500 {
+    box-shadow: 0 0 10px rgb(255 79 139 / 0.85);
+  }
+  html[data-theme='c']:not(.share-capturing) .text-crab-600 {
+    text-shadow: 0 0 12px rgb(255 79 139 / 0.45);
+  }
+  html[data-theme='c']:not(.share-capturing) .text-ice-600 {
+    text-shadow: 0 0 10px rgb(91 224 255 / 0.35);
+  }
+  html[data-theme='c']:not(.share-capturing) .menu-backdrop {
+    background: rgb(3 5 20 / 0.55);
+  }
+  html[data-theme='c']:not(.share-capturing) .leaflet-container {
+    background: #0b1030;
+  }
+  html[data-theme='c']:not(.share-capturing) .leaflet-bar a {
+    background-color: rgb(18 25 66 / 0.94) !important;
+    border-bottom-color: rgb(160 178 255 / 0.25) !important;
+  }
+}
+
+/* Aurora and stars live in the header (shown only in theme C). */
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.aurora-band {
+  position: absolute;
+  top: -80%;
+  left: -50%;
+  width: 200%;
+  height: 260%;
+  background: linear-gradient(
+    100deg,
+    transparent 22%,
+    rgb(61 255 168 / 0.32) 34%,
+    rgb(91 224 255 / 0.24) 44%,
+    rgb(155 127 255 / 0.34) 56%,
+    rgb(255 79 139 / 0.12) 64%,
+    transparent 76%
+  );
+  animation: aurora-flow 16s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes aurora-flow {
+  from {
+    transform: translateX(-14%) skewX(-12deg);
+    opacity: 0.75;
+  }
+  to {
+    transform: translateX(14%) skewX(10deg);
+    opacity: 1;
+  }
+}
+.stars {
+  position: absolute;
+  inset: 0;
+}
+.star {
+  position: absolute;
+  border-radius: 9999px;
+  background: #fff;
+  opacity: 0.3;
+  animation: twinkle 3.6s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+@keyframes fade-slide {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-layer *,
+  .aurora-band,
+  .star {
+    animation: none !important;
+  }
+  .burger span {
+    transition: none !important;
+  }
+}
+
 /* Fill the flex map column. A fixed 55dvh floor clipped the bottom nav once the day strip and alerts stayed on screen. */
 .map-pane {
   position: relative;
@@ -319,7 +724,7 @@ html.share-capturing [data-reveal] {
   z-index: 0;
   font: inherit;
   touch-action: none;
-  background: #dff2fa;
+  background: rgb(var(--c-bluebell-100));
 }
 
 .leaflet-control-attribution {
@@ -336,7 +741,7 @@ html.share-capturing [data-reveal] {
   height: 100%;
   min-height: 0;
   touch-action: none;
-  background: #dff2fa;
+  background: rgb(var(--c-bluebell-100));
 }
 
 .pac-container {
@@ -361,18 +766,18 @@ body:not(.place-dialog-open) .pac-container {
 /* Leaflet zoom buttons get the sticker outline. */
 .leaflet-touch .leaflet-bar,
 .leaflet-bar {
-  border: 2px solid #2d2a4a !important;
-  border-radius: 14px !important;
-  box-shadow: 0 2px 0 0 #2d2a4a !important;
+  border: var(--bw) solid rgb(var(--c-ink)) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--shadow-sticker-sm) !important;
   overflow: hidden;
 }
 .leaflet-bar a {
-  color: #2d2a4a !important;
+  color: rgb(var(--c-ink)) !important;
 }
 
 /* dnd drag overlay */
 .drag-overlay {
-  box-shadow: 0 4px 0 0 #2d2a4a, 0 12px 30px rgba(45, 42, 74, 0.2);
+  box-shadow: var(--shadow-sticker), 0 12px 30px rgb(var(--c-ink) / 0.2);
   transform: scale(1.03) rotate(-1deg);
 }
 

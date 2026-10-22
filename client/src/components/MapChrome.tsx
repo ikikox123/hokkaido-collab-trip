@@ -24,9 +24,9 @@ export function MapChrome({
       <div className="pointer-events-none absolute bottom-2 left-2 z-[400] max-w-[78%] rounded-2xl border-2 border-ink bg-white/95 px-2.5 py-1.5 text-sm leading-snug text-ink shadow-sticker-sm">
         {providerLabel && <div className="font-medium text-slate-700">{providerLabel}</div>}
         <div>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: STOP_MARKER_COLORS.next }} />
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-circle align-middle" style={{ background: STOP_MARKER_COLORS.next }} />
           {t('nextStop')}
-          <span className="ml-2 mr-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: STOP_MARKER_COLORS.selected }} />
+          <span className="ml-2 mr-1 inline-block h-2.5 w-2.5 rounded-circle align-middle" style={{ background: STOP_MARKER_COLORS.selected }} />
           {t('selectedStop')}
         </div>
         {modes.length > 0 && (

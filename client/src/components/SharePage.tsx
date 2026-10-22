@@ -401,7 +401,7 @@ export function SharePage() {
                                 className={`w-0 shrink-0 border-l-2 ${index > 0 ? 'h-3 border-dotted border-ink/60 print:border-solid print:border-slate-500' : 'h-3 border-transparent'}`}
                                 aria-hidden
                               />
-                              <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink bg-lavender-100 text-sm font-bold text-ink print:border-black print:bg-white print:text-black">
+                              <span className="z-10 flex h-8 w-8 items-center justify-center rounded-circle border-2 border-ink bg-lavender-100 text-sm font-bold text-ink print:border-black print:bg-white print:text-black">
                                 {shown.number}
                               </span>
                               <span

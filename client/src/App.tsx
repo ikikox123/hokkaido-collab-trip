@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { connectRealtime, type RealtimeSocket } from './lib/realtime';
 import type { FxView } from '../../server/src/fx.js';
 import { LoginModal } from './components/LoginModal';
@@ -8,19 +8,17 @@ import { MapView } from './components/MapView';
 import { LodgingDialog, type LodgingDraft } from './components/LodgingDialog';
 import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
 import { SplitBoard } from './components/SplitBoard';
-import { LanguageMenu } from './i18n/LanguageMenu';
 import { useI18n } from './i18n/I18nProvider';
 import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
-import { ShareMenu } from './components/ShareMenu';
-import { DayScene, FlightCard, Fox, HokkaidoBand, Mascot, Snowfall } from './components/Cute';
+import { DayScene, FlightCard, Fox, HeaderSky, HokkaidoBand, Mascot } from './components/Cute';
+import { HeaderMenu } from './components/HeaderMenu';
 import { DayTimeline } from './components/DayTimeline';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { emitAck } from './lib/bill';
 import { SAPPORO_BASE } from './lib/dayView';
 import { usesGoogleMaps } from './lib/mapProvider';
-import { openShareExport } from './lib/shareExport';
 import { shareLocation } from './lib/sharePath';
 import { isSplitPath, leaveSplit, openSplit } from './lib/splitLink';
 import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './types/trip';
@@ -65,6 +63,46 @@ function CurrentStopBar({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Brand + title on the left, one menu button on the right. The subtitle splits on "｜" into small chips. */
+function AppHeader({ subtitle, menu, className = '' }: { subtitle?: string; menu: ReactNode; className?: string }) {
+  const { locale } = useI18n();
+  const heading = pageHeading(locale);
+  const parts = (subtitle ?? '')
+    .split('｜')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return (
+    <header
+      className={`app-header th-glass relative z-20 shrink-0 overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 text-ink ${className}`}
+    >
+      <HeaderSky />
+      <div className="relative flex min-h-[3.75rem] items-center gap-2.5 px-3 py-2 sm:px-4">
+        <span className="brand-mascot mascot-bob shrink-0">
+          <Mascot size={38} />
+        </span>
+        <span className="brand-mark" aria-hidden>
+          雪
+        </span>
+        <div className="min-w-0 flex-1">
+          <h1 className="header-title truncate text-base font-bold leading-tight tracking-wide sm:text-lg" title={heading}>
+            {heading}
+          </h1>
+          {parts.length > 0 && (
+            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-[11px] font-semibold leading-4 text-slate-600">
+              {parts.map((part) => (
+                <span key={part} className="header-chip rounded-full bg-white/70 px-2">
+                  {part}
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
+        {menu}
+      </div>
+    </header>
   );
 }
 
@@ -269,19 +307,12 @@ export default function App() {
   if (!user || !token) {
     return (
       <div className="cute-paper min-h-full text-ink">
-        <header className="relative overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
-          <Snowfall />
-          <div className="relative flex items-center gap-2">
-            <span className="mascot-bob shrink-0">
-              <Mascot size={36} />
-            </span>
-            <h1 className="min-w-0 flex-1 truncate text-base font-bold">{pageHeading(locale)}</h1>
-            <ShareMenu scope={{ kind: 'all' }} lang={locale} />
-            <LanguageMenu />
-          </div>
-        </header>
+        <AppHeader
+          className="pt-[var(--safe-top)]"
+          menu={<HeaderMenu open={headerOpen} onOpenChange={setHeaderOpen} shareScope={{ kind: 'all' }} lang={locale} />}
+        />
         <main className="cute-enter mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
-          <div className="relative mt-7" data-reveal>
+          <div className="hero-art relative mt-7" data-reveal>
             <HokkaidoBand />
             <div className="pointer-events-none absolute -top-8 right-3 flex items-end gap-0.5" aria-hidden>
               <span className="mascot-bob block">
@@ -308,18 +339,20 @@ export default function App() {
   if (notCompanion) {
     return (
       <div className="cute-paper min-h-full text-ink">
-        <header className="relative overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
-          <Snowfall />
-          <div className="relative flex items-center gap-2">
-            <span className="mascot-bob shrink-0">
-              <Mascot size={36} />
-            </span>
-            <h1 className="min-w-0 flex-1 truncate text-base font-bold">{pageHeading(locale)}</h1>
-            <LanguageMenu />
-          </div>
-        </header>
+        <AppHeader
+          className="pt-[var(--safe-top)]"
+          menu={
+            <HeaderMenu
+              open={headerOpen}
+              onOpenChange={setHeaderOpen}
+              shareScope={{ kind: 'all' }}
+              lang={locale}
+              account={{ name: user.displayName, onLogout: handleLogout }}
+            />
+          }
+        />
         <main className="cute-enter mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
-          <div className="relative mt-7" data-reveal>
+          <div className="hero-art relative mt-7" data-reveal>
             <HokkaidoBand />
             <div className="pointer-events-none absolute -top-8 right-3 flex items-end gap-0.5" aria-hidden>
               <span className="mascot-bob block">
@@ -352,12 +385,17 @@ export default function App() {
   if (!trip) {
     return (
       <div className="cute-paper relative min-h-full flex items-center justify-center text-ink">
-        <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))] flex items-center gap-2">
-          <ShareMenu scope={{ kind: 'day', day: selectedDay }} lang={locale} tone="light" />
-          <LanguageMenu tone="light" />
+        <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))]">
+          <HeaderMenu
+            open={headerOpen}
+            onOpenChange={setHeaderOpen}
+            shareScope={{ kind: 'day', day: selectedDay }}
+            lang={locale}
+            account={{ name: user.displayName, onLogout: handleLogout }}
+          />
         </div>
         <div className="w-full max-w-xs text-center px-6">
-          <div className="mb-1 flex items-end justify-center gap-1">
+          <div className="hero-art mb-1 flex items-end justify-center gap-1">
             <span className="mascot-bob block">
               <Mascot size={64} />
             </span>
@@ -372,134 +410,83 @@ export default function App() {
 
   return (
     <div className="app-enter h-[100dvh] flex flex-col bg-snow-50 text-ink overflow-hidden pt-[var(--safe-top)]">
-      {/* Top bar — compact on mobile, expandable */}
-      <header className="relative shrink-0 overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 text-ink z-20">
-        <Snowfall />
-        <div className="relative flex items-center gap-1 px-1.5 min-h-touch py-2 sm:gap-2 sm:px-3">
-          <span className="mascot-bob hidden shrink-0 min-[400px]:block sm:block">
-            <Mascot size={34} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-sm sm:text-base truncate leading-tight">
-              {pageHeading(locale)}
-            </h1>
-            <p className="truncate text-sm text-slate-600">
-              {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
-            </p>
-          </div>
-          <ShareMenu scope={{ kind: 'day', day: selectedDay }} lang={locale} />
-          <LanguageMenu />
-          <button
-            type="button"
-            className={`cute-press min-h-touch shrink-0 rounded-full border-2 border-ink px-2 text-sm font-bold sm:px-3 ${
-              headerOpen ? 'bg-lavender-300' : 'bg-mint-200'
-            }`}
-            onClick={() => setHeaderOpen((v) => !v)}
-            aria-expanded={headerOpen}
+      {/* Top bar: brand and title on the left, everything else behind one menu button */}
+      <AppHeader
+        subtitle={trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
+        menu={
+          <HeaderMenu
+            open={headerOpen}
+            onOpenChange={setHeaderOpen}
+            shareScope={{ kind: 'day', day: selectedDay }}
+            lang={locale}
+            account={user ? { name: user.displayName, onLogout: handleLogout } : null}
+            onLogin={user ? undefined : () => setLoginOpen(true)}
           >
-            {headerOpen ? t('collapse') : t('menu')}
-          </button>
-          {user ? (
-            <button
-              type="button"
-              className="cute-press min-h-touch min-w-0 max-w-[2.6rem] truncate rounded-full border-2 border-ink bg-butter-100 px-1.5 text-sm font-bold min-[360px]:max-w-[3.5rem] sm:max-w-[9rem] sm:px-3"
-              title={user.displayName}
-              onClick={handleLogout}
-            >
-              {user.displayName}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="cute-press min-h-touch px-3 rounded-full border-2 border-ink bg-lavender-300 text-sm font-bold"
-              onClick={() => setLoginOpen(true)}
-            >
-              {t('login')}
-            </button>
-          )}
-        </div>
-
-        {headerOpen && (
-          <div className="cute-enter relative max-h-[70dvh] overflow-y-auto border-t-2 border-dashed border-ink/40 px-3 py-3 space-y-3 text-sm">
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="font-bold">{t('roomCode')}</span>
-              <input
-                className="flex-1 min-w-[8rem] min-h-touch rounded-lg border border-ink bg-white px-3 font-bold tracking-wider text-ink placeholder:text-slate-400"
-                value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                placeholder={DEFAULT_ROOM}
-              />
-              <button
-                type="button"
-                className="cute-pop min-h-touch px-4 rounded-full border-2 border-ink bg-lavender-300 text-ink font-bold shadow-sticker-sm"
-                onClick={joinRoom}
-              >
-                {t('join')}
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-700">
-              <span className="inline-flex items-center gap-1 rounded-full border-2 border-ink bg-mint-100 px-2 font-bold text-ink">
-                <span className="h-2 w-2 rounded-full bg-mint-500" aria-hidden />
-                {t('onlineCount', { count: online.length })}
-              </span>
-              <span className="truncate max-w-full">
-                {online.map((o) => o.displayName).join(t('listSep')) || t('noneYet')}
-              </span>
-            </div>
-            <div className="space-y-2 text-sm text-slate-700">
-              <div className="flex items-center gap-2 rounded-2xl border-2 border-ink bg-white px-3 py-1">
-                <div className="min-w-0 flex-1 truncate font-semibold text-ink">
-                  {t('lodgingLine', { name: trip.lodging?.name?.trim() || t('lodgingUnset') })}
-                </div>
-                {canEdit && isTripCompanion && (
+            <section className="menu-section">
+              <h3 className="menu-heading">{t('menuTripSection')}</h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold">{t('roomCode')}</span>
+                  <input
+                    className="min-h-touch min-w-[8rem] flex-1 rounded-lg border border-ink bg-white px-3 font-bold tracking-wider text-ink placeholder:text-slate-400"
+                    value={roomCode}
+                    onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                    placeholder={DEFAULT_ROOM}
+                  />
                   <button
                     type="button"
-                    className="cute-press min-h-touch shrink-0 rounded-full border-2 border-ink bg-mint-200 px-3 text-sm font-bold text-ink"
-                    onClick={() => setLodgingOpen(true)}
+                    className="cute-pop min-h-touch rounded-full border-2 border-ink bg-lavender-300 px-4 font-bold text-ink shadow-sticker-sm"
+                    onClick={joinRoom}
                   >
-                    {t('editLodging')}
+                    {t('join')}
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-700">
+                  <span className="inline-flex items-center gap-1 rounded-full border-2 border-ink bg-mint-100 px-2 font-bold text-ink">
+                    <span className="h-2 w-2 rounded-circle bg-mint-500" aria-hidden />
+                    {t('onlineCount', { count: online.length })}
+                  </span>
+                  <span className="max-w-full truncate">
+                    {online.map((o) => o.displayName).join(t('listSep')) || t('noneYet')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 rounded-2xl border-2 border-ink bg-white px-3 py-1">
+                  <div className="min-w-0 flex-1 truncate font-semibold text-ink">
+                    {t('lodgingLine', { name: trip.lodging?.name?.trim() || t('lodgingUnset') })}
+                  </div>
+                  {canEdit && isTripCompanion && (
+                    <button
+                      type="button"
+                      className="cute-press min-h-touch shrink-0 rounded-full border-2 border-ink bg-mint-200 px-3 text-sm font-bold text-ink"
+                      onClick={() => {
+                        setHeaderOpen(false);
+                        setLodgingOpen(true);
+                      }}
+                    >
+                      {t('editLodging')}
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-2">
+                  <FlightCard title={t('outboundLine', { text: '' }).trim()} text={trip.flights.outbound} />
+                  <FlightCard title={t('inboundLine', { text: '' }).trim()} text={trip.flights.inbound} />
+                </div>
+                {isTripCompanion && (
+                  <button
+                    type="button"
+                    className="cute-pop min-h-touch w-full rounded-full border-2 border-dashed border-ink/60 font-semibold text-slate-600"
+                    onClick={() => {
+                      if (confirm(t('resetConfirm'))) emitAuth('trip:reset', {});
+                    }}
+                  >
+                    {t('resetSeed')}
                   </button>
                 )}
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <FlightCard title={t('outboundLine', { text: '' }).trim()} text={trip.flights.outbound} />
-                <FlightCard title={t('inboundLine', { text: '' }).trim()} text={trip.flights.inbound} />
-              </div>
-            </div>
-            <a
-              href={shareLocation({ kind: 'day', day: selectedDay }, locale)}
-              className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-white px-3 font-bold text-ink shadow-sticker-sm"
-            >
-              {t('shareOpen')}
-            </a>
-            <button
-              type="button"
-              className="cute-pop flex min-h-touch w-full items-center justify-center rounded-full border-2 border-ink bg-white px-3 font-bold text-ink shadow-sticker-sm"
-              onClick={() => openShareExport('image', { kind: 'day', day: selectedDay }, locale)}
-            >
-              {t('shareExportImage')}
-            </button>
-            <button
-              type="button"
-              className="cute-pop flex min-h-touch w-full items-center justify-center rounded-full border-2 border-ink bg-white px-3 font-bold text-ink shadow-sticker-sm"
-              onClick={() => openShareExport('pdf', { kind: 'day', day: selectedDay }, locale)}
-            >
-              {t('shareExportPdf')}
-            </button>
-            {isTripCompanion && (
-              <button
-                type="button"
-                className="cute-pop min-h-touch w-full rounded-full border-2 border-dashed border-ink/60 font-semibold text-slate-600"
-                onClick={() => {
-                  if (confirm(t('resetConfirm'))) emitAuth('trip:reset', {});
-                }}
-              >
-                {t('resetSeed')}
-              </button>
-            )}
-          </div>
-        )}
-      </header>
+            </section>
+          </HeaderMenu>
+        }
+      />
 
       {/* Day strip stays outside the list scroller. Hidden on the phone bill tab. */}
       {!mobileSplit && <DayTimeline days={trip.days} selectedDay={selectedDay} onSelect={setSelectedDay} />}

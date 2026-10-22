@@ -61,7 +61,7 @@ function TimelineDot({
     <div className="relative flex w-8 shrink-0 flex-col items-center self-stretch" aria-hidden>
       <span className={`h-2 shrink-0 ${fromPrevious ? 'border-l-[3px] border-dotted border-ink/70' : ''}`} />
       <span
-        className={`z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink text-sm font-bold text-ink transition-colors ${dot}`}
+        className={`z-10 flex h-8 w-8 items-center justify-center rounded-circle border-2 border-ink text-sm font-bold text-ink ${dot}`}
       >
         {index + 1}
       </span>
@@ -218,7 +218,7 @@ function LegConnector({
       <div className="relative flex w-8 shrink-0 items-center justify-center self-stretch" aria-hidden>
         <span className="absolute inset-y-0 left-1/2 -translate-x-[1.5px] border-l-[3px] border-dotted border-ink/70" />
         <span
-          className="relative z-10 h-3.5 w-3.5 rounded-full border-2 border-ink"
+          className="relative z-10 h-3.5 w-3.5 rounded-circle border-2 border-ink"
           style={{ background: MODE_COLORS[mode] }}
         />
       </div>
@@ -228,7 +228,7 @@ function LegConnector({
           <select
             aria-label={t('toNextModeAria', { from: fromName, to: toName })}
             className="mt-1 min-h-touch w-full rounded-full border border-ink px-3 text-base font-bold text-ink"
-            style={{ background: `color-mix(in srgb, ${MODE_COLORS[mode]} 16%, white)` }}
+            style={{ background: `color-mix(in srgb, ${MODE_COLORS[mode]} 16%, rgb(var(--c-snow-50)))` }}
             value={mode}
             onChange={(e) => {
               if (isTravelMode(e.target.value)) onSetMode(e.target.value);
@@ -244,7 +244,7 @@ function LegConnector({
           <p className="mt-0.5">
             <span
               className="inline-flex items-center rounded-full border-2 px-2.5 text-sm font-bold leading-6 text-ink"
-              style={{ borderColor: MODE_COLORS[mode], background: `color-mix(in srgb, ${MODE_COLORS[mode]} 16%, white)` }}
+              style={{ borderColor: MODE_COLORS[mode], background: `color-mix(in srgb, ${MODE_COLORS[mode]} 16%, rgb(var(--c-snow-50)))` }}
             >
               {travelLabel(t, mode)}
             </span>

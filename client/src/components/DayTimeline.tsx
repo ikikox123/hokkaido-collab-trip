@@ -97,7 +97,7 @@ export function DayTimeline({ days, selectedDay, onSelect }: Props) {
                 className="cute-press flex min-h-touch min-w-[4.4rem] flex-1 flex-col items-center px-0.5 pb-2"
               >
                 <span
-                  className={`relative z-[1] mt-1 h-3.5 w-3.5 rounded-full border-[2.5px] border-ink ${
+                  className={`relative z-[1] mt-1 h-3.5 w-3.5 rounded-circle border-[2.5px] border-ink ${
                     active ? 'bg-crab-500' : 'bg-white'
                   }`}
                   aria-hidden

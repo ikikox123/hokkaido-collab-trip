@@ -641,6 +641,20 @@ export const catalog = {
   titleTooLong: { 'zh-Hant': '地點名稱過長', ja: '地点名が長すぎます', en: 'Place name is too long' },
   stopNotFound: { 'zh-Hant': '找不到站點', ja: '地点が見つかりません', en: 'Stop not found' },
   timeoutRetry: { 'zh-Hant': '連線逾時，請再試一次', ja: '接続がタイムアウトしました。もう一度お試しください', en: 'The connection timed out. Try again' },
+  themeTitle: { 'zh-Hant': '主題', ja: 'テーマ', en: 'Theme' },
+  themeA: { 'zh-Hant': '可愛北海道', ja: 'かわいい北海道', en: 'Cute Hokkaido' },
+  themeAHint: { 'zh-Hant': '貼紙、吉祥物、雪花', ja: 'ステッカーとマスコット', en: 'Stickers, mascots, snow' },
+  themeB: { 'zh-Hant': '雪國極簡', ja: '雪国ミニマル', en: 'Snow minimal' },
+  themeBHint: { 'zh-Hant': '細線、留白、明朝體', ja: '細い線と余白、明朝', en: 'Hairlines, white space, serif' },
+  themeC: { 'zh-Hant': '極光夜空', ja: 'オーロラの夜', en: 'Aurora night' },
+  themeCHint: { 'zh-Hant': '深夜藍、極光、玻璃卡片', ja: '夜空とオーロラ、ガラス', en: 'Night sky, aurora, glass' },
+  headerMenuOpen: { 'zh-Hant': '開啟選單', ja: 'メニューを開く', en: 'Open menu' },
+  headerMenuClose: { 'zh-Hant': '關閉選單', ja: 'メニューを閉じる', en: 'Close menu' },
+  menuShareSection: { 'zh-Hant': '分享與匯出', ja: '共有と書き出し', en: 'Share & export' },
+  menuTripSection: { 'zh-Hant': '行程資訊', ja: '旅の情報', en: 'Trip info' },
+  menuDisplaySection: { 'zh-Hant': '顯示', ja: '表示', en: 'Display' },
+  menuAccountSection: { 'zh-Hant': '帳號', ja: 'アカウント', en: 'Account' },
+  signedInAs: { 'zh-Hant': '已登入：{name}', ja: 'ログイン中：{name}', en: 'Signed in as {name}' },
 } satisfies Record<string, Entry>;
 
 export type MessageKey = keyof typeof catalog;
