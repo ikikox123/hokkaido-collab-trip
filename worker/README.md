@@ -42,6 +42,34 @@ npm test               # 單元測試
    - `GOOGLE_MAPS_SERVER_KEY`：選填，Google 路線與地點搜尋
 4. Google Cloud Console → 瀏覽器金鑰 → HTTP referrer 加上 `https://hokkaido-collab-trip.<你的子網域>.workers.dev/*`
 
+## Google 地圖建置設定
+
+前端是在建置時（`npm run build:client`，也就是 `wrangler.jsonc` 的 `build.command`）把 Google 地圖設定編進去的。Vite 會讀 `client/.env.production.local` 和環境變數裡的 `VITE_*`。兩種方式擇一：
+
+1. **本機檔案**：在 `client/.env.production.local` 放這兩行（這個檔案已被 `.gitignore` 忽略，不會進 git）：
+   ```
+   VITE_MAP_PROVIDER=google
+   VITE_GOOGLE_MAPS_API_KEY=<瀏覽器金鑰>
+   ```
+   之後在 `worker/` 執行 `npx wrangler deploy` 就會用這份設定建置。
+2. **部署時用環境變數**：
+   ```
+   VITE_MAP_PROVIDER=google VITE_GOOGLE_MAPS_API_KEY=<瀏覽器金鑰> npx wrangler deploy
+   ```
+   用 Cloudflare 後台連 GitHub 部署時，就是上面「Build variables」那兩個變數。
+
+伺服器端的路線與地點搜尋用的是另一把金鑰 `GOOGLE_MAPS_SERVER_KEY`，它是 Worker secret，不會編進前端：
+```
+npx wrangler secret put GOOGLE_MAPS_SERVER_KEY
+```
+
+金鑰安全提醒：
+- 瀏覽器金鑰會出現在前端程式裡，一定要在 Google Cloud Console 設 **HTTP referrer 限制**，只允許：
+  - `https://hokkaido-collab-trip.ikikox123.workers.dev/*`
+  - Railway 網域：`https://hokkaido-collab-trip-production.up.railway.app/*`
+- 兩把金鑰都要設 **API 限制**，只開實際用到的 API。
+- 瀏覽器金鑰和伺服器金鑰最好分開成兩把，伺服器金鑰不要設 referrer、也不要放進任何 `VITE_*` 變數。
+
 ## 從 Railway 搬資料
 
 Production 不會自動建立種子行程；匯入前，行程相關 API 都會回「行程資料尚未匯入」。

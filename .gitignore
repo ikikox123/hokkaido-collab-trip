@@ -17,6 +17,10 @@ server/dist/
 secrets/
 server/.env
 client/.env
+# Vite build-time settings (Google Maps browser key) for the Worker build
+client/.env*.local
+client/.env.production.local
+worker/.env.build
 
 # runtime state — never commit a live itinerary
 data/state.json
