@@ -210,8 +210,8 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                 <button
                   key={currency}
                   type="button"
-                  className={`min-h-touch rounded-xl text-base font-bold ${
-                    draft.currency === currency ? 'bg-ice-600 text-white' : 'bg-snow-100 text-slate-700'
+                  className={`min-h-touch cute-press rounded-full border-2 text-base font-bold ${
+                    draft.currency === currency ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                   }`}
                   onClick={() => setDraft((current) => ({ ...current, currency }))}
                 >
@@ -255,8 +255,8 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
                 <button
                   key={mode}
                   type="button"
-                  className={`min-h-touch rounded-xl px-2 text-base font-bold ${
-                    draft.mode === mode ? 'bg-ice-600 text-white' : 'bg-snow-100 text-slate-700'
+                  className={`min-h-touch cute-press rounded-full border-2 px-2 text-base font-bold ${
+                    draft.mode === mode ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-transparent bg-snow-100 text-slate-700'
                   }`}
                   onClick={() => setMode(mode)}
                 >
@@ -388,7 +388,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
 
           <div
             className={`rounded-xl px-3 py-2 text-sm ${
-              preview.ok ? 'bg-snow-100 text-slate-700' : 'bg-red-50 text-red-700'
+              preview.ok ? 'border-transparent bg-snow-100 text-slate-700' : 'bg-red-50 text-red-700'
             }`}
           >
             {preview.ok ? (
@@ -426,7 +426,7 @@ export function ExpenseEditor({ trip, expense, selfId, pending, onClose, onSubmi
             <button
               type="submit"
               disabled={!preview.ok || pending}
-              className="min-h-touch rounded-xl bg-ice-600 text-base font-bold text-white disabled:opacity-50"
+              className="cute-pop min-h-touch rounded-full border-2 border-ink bg-sakura-500 text-base font-bold text-ink disabled:opacity-50 shadow-sticker"
             >
               {t('save')}
             </button>

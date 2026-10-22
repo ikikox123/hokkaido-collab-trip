@@ -3,6 +3,7 @@ import { LanguageMenu } from '../i18n/LanguageMenu';
 import { useI18n } from '../i18n/I18nProvider';
 import { pageHeading } from '../i18n/screen.ts';
 import type { Locale } from '../i18n/messages.ts';
+import { Mascot } from './Cute';
 import { ShareExportBar } from './ShareExportBar';
 import { ShareNotice, useTimedNotice } from './ShareNotice';
 import { shareOrCopy, sharePageUrl } from '../lib/shareLink';
@@ -40,7 +41,7 @@ function InAppSafariHint() {
   const external = kind === 'line' ? lineExternalBrowserUrl(window.location.href) : null;
   return (
     <div
-      className="share-export-ignore mt-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-800 ring-1 ring-slate-200"
+      className="share-export-ignore mt-2 rounded-2xl border-2 border-ink bg-white px-3 py-2 text-sm text-ink"
       data-share-export-ignore="true"
       role="status"
     >
@@ -55,8 +56,8 @@ function InAppSafariHint() {
 }
 
 function chipClass(active: boolean) {
-  return `min-h-touch shrink-0 rounded-xl px-3 py-1 text-left text-sm font-semibold ${
-    active ? 'bg-ice-600 text-white shadow' : 'bg-white text-slate-600 ring-1 ring-slate-200'
+  return `cute-press min-h-touch shrink-0 rounded-2xl border-2 px-3 py-1 text-left text-sm font-bold ${
+    active ? 'border-ink bg-sakura-500 text-ink shadow-sticker-sm' : 'border-ink/25 bg-white text-slate-600'
   }`;
 }
 
@@ -284,16 +285,19 @@ export function SharePage() {
   );
 
   return (
-    <div className="share-root min-h-full bg-snow-50 text-slate-800">
+    <div className="share-root cute-paper min-h-full text-slate-800">
       <div className="share-sheet mx-auto min-h-full max-w-2xl px-4 pb-[calc(5.75rem+var(--safe-bottom))] md:pb-[max(2.5rem,var(--safe-bottom))]">
         <div
-          className="share-toolbar share-export-ignore sticky top-0 z-20 -mx-4 mb-4 border-b border-slate-200 bg-snow-50/95 px-4 pb-2 pt-[max(0.75rem,var(--safe-top))] shadow-sm backdrop-blur print:hidden"
+          className="share-toolbar share-export-ignore sticky top-0 z-20 -mx-4 mb-4 border-b-2 border-ink bg-snow-50/95 px-4 pb-2 pt-[max(0.75rem,var(--safe-top))] backdrop-blur print:hidden"
           data-share-export-ignore="true"
         >
           <div className="mb-2 hidden md:block">{bar}</div>
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-bold tracking-wide text-ice-700">{t('shareReadOnly')}</p>
+            <span className="mascot-bob shrink-0 self-center" aria-hidden>
+              <Mascot size={38} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold tracking-wide text-ice-600">{t('shareReadOnly')}</p>
               <h1 className="text-lg font-bold leading-snug text-slate-900">{pageHeading(locale)}</h1>
             </div>
             <LanguageMenu tone="light" onPick={pickLang} />
@@ -349,7 +353,7 @@ export function SharePage() {
                 {t('shareBack')}
               </a>
               {subtitle && <p className="mt-3 text-sm font-medium text-slate-700 print:mt-1 print:text-black">{subtitle}</p>}
-              <section className="share-lodging mt-4 rounded-2xl border border-ice-100 bg-white px-4 py-3 print:mt-3 print:rounded-none print:border-0 print:border-b print:border-slate-300 print:bg-transparent print:px-0 print:py-2">
+              <section className="share-lodging mt-4 rounded-2xl border-2 border-ink bg-white px-4 py-3 shadow-sticker-sm print:mt-3 print:shadow-none print:rounded-none print:border-0 print:border-b print:border-slate-300 print:bg-transparent print:px-0 print:py-2">
                 <h2 className="text-sm font-bold text-ice-700 print:text-black">{t('shareStayBase')}</h2>
                 {lodging.name && <p className="mt-1 text-base font-semibold leading-snug text-slate-900">{lodging.name}</p>}
                 {lodging.address && <p className="mt-0.5 text-sm leading-relaxed text-slate-600 print:text-black">{lodging.address}</p>}
@@ -372,7 +376,7 @@ export function SharePage() {
               const heading = shareDayHeading(locale, block.day);
               return (
                 <section key={block.day.day} className="share-day mt-8 print:mt-4" aria-labelledby={`share-day-${block.day.day}`}>
-                  <header className="share-day-head border-b-2 border-ice-600 pb-2 print:border-black">
+                  <header className="share-day-head border-b-[3px] border-dotted border-ink pb-2 print:border-solid print:border-black">
                     <div className="flex items-baseline justify-between gap-3">
                       <h2 id={`share-day-${block.day.day}`} className="text-xl font-bold leading-tight text-slate-900">
                         {heading.title}
@@ -394,14 +398,14 @@ export function SharePage() {
                           <li key={row.stop.id} className="share-stop flex items-stretch gap-3">
                             <div className="flex w-8 shrink-0 flex-col items-center self-stretch">
                               <span
-                                className={`w-0 shrink-0 border-l-2 ${index > 0 ? 'h-3 border-ice-300 print:border-slate-500' : 'h-3 border-transparent'}`}
+                                className={`w-0 shrink-0 border-l-2 ${index > 0 ? 'h-3 border-dotted border-ink/60 print:border-solid print:border-slate-500' : 'h-3 border-transparent'}`}
                                 aria-hidden
                               />
-                              <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ice-700 bg-white text-sm font-bold text-ice-700 print:border-black print:text-black">
+                              <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink bg-sakura-100 text-sm font-bold text-ink print:border-black print:bg-white print:text-black">
                                 {shown.number}
                               </span>
                               <span
-                                className={`w-0 flex-1 border-l-2 ${continued ? 'border-ice-300 print:border-slate-500' : 'border-transparent'}`}
+                                className={`w-0 flex-1 border-l-2 ${continued ? 'border-dotted border-ink/60 print:border-solid print:border-slate-500' : 'border-transparent'}`}
                                 aria-hidden
                               />
                             </div>
@@ -429,7 +433,7 @@ export function SharePage() {
       </div>
 
       <div
-        className="share-actionbar share-export-ignore fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur print:hidden md:hidden"
+        className="share-actionbar share-export-ignore fixed inset-x-0 bottom-0 z-30 border-t-2 border-ink bg-snow-50/95 px-3 pt-2 backdrop-blur print:hidden md:hidden"
         style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
         data-share-export-ignore="true"
       >
@@ -449,7 +453,7 @@ export function SharePage() {
         >
           <button
             type="button"
-            className="min-h-touch w-full rounded-xl bg-ice-700 px-4 text-sm font-bold text-white shadow-lg"
+            className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-sakura-500 px-4 text-sm font-bold text-ink shadow-sticker"
             onClick={() => {
               if (!readyFile) return;
               void onSaveReady(readyFile);

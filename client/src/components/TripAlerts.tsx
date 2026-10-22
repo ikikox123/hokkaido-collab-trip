@@ -168,12 +168,12 @@ export function TripAlerts() {
   return (
     <section
       aria-labelledby="trip-alerts-heading"
-      className="shrink-0 border-b border-slate-200 bg-white"
+      className="shrink-0 border-b-2 border-ink bg-snow-50 px-3 pb-2"
     >
-      <div className="flex items-stretch gap-1 px-2 py-1.5">
+      <div className="flex items-stretch gap-1 rounded-2xl border-2 border-ink bg-bluebell-100 px-1 py-0.5 shadow-sticker-sm">
         <button
           type="button"
-          className="flex min-h-touch min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-1 text-left active:bg-snow-100"
+          className="cute-press flex min-h-touch min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-1 text-left"
           aria-expanded={expanded}
           aria-controls="trip-alerts-details"
           onClick={() => setExpanded((open) => !open)}
@@ -185,10 +185,10 @@ export function TripAlerts() {
             {warningOn ? (
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="font-bold text-amber-950">{t('statusNow')}</span>
-                <span className="rounded-md bg-amber-100 px-2 py-0.5 text-sm font-bold text-amber-950">
+                <span className="rounded-full border-2 border-ink bg-butter-300 px-2 text-sm font-bold leading-5 text-ink">
                   {t('hasWarnings')}
                 </span>
-                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-sm font-bold text-white">
+                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-ink bg-red-600 px-1.5 text-sm font-bold text-white">
                   {warningSummary.count}
                 </span>
                 <span className="min-w-0 text-sm font-medium leading-snug text-slate-800">
@@ -215,13 +215,15 @@ export function TripAlerts() {
               </span>
             )}
           </span>
-          <span className="shrink-0 text-sm font-bold text-ice-700">{expanded ? t('collapse') : t('expand')}</span>
+          <span className="shrink-0 rounded-full border-2 border-ink bg-white px-2 text-sm font-bold leading-6 text-ink">
+            {expanded ? t('collapse') : t('expand')}
+          </span>
         </button>
         {needsRefresh && (
           <button
             type="button"
             onClick={() => setReloadKey((key) => key + 1)}
-            className="shrink-0 self-center rounded-full bg-snow-100 px-3 min-h-touch text-sm font-semibold text-ice-700"
+            className="cute-press shrink-0 self-center rounded-full border-2 border-ink bg-white px-3 min-h-touch text-sm font-bold text-ink"
           >
             {t('refresh')}
           </button>
@@ -229,8 +231,8 @@ export function TripAlerts() {
       </div>
 
       {expanded && (
-        <div id="trip-alerts-details" className="max-h-[42vh] space-y-3 overflow-y-auto px-3 pb-3">
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3">
+        <div id="trip-alerts-details" className="cute-enter max-h-[42vh] space-y-3 overflow-y-auto pt-2">
+          <div className="rounded-2xl border-2 border-ink bg-sky-50 p-3 shadow-sticker-sm">
             <h3 className="text-base font-bold text-sky-950">{t('forecastTitle')}</h3>
             <p className="mt-0.5 text-sm leading-snug text-sky-900">{t('forecastHint')}</p>
             <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
@@ -262,7 +264,7 @@ export function TripAlerts() {
             {weather?.warning && <p className="mt-2 text-sm text-slate-600">{weather.warning}</p>}
           </div>
 
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-3">
+          <div className="rounded-2xl border-2 border-ink bg-amber-50/60 p-3 shadow-sticker-sm">
             <h3 className="text-base font-bold text-amber-950">{t('statusNow')}</h3>
             <p className="mt-0.5 text-sm leading-snug text-amber-950">{t('statusHint')}</p>
 
@@ -363,7 +365,7 @@ export function TripAlerts() {
             href={jrUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex min-h-touch items-center justify-center rounded-xl bg-ice-600 px-3 text-center text-base font-semibold text-white active:bg-ice-700"
+            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-sakura-500 px-3 text-center text-base font-semibold text-ink active:bg-sakura-400 shadow-sticker"
           >
             {t('viewJrOfficial')}
           </a>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { connectRealtime, type RealtimeSocket } from './lib/realtime';
 import type { FxView } from '../../server/src/fx.js';
 import { LoginModal } from './components/LoginModal';
@@ -14,6 +14,8 @@ import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
 import { ShareMenu } from './components/ShareMenu';
+import { DayScene, FlightCard, Mascot, Snowfall } from './components/Cute';
+import { DayTimeline } from './components/DayTimeline';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { emitAck } from './lib/bill';
 import { SAPPORO_BASE } from './lib/dayView';
@@ -25,20 +27,42 @@ import type { Leg, PresenceUser, Stop, TravelMode, TripState, User } from './typ
 
 type MobileTab = 'list' | 'map' | 'split';
 
-function CurrentStopBar({ stop }: { stop: Stop | null }) {
+function CurrentStopBar({
+  stop,
+  day,
+  dayLabel,
+  lodgingName,
+}: {
+  stop: Stop | null;
+  day: number;
+  dayLabel: string;
+  lodgingName: string;
+}) {
   const { t, locale } = useI18n();
   return (
-    <div className="z-20 shrink-0 border-b border-ice-100 bg-white px-3 py-2">
-      <div className="flex min-h-touch items-center gap-2">
-        <span className="shrink-0 rounded-md bg-ice-600 px-2 py-1 text-sm font-bold text-white">{t('currentStop')}</span>
-        {stop ? (
-          <p className="min-w-0 truncate text-base font-bold text-slate-900">
-            <span className="mr-2 font-semibold text-ice-700">{stop.time || t('timeUnset')}</span>
-            {displayStopTitle(locale, stop.title)}
+    <div className="z-20 shrink-0 bg-snow-50 px-3 py-2">
+      <div
+        key={`${day}-${stop?.id ?? 'none'}`}
+        className="cute-enter cute-pop flex min-h-touch items-center gap-3 rounded-2xl border-2 border-ink bg-sakura-100 p-2 shadow-sticker"
+      >
+        <DayScene day={day} className="h-12 w-[4.25rem] shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+            <span className="truncate">{dayLabel}</span>
+            <span className="shrink-0 rounded-full border-[1.5px] border-ink bg-white px-1.5 text-[11px] font-bold leading-4 text-ink">
+              {t('currentStop')}
+            </span>
           </p>
-        ) : (
-          <p className="truncate text-base text-slate-500">{t('noStopsToday')}</p>
-        )}
+          {stop ? (
+            <p className="truncate text-base font-bold leading-snug text-ink">
+              <span className="mr-1.5 text-ice-600">{stop.time || t('timeUnset')}</span>
+              {displayStopTitle(locale, stop.title)}
+            </p>
+          ) : (
+            <p className="truncate text-base font-semibold text-slate-500">{t('noStopsToday')}</p>
+          )}
+          <p className="truncate text-xs text-slate-500">{t('lodgingLine', { name: lodgingName })}</p>
+        </div>
       </div>
     </div>
   );
@@ -237,26 +261,30 @@ export default function App() {
   }
 
   const toastNode = toast ? (
-    <div className="fixed left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2.5 text-sm text-white shadow-lg bottom-[calc(1rem+var(--safe-bottom))]">
+    <div className="cute-enter fixed left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 rounded-full border-2 border-ink bg-butter-100 px-4 py-2.5 text-sm font-bold text-ink shadow-sticker bottom-[calc(5rem+var(--safe-bottom))] md:bottom-[calc(1rem+var(--safe-bottom))]">
       {toast}
     </div>
   ) : null;
 
   if (!user || !token) {
     return (
-      <div className="min-h-full bg-snow-50 text-slate-800">
-        <header className="bg-ice-700 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-white">
-          <div className="flex items-center gap-2">
+      <div className="cute-paper min-h-full text-ink">
+        <header className="relative overflow-hidden border-b-2 border-ink bg-snow-50 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
+          <Snowfall />
+          <div className="relative flex items-center gap-2">
+            <span className="mascot-bob shrink-0">
+              <Mascot size={36} />
+            </span>
             <h1 className="min-w-0 flex-1 truncate text-base font-bold">{pageHeading(locale)}</h1>
             <ShareMenu scope={{ kind: 'all' }} lang={locale} />
             <LanguageMenu />
           </div>
         </header>
-        <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
+        <main className="cute-enter mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
           <p className="text-sm leading-relaxed text-slate-600">{t('collabNeedsLogin')}</p>
           <a
             href={shareLocation({ kind: 'all' }, locale)}
-            className="flex min-h-touch items-center justify-center rounded-xl border border-ice-200 bg-white px-3 text-base font-bold text-ice-700"
+            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-mint-200 px-3 text-base font-bold text-ink shadow-sticker"
           >
             {t('shareOpen')}
           </a>
@@ -270,25 +298,29 @@ export default function App() {
 
   if (notCompanion) {
     return (
-      <div className="min-h-full bg-snow-50 text-slate-800">
-        <header className="bg-ice-700 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-white">
-          <div className="flex items-center gap-2">
+      <div className="cute-paper min-h-full text-ink">
+        <header className="relative overflow-hidden border-b-2 border-ink bg-snow-50 px-3 py-3 pt-[max(0.75rem,var(--safe-top))] text-ink">
+          <Snowfall />
+          <div className="relative flex items-center gap-2">
+            <span className="mascot-bob shrink-0">
+              <Mascot size={36} />
+            </span>
             <h1 className="min-w-0 flex-1 truncate text-base font-bold">{pageHeading(locale)}</h1>
             <LanguageMenu />
           </div>
         </header>
-        <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
+        <main className="cute-enter mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-5">
           <p className="text-sm leading-relaxed text-slate-600">{t('notCompanionYet')}</p>
           <a
             href={shareLocation({ kind: 'all' }, locale)}
-            className="flex min-h-touch items-center justify-center rounded-xl border border-ice-200 bg-white px-3 text-base font-bold text-ice-700"
+            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-mint-200 px-3 text-base font-bold text-ink shadow-sticker"
           >
             {t('shareOpen')}
           </a>
           <p className="text-sm leading-relaxed text-slate-600">{t('shareCanExport')}</p>
           <button
             type="button"
-            className="flex min-h-touch items-center justify-center rounded-xl bg-ice-600 px-3 text-base font-bold text-white"
+            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-sakura-500 px-3 text-base font-bold text-ink shadow-sticker"
             onClick={handleLogout}
           >
             {t('logOut')}
@@ -301,13 +333,15 @@ export default function App() {
 
   if (!trip) {
     return (
-      <div className="relative min-h-full flex items-center justify-center bg-snow-50 text-ice-700">
+      <div className="cute-paper relative min-h-full flex items-center justify-center text-ink">
         <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))] flex items-center gap-2">
           <ShareMenu scope={{ kind: 'day', day: selectedDay }} lang={locale} tone="light" />
           <LanguageMenu tone="light" />
         </div>
         <div className="text-center px-6">
-          <div className="text-4xl mb-3">❄️</div>
+          <div className="mascot-hop mb-3 flex justify-center">
+            <Mascot size={72} />
+          </div>
           <p className="font-semibold">{t('loadingTrip')}</p>
         </div>
       </div>
@@ -315,15 +349,19 @@ export default function App() {
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-snow-50 overflow-hidden pt-[var(--safe-top)]">
+    <div className="h-[100dvh] flex flex-col bg-snow-50 text-ink overflow-hidden pt-[var(--safe-top)]">
       {/* Top bar — compact on mobile, expandable */}
-      <header className="shrink-0 bg-ice-700 text-white shadow-md z-20">
-        <div className="flex items-center gap-1 px-1.5 min-h-touch py-2 sm:gap-2 sm:px-3">
+      <header className="relative shrink-0 overflow-hidden border-b-2 border-ink bg-snow-50 text-ink z-20">
+        <Snowfall />
+        <div className="relative flex items-center gap-1 px-1.5 min-h-touch py-2 sm:gap-2 sm:px-3">
+          <span className="mascot-bob hidden shrink-0 min-[400px]:block sm:block">
+            <Mascot size={34} />
+          </span>
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-sm sm:text-base truncate leading-tight">
               {pageHeading(locale)}
             </h1>
-            <p className="truncate text-sm text-white/80">
+            <p className="truncate text-sm text-slate-600">
               {trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
             </p>
           </div>
@@ -331,7 +369,9 @@ export default function App() {
           <LanguageMenu />
           <button
             type="button"
-            className="min-h-touch shrink-0 rounded-lg bg-white/15 px-1.5 text-sm font-medium sm:px-2"
+            className={`cute-press min-h-touch shrink-0 rounded-full border-2 border-ink px-2 text-sm font-bold sm:px-3 ${
+              headerOpen ? 'bg-sakura-500' : 'bg-mint-200'
+            }`}
             onClick={() => setHeaderOpen((v) => !v)}
             aria-expanded={headerOpen}
           >
@@ -340,7 +380,7 @@ export default function App() {
           {user ? (
             <button
               type="button"
-              className="min-h-touch min-w-0 max-w-[2.6rem] truncate rounded-lg bg-white/20 px-1.5 text-sm font-semibold min-[360px]:max-w-[3.5rem] sm:max-w-[9rem] sm:px-3"
+              className="cute-press min-h-touch min-w-0 max-w-[2.6rem] truncate rounded-full border-2 border-ink bg-butter-100 px-1.5 text-sm font-bold min-[360px]:max-w-[3.5rem] sm:max-w-[9rem] sm:px-3"
               title={user.displayName}
               onClick={handleLogout}
             >
@@ -349,7 +389,7 @@ export default function App() {
           ) : (
             <button
               type="button"
-              className="min-h-touch px-3 rounded-lg bg-sakura-500 text-sm font-semibold"
+              className="cute-press min-h-touch px-3 rounded-full border-2 border-ink bg-sakura-500 text-sm font-bold"
               onClick={() => setLoginOpen(true)}
             >
               {t('login')}
@@ -358,63 +398,68 @@ export default function App() {
         </div>
 
         {headerOpen && (
-          <div className="border-t border-white/15 px-3 py-3 space-y-3 text-sm">
+          <div className="cute-enter relative max-h-[70dvh] overflow-y-auto border-t-2 border-dashed border-ink/40 px-3 py-3 space-y-3 text-sm">
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-white/80">{t('roomCode')}</span>
+              <span className="font-bold">{t('roomCode')}</span>
               <input
-                className="flex-1 min-w-[8rem] min-h-touch rounded-lg bg-white/10 border border-white/20 px-3 text-white placeholder:text-white/40"
+                className="flex-1 min-w-[8rem] min-h-touch rounded-lg border border-ink bg-white px-3 font-bold tracking-wider text-ink placeholder:text-slate-400"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 placeholder={DEFAULT_ROOM}
               />
               <button
                 type="button"
-                className="min-h-touch px-4 rounded-lg bg-white text-ice-700 font-semibold"
+                className="cute-pop min-h-touch px-4 rounded-full border-2 border-ink bg-sakura-500 text-ink font-bold shadow-sticker-sm"
                 onClick={joinRoom}
               >
                 {t('join')}
               </button>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/85">
-              <span>{t('onlineCount', { count: online.length })}</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-700">
+              <span className="inline-flex items-center gap-1 rounded-full border-2 border-ink bg-mint-100 px-2 font-bold text-ink">
+                <span className="h-2 w-2 rounded-full bg-mint-500" aria-hidden />
+                {t('onlineCount', { count: online.length })}
+              </span>
               <span className="truncate max-w-full">
                 {online.map((o) => o.displayName).join(t('listSep')) || t('noneYet')}
               </span>
             </div>
-            <div className="space-y-0.5 text-sm text-white/80">
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1 truncate">
+            <div className="space-y-2 text-sm text-slate-700">
+              <div className="flex items-center gap-2 rounded-2xl border-2 border-ink bg-white px-3 py-1">
+                <div className="min-w-0 flex-1 truncate font-semibold text-ink">
                   {t('lodgingLine', { name: trip.lodging?.name?.trim() || t('lodgingUnset') })}
                 </div>
                 {canEdit && isTripCompanion && (
                   <button
                     type="button"
-                    className="min-h-touch shrink-0 rounded-lg bg-white/15 px-3 text-sm font-semibold text-white"
+                    className="cute-press min-h-touch shrink-0 rounded-full border-2 border-ink bg-mint-200 px-3 text-sm font-bold text-ink"
                     onClick={() => setLodgingOpen(true)}
                   >
                     {t('editLodging')}
                   </button>
                 )}
               </div>
-              <div>{t('outboundLine', { text: trip.flights.outbound })}</div>
-              <div>{t('inboundLine', { text: trip.flights.inbound })}</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FlightCard title={t('outboundLine', { text: '' }).trim()} text={trip.flights.outbound} />
+                <FlightCard title={t('inboundLine', { text: '' }).trim()} text={trip.flights.inbound} />
+              </div>
             </div>
             <a
               href={shareLocation({ kind: 'day', day: selectedDay }, locale)}
-              className="flex min-h-touch items-center justify-center rounded-lg border border-white/30 px-3 font-semibold text-white/90"
+              className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-white px-3 font-bold text-ink shadow-sticker-sm"
             >
               {t('shareOpen')}
             </a>
             <button
               type="button"
-              className="flex min-h-touch w-full items-center justify-center rounded-lg border border-white/30 px-3 font-semibold text-white/90"
+              className="cute-pop flex min-h-touch w-full items-center justify-center rounded-full border-2 border-ink bg-white px-3 font-bold text-ink shadow-sticker-sm"
               onClick={() => openShareExport('image', { kind: 'day', day: selectedDay }, locale)}
             >
               {t('shareExportImage')}
             </button>
             <button
               type="button"
-              className="flex min-h-touch w-full items-center justify-center rounded-lg border border-white/30 px-3 font-semibold text-white/90"
+              className="cute-pop flex min-h-touch w-full items-center justify-center rounded-full border-2 border-ink bg-white px-3 font-bold text-ink shadow-sticker-sm"
               onClick={() => openShareExport('pdf', { kind: 'day', day: selectedDay }, locale)}
             >
               {t('shareExportPdf')}
@@ -422,7 +467,7 @@ export default function App() {
             {isTripCompanion && (
               <button
                 type="button"
-                className="min-h-touch w-full rounded-lg border border-white/30 text-white/90"
+                className="cute-pop min-h-touch w-full rounded-full border-2 border-dashed border-ink/60 font-semibold text-slate-600"
                 onClick={() => {
                   if (confirm(t('resetConfirm'))) emitAuth('trip:reset', {});
                 }}
@@ -435,58 +480,51 @@ export default function App() {
       </header>
 
       {/* Day strip stays outside the list scroller. Hidden on the phone bill tab. */}
-      {!mobileSplit && (
-      <nav aria-label={t('dayNav')} className="z-20 shrink-0 border-b border-slate-200 bg-white">
-        <div className="flex gap-1 overflow-x-auto no-scrollbar px-2 py-2">
-          {trip.days.map((d) => (
-            <button
-              key={d.day}
-              type="button"
-              onClick={() => setSelectedDay(d.day)}
-              className={`min-h-touch shrink-0 rounded-xl px-3 text-sm font-semibold transition ${
-                selectedDay === d.day
-                  ? 'bg-ice-600 text-white shadow'
-                  : 'bg-snow-100 text-slate-600 active:bg-snow-200'
-              }`}
-            >
-              <span className="block leading-tight">{displayDayLabel(locale, d.label)}</span>
-              <span className="block text-sm font-medium opacity-90">{d.date.slice(5)}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
-      )}
+      {!mobileSplit && <DayTimeline days={trip.days} selectedDay={selectedDay} onSelect={setSelectedDay} />}
 
-      {!mobileSplit && <CurrentStopBar stop={dayStops.find((s) => s.id === selectedId) ?? null} />}
+      {!mobileSplit && (
+        <CurrentStopBar
+          stop={dayStops.find((s) => s.id === selectedId) ?? null}
+          day={selectedDay}
+          dayLabel={displayDayLabel(locale, trip.days.find((d) => d.day === selectedDay)?.label ?? `D${selectedDay}`)}
+          lodgingName={trip.lodging?.name?.trim() || t('lodgingUnset')}
+        />
+      )}
 
       {!mobileSplit && <TripAlerts />}
 
       {/* Main: stacked on mobile via tabs; side-by-side on md+ */}
       <main className="flex min-h-0 flex-1 flex-col md:flex-row">
         <section
-          className={`min-h-0 flex-1 flex-col border-slate-200 bg-snow-50 md:w-[42%] md:max-w-md md:border-r ${
+          className={`cute-paper min-h-0 flex-1 flex-col border-ink md:w-[42%] md:max-w-md md:border-r-2 ${
             mobileTab === 'map' ? 'hidden md:flex' : 'flex'
           }`}
         >
-          <div className="hidden shrink-0 grid-cols-2 gap-1 border-b border-slate-100 bg-white p-2 md:grid">
-            <button
-              type="button"
-              className={`min-h-touch rounded-xl text-base font-bold ${
-                mobileTab === 'split' ? 'bg-snow-100 text-slate-700' : 'bg-ice-600 text-white'
-              }`}
-              onClick={() => selectTab('list')}
+          <div className="hidden shrink-0 border-b-2 border-ink bg-snow-50 p-2 md:block">
+            <div
+              className="relative grid grid-cols-2 gap-1 rounded-full border-2 border-ink bg-white p-1"
+              style={{ '--tab-count': 2, '--tab-index': mobileTab === 'split' ? 1 : 0, '--tab-gap': '0.25rem' } as CSSProperties}
             >
-              {t('tabItinerary')}
-            </button>
-            <button
-              type="button"
-              className={`min-h-touch rounded-xl text-base font-bold ${
-                mobileTab === 'split' ? 'bg-ice-600 text-white' : 'bg-snow-100 text-slate-700'
-              }`}
-              onClick={() => selectTab('split')}
-            >
-              {t('tabSplit')}
-            </button>
+              <span className="pointer-events-none absolute inset-1" aria-hidden>
+                <span className="tab-slider rounded-full border-2 border-ink bg-sakura-500" />
+              </span>
+              {(
+                [
+                  ['list', t('tabItinerary')],
+                  ['split', t('tabSplit')],
+                ] as [MobileTab, string][]
+              ).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  aria-pressed={(tab === 'split') === (mobileTab === 'split')}
+                  className="cute-press relative min-h-[40px] rounded-full text-base font-bold text-ink"
+                  onClick={() => selectTab(tab)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="min-h-0 flex-1">
           {mobileTab === 'split' ? (
@@ -579,28 +617,40 @@ export default function App() {
 
       <nav
         aria-label={t('tabNav')}
-        className="grid shrink-0 grid-cols-3 gap-2 border-t border-slate-200 bg-white px-3 pt-2 md:hidden"
+        className="shrink-0 border-t-2 border-ink bg-snow-50 px-3 pt-2 md:hidden"
         style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
       >
-        {(
-          [
-            ['list', t('tabItinerary')],
-            ['split', t('tabSplit')],
-            ['map', t('tabMap')],
-          ] as [MobileTab, string][]
-        ).map(([tab, label]) => (
-          <button
-            key={tab}
-            type="button"
-            aria-current={mobileTab === tab ? 'page' : undefined}
-            className={`min-h-touch min-w-0 rounded-xl px-1 text-base font-bold ${
-              mobileTab === tab ? 'bg-ice-600 text-white shadow' : 'bg-snow-100 text-slate-700'
-            }`}
-            onClick={() => selectTab(tab)}
-          >
-            {label}
-          </button>
-        ))}
+        <div
+          className="relative grid grid-cols-3 gap-1 rounded-full border-2 border-ink bg-white p-1 shadow-sticker-sm"
+          style={
+            {
+              '--tab-count': 3,
+              '--tab-index': mobileTab === 'list' ? 0 : mobileTab === 'split' ? 1 : 2,
+              '--tab-gap': '0.25rem',
+            } as CSSProperties
+          }
+        >
+          <span className="pointer-events-none absolute inset-1" aria-hidden>
+            <span className="tab-slider rounded-full border-2 border-ink bg-sakura-500" />
+          </span>
+          {(
+            [
+              ['list', t('tabItinerary')],
+              ['split', t('tabSplit')],
+              ['map', t('tabMap')],
+            ] as [MobileTab, string][]
+          ).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              aria-current={mobileTab === tab ? 'page' : undefined}
+              className="cute-press relative min-h-touch min-w-0 rounded-full px-1 text-base font-bold text-ink"
+              onClick={() => selectTab(tab)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </nav>
 
       <LoginModal

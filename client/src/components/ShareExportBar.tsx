@@ -22,9 +22,9 @@ export function ShareExportBar({
   const controls = shareExportControlState(canExport, busy);
   const item =
     placement === 'bottom'
-      ? 'min-h-touch min-w-0 flex-1 rounded-xl px-2 py-1 text-center text-sm font-bold leading-tight'
-      : 'min-h-touch shrink-0 rounded-xl px-3 text-sm font-bold';
-  const face = 'bg-white text-ice-700 ring-1 ring-slate-200 active:bg-snow-100 disabled:opacity-40';
+      ? 'cute-press min-h-touch min-w-0 flex-1 rounded-full px-2 py-1 text-center text-sm font-bold leading-tight'
+      : 'cute-press min-h-touch shrink-0 rounded-full px-3 text-sm font-bold';
+  const face = 'border-2 border-ink bg-white text-ink shadow-sticker-sm active:bg-sakura-100 disabled:opacity-40';
 
   return (
     <div

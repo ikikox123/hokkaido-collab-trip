@@ -34,7 +34,7 @@ export function ShareNotice({ message, lift = false }: { message: string | null;
     <div
       role="status"
       data-share-export-ignore="true"
-      className={`share-export-ignore print:hidden fixed left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2.5 text-sm text-white shadow-lg ${bottom}`}
+      className={`share-export-ignore print:hidden fixed left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 rounded-full border-2 border-ink bg-butter-100 px-4 py-2.5 text-sm font-bold text-ink shadow-sticker ${bottom}`}
     >
       {message}
     </div>

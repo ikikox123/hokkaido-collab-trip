@@ -418,7 +418,7 @@ export function GoogleMapView({
       <div className="absolute right-2 top-2 z-[400] flex flex-col gap-1">
         <button
           type="button"
-          className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-xl font-bold text-slate-800 shadow"
+          className="cute-press flex h-11 w-11 items-center justify-center rounded-full border-2 border-ink bg-white text-xl font-bold text-ink shadow-sticker-sm"
           aria-label={t('zoomIn')}
           onClick={() => zoomBy(1)}
         >
@@ -426,7 +426,7 @@ export function GoogleMapView({
         </button>
         <button
           type="button"
-          className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-xl font-bold text-slate-800 shadow"
+          className="cute-press flex h-11 w-11 items-center justify-center rounded-full border-2 border-ink bg-white text-xl font-bold text-ink shadow-sticker-sm"
           aria-label={t('zoomOut')}
           onClick={() => zoomBy(-1)}
         >

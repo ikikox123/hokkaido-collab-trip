@@ -25,8 +25,8 @@ export function LanguageMenu({
   const { locale, setLocale, t } = useI18n();
   const face =
     tone === 'light'
-      ? 'border border-slate-200 bg-white text-ice-700'
-      : 'border border-white/30 bg-white text-ice-700';
+      ? 'border-2 border-ink bg-white text-ink'
+      : 'border-2 border-ink bg-white text-ink shadow-sticker-sm';
   const onChange = (event: { target: { value: string } }) => {
     const next = event.target.value;
     if (next !== 'zh-Hant' && next !== 'ja' && next !== 'en') return;
@@ -37,7 +37,7 @@ export function LanguageMenu({
     <label className="shrink-0">
       <span className="sr-only">{t('language')}</span>
       <select
-        className={`min-h-touch rounded-lg px-1 text-sm font-bold sm:hidden ${face}`}
+        className={`min-h-touch rounded-full px-1.5 text-sm font-bold sm:hidden ${face}`}
         value={locale}
         aria-label={t('language')}
         onChange={onChange}
@@ -49,7 +49,7 @@ export function LanguageMenu({
         ))}
       </select>
       <select
-        className={`hidden min-h-touch max-w-[9rem] rounded-lg px-2 text-sm font-bold sm:block ${face}`}
+        className={`hidden min-h-touch max-w-[9rem] rounded-full px-2 text-sm font-bold sm:block ${face}`}
         value={locale}
         aria-label={t('language')}
         onChange={onChange}

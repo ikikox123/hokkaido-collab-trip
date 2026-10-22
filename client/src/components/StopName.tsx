@@ -63,7 +63,7 @@ export function StopName({ title, canEdit, onRename }: Props) {
   }
 
   if (!canEdit) {
-    return <span className="font-semibold text-[15px] leading-snug">{shown}</span>;
+    return <span className="font-bold text-[15px] leading-snug text-ink">{shown}</span>;
   }
 
   if (editing) {
@@ -112,8 +112,8 @@ export function StopName({ title, canEdit, onRename }: Props) {
           begin();
         }}
       >
-        <span className="min-w-0 flex-1 font-semibold text-[15px] leading-snug">{shown}</span>
-        <span className="shrink-0 rounded-md bg-ice-600/10 px-2 py-1 text-sm font-semibold text-ice-700">
+        <span className="min-w-0 flex-1 font-bold text-[15px] leading-snug text-ink">{shown}</span>
+        <span className="shrink-0 rounded-full border-2 border-ink bg-mint-100 px-2 text-sm font-bold leading-6 text-ink">
           {t('rename')}
         </span>
       </button>

@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import { localizeError } from '../i18n/errors';
 import { loginRequest, registerRequest, saveAuth } from '../lib/auth';
 import { demoLoginFields } from '../lib/demoLogin';
+import { Mascot } from './Cute';
 import type { User } from '../types/trip';
 
 type Props = {
@@ -74,14 +75,17 @@ export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) 
 
   const card = (
       <div
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+        className={`cute-enter max-h-[92dvh] w-full overflow-y-auto border-2 border-ink bg-white p-5 shadow-sticker sm:max-w-md ${
+          embedded ? 'rounded-3xl' : 'rounded-t-3xl sm:rounded-3xl'
+        }`}
         role={embedded ? undefined : 'dialog'}
         aria-modal={embedded ? undefined : true}
         aria-labelledby="login-title"
         onClick={embedded ? undefined : (e) => e.stopPropagation()}
       >
         {!embedded && <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />}
-        <h2 id="login-title" className="text-lg font-bold text-ice-700">
+        <h2 id="login-title" className="flex items-center gap-2 text-lg font-bold text-ink">
+          <Mascot size={34} className="shrink-0" />
           {isRegister ? t('registerTitle') : t('loginTitle')}
         </h2>
         <p className="mt-1 text-sm text-slate-500">
@@ -129,13 +133,13 @@ export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) 
           <button
             type="submit"
             disabled={loading}
-            className="w-full min-h-touch rounded-xl bg-ice-600 text-white font-semibold active:bg-ice-700 disabled:opacity-60"
+            className="cute-pop w-full min-h-touch rounded-full border-2 border-ink bg-sakura-500 text-ink font-semibold active:bg-sakura-400 disabled:opacity-60 shadow-sticker"
           >
             {loading ? (isRegister ? t('registering') : t('loggingIn')) : isRegister ? t('registerAndLogin') : t('login')}
           </button>
           <button
             type="button"
-            className="w-full min-h-touch rounded-xl text-ice-700 font-medium"
+            className="cute-press w-full min-h-touch rounded-full font-bold text-ice-600"
             onClick={switchMode}
           >
             {isRegister ? t('haveAccount') : t('needAccount')}
@@ -157,7 +161,7 @@ export function LoginModal({ open, onClose, onLogin, embedded = false }: Props) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 sm:items-center sm:p-4"
       onClick={onClose}
     >
       {card}

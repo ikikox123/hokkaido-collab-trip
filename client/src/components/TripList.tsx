@@ -23,6 +23,7 @@ import { travelLabel } from '../i18n/labels';
 import { isTravelMode, MODE_COLORS, TRAVEL_MODES } from '../lib/travel';
 import { displayStopTitle } from '../i18n/stopNames';
 import { StopName } from './StopName';
+import { SectionBadge } from './Cute';
 
 type Props = {
   stops: Stop[];
@@ -52,17 +53,19 @@ function TimelineDot({
 }) {
   const dot =
     accent === 'next'
-      ? 'bg-sakura-500 text-white'
+      ? 'bg-sakura-500 shadow-sticker-sm'
       : accent === 'selected'
-        ? 'bg-ice-600 text-white ring-2 ring-ice-300'
-        : 'bg-white text-ice-700 ring-2 ring-ice-500';
+        ? 'bg-mint-300 shadow-sticker-sm'
+        : 'bg-white';
   return (
     <div className="relative flex w-8 shrink-0 flex-col items-center self-stretch" aria-hidden>
-      <span className={`w-0.5 shrink-0 ${fromPrevious ? 'h-2 bg-ice-300' : 'h-2'}`} />
-      <span className={`z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${dot}`}>
+      <span className={`h-2 shrink-0 ${fromPrevious ? 'border-l-[3px] border-dotted border-ink/70' : ''}`} />
+      <span
+        className={`z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-ink text-sm font-bold text-ink transition-colors ${dot}`}
+      >
         {index + 1}
       </span>
-      <span className={`w-0.5 flex-1 ${continued ? 'bg-ice-300' : ''}`} />
+      <span className={`flex-1 ${continued ? 'border-l-[3px] border-dotted border-ink/70' : ''}`} />
     </div>
   );
 }
@@ -106,12 +109,13 @@ function SortableItem({
   const accent = isNext ? 'next' : selected ? 'selected' : 'default';
 
   return (
-    <li ref={setNodeRef} style={style} className="flex items-stretch gap-1">
+    <li ref={setNodeRef} style={style} className="flex items-stretch gap-1.5">
       <TimelineDot index={index} continued={hasNext} fromPrevious={index > 0} accent={accent} />
       <div
-        className={`mb-1 flex min-w-0 flex-1 items-stretch gap-1 rounded-xl border bg-white p-1.5 shadow-sm ${
-          selected ? 'border-ice-500 ring-2 ring-ice-500/30' : 'border-slate-200'
-        } ${isNext ? 'bg-pink-50/80' : ''}`}
+        className={`cute-enter cute-pop mb-1 flex min-w-0 flex-1 items-stretch gap-1 rounded-2xl border-2 border-ink p-1.5 ${
+          selected ? 'bg-ice-50 shadow-sticker' : 'shadow-sticker-sm'
+        } ${isNext ? 'bg-sakura-100' : selected ? '' : 'bg-white'}`}
+        style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
       >
         {canEdit && (
           <button
@@ -135,7 +139,7 @@ function SortableItem({
           <div className="flex items-center gap-2">
             <StopName title={stop.title} canEdit={canEdit} onRename={onRename} />
             {isNext && (
-              <span className="shrink-0 rounded-md bg-pink-100 px-2 py-0.5 text-sm font-bold text-pink-700">
+              <span className="shrink-0 rounded-full border-2 border-ink bg-sakura-500 px-2 text-sm font-bold leading-6 text-ink">
                 {t('nextStop')}
               </span>
             )}
@@ -147,13 +151,15 @@ function SortableItem({
             {canEdit ? (
               <input
                 type="time"
-                className="min-h-touch rounded-lg border border-slate-200 px-2 py-1 text-base"
+                className="min-h-touch rounded-full border border-slate-300 bg-white px-3 py-1 text-base font-bold text-ink"
                 value={stop.time || ''}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => onUpdateTime(e.target.value)}
               />
             ) : (
-              <span className="font-medium text-slate-700">{stop.time || t('timeUnset')}</span>
+              <span className="rounded-full border-2 border-ink bg-butter-100 px-2 font-bold leading-6 text-ink">
+                {stop.time || t('timeUnset')}
+              </span>
             )}
             {stop.notes && <span className="min-w-0 flex-1 truncate">{stop.notes}</span>}
           </div>
@@ -163,7 +169,7 @@ function SortableItem({
             {onEditPlace && (
               <button
                 type="button"
-                className="min-h-touch min-w-touch text-sm font-medium text-ice-700"
+                className="cute-press min-h-touch min-w-touch rounded-full text-sm font-bold text-ice-600"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEditPlace();
@@ -174,7 +180,7 @@ function SortableItem({
             )}
             <button
               type="button"
-              className="min-h-touch min-w-touch text-sm font-medium text-red-500"
+              className="cute-press min-h-touch min-w-touch rounded-full text-sm font-bold text-red-600"
               aria-label={t('delete')}
               onClick={(e) => {
                 e.stopPropagation();
@@ -208,20 +214,21 @@ function LegConnector({
   const fromName = displayStopTitle(locale, from.title);
   const toName = displayStopTitle(locale, to.title);
   return (
-    <li className="flex items-stretch gap-1" aria-label={t('toNextAria', { from: fromName, to: toName })}>
+    <li className="flex items-stretch gap-1.5" aria-label={t('toNextAria', { from: fromName, to: toName })}>
       <div className="relative flex w-8 shrink-0 items-center justify-center self-stretch" aria-hidden>
-        <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-ice-300" />
+        <span className="absolute inset-y-0 left-1/2 -translate-x-[1.5px] border-l-[3px] border-dotted border-ink/70" />
         <span
-          className="relative z-10 h-3.5 w-3.5 rounded-full ring-2 ring-snow-50"
+          className="relative z-10 h-3.5 w-3.5 rounded-full border-2 border-ink"
           style={{ background: MODE_COLORS[mode] }}
         />
       </div>
-      <div className="min-w-0 flex-1 pb-2 pr-1">
-        <p className="text-sm font-bold text-ice-700">{t('toNext')}</p>
+      <div className="min-w-0 flex-1 py-1.5 pr-1">
+        <p className="text-xs font-bold text-slate-500">{t('toNext')}</p>
         {canEdit ? (
           <select
             aria-label={t('toNextModeAria', { from: fromName, to: toName })}
-            className="mt-1 min-h-touch w-full rounded-lg border border-slate-200 bg-white px-2 text-base text-slate-800"
+            className="mt-1 min-h-touch w-full rounded-full border border-ink px-3 text-base font-bold text-ink"
+            style={{ background: `color-mix(in srgb, ${MODE_COLORS[mode]} 16%, white)` }}
             value={mode}
             onChange={(e) => {
               if (isTravelMode(e.target.value)) onSetMode(e.target.value);
@@ -234,7 +241,14 @@ function LegConnector({
             ))}
           </select>
         ) : (
-          <p className="mt-0.5 text-base font-medium text-slate-800">{travelLabel(t, mode)}</p>
+          <p className="mt-0.5">
+            <span
+              className="inline-flex items-center rounded-full border-2 px-2.5 text-sm font-bold leading-6 text-ink"
+              style={{ borderColor: MODE_COLORS[mode], background: `color-mix(in srgb, ${MODE_COLORS[mode]} 16%, white)` }}
+            >
+              {travelLabel(t, mode)}
+            </span>
+          </p>
         )}
         <p className="mt-1 text-sm leading-snug text-slate-600">{leg?.summary || t('estimating')}</p>
       </div>
@@ -284,13 +298,16 @@ export function TripList({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
-        <h2 className="font-bold text-ice-700">{t('stopsTitle')}</h2>
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
+          <SectionBadge icon="pin" />
+          {t('stopsTitle')}
+        </h2>
         {canEdit ? (
           <button
             type="button"
             onClick={onAdd}
-            className="min-h-touch min-w-touch px-3 rounded-xl bg-ice-600 text-white text-sm font-semibold active:bg-ice-700"
+            className="cute-pop min-h-touch min-w-touch rounded-full border-2 border-ink bg-sakura-500 px-4 text-sm font-bold text-ink shadow-sticker"
           >
             {t('addStopButton')}
           </button>
@@ -346,7 +363,7 @@ export function TripList({
         </SortableContext>
         <DragOverlay>
           {activeStop ? (
-            <div className="drag-overlay rounded-xl border border-ice-400 bg-white p-3 font-semibold shadow-lg">
+            <div className="drag-overlay rounded-2xl border-2 border-ink bg-butter-100 p-3 font-bold text-ink">
               {displayStopTitle(locale, activeStop.title)}
             </div>
           ) : null}

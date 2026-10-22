@@ -255,7 +255,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
           </button>
           <button
             type="submit"
-            className="min-h-touch flex-1 rounded-xl bg-ice-600 font-semibold text-white disabled:opacity-50"
+            className="cute-pop min-h-touch flex-1 rounded-full border-2 border-ink bg-sakura-500 font-semibold text-ink disabled:opacity-50 shadow-sticker"
             disabled={searching || (lat == null && !query.trim())}
           >
             {lat == null ? t('searchAndUse') : mode === 'add' ? t('join') : t('updatePlace')}

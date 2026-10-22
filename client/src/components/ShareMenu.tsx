@@ -40,8 +40,8 @@ export function ShareMenu({
   const href = shareLocation(scope, lang);
   const face =
     tone === 'light'
-      ? 'border border-ice-200 bg-white text-ice-700'
-      : 'bg-white text-ice-700 shadow-sm';
+      ? 'border-2 border-ink bg-white text-ink'
+      : 'border-2 border-ink bg-white text-ink shadow-sticker-sm';
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -104,19 +104,19 @@ export function ShareMenu({
             role="menu"
             aria-label={t('share')}
             data-share-export-ignore="true"
-            className="share-export-ignore fixed z-40 overflow-hidden rounded-xl bg-white py-1 text-slate-800 shadow-lg ring-1 ring-slate-200"
+            className="share-export-ignore cute-enter fixed z-40 overflow-hidden rounded-2xl border-2 border-ink bg-white py-1 text-ink shadow-sticker"
             style={{ top: pos.top, left: pos.left, width: pos.width }}
           >
-            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-snow-100" onClick={() => void onCopy()}>
+            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-sakura-100" onClick={() => void onCopy()}>
               {t('copyLink')}
             </button>
-            <a role="menuitem" href={href} className="flex min-h-touch items-center px-3 text-sm font-semibold hover:bg-snow-100">
+            <a role="menuitem" href={href} className="flex min-h-touch items-center px-3 text-sm font-semibold hover:bg-sakura-100">
               {t('shareOpenPage')}
             </a>
-            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-snow-100" onClick={() => onExport('image')}>
+            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-sakura-100" onClick={() => onExport('image')}>
               {t('shareExportImage')}
             </button>
-            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-snow-100" onClick={() => onExport('pdf')}>
+            <button type="button" role="menuitem" className="min-h-touch w-full px-3 text-left text-sm font-semibold hover:bg-sakura-100" onClick={() => onExport('pdf')}>
               {t('shareExportPdf')}
             </button>
           </div>,
@@ -129,7 +129,7 @@ export function ShareMenu({
       <button
         ref={buttonRef}
         type="button"
-        className={`inline-flex min-h-touch shrink-0 items-center justify-center gap-0.5 whitespace-nowrap rounded-lg px-1.5 text-sm font-bold sm:gap-1 sm:px-2.5 ${face}`}
+        className={`cute-press inline-flex min-h-touch shrink-0 items-center justify-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-sm font-bold sm:gap-1 sm:px-2.5 ${face}`}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={panelId}
