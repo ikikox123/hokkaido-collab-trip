@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { connectRealtime, type RealtimeSocket } from './lib/realtime';
 import type { FxView } from '../../server/src/fx.js';
 import { LoginModal } from './components/LoginModal';
@@ -14,6 +14,7 @@ import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
 import { DayScene, FlightCard, Fox, HeaderSky, HokkaidoBand, Mascot } from './components/Cute';
 import { HeaderMenu } from './components/HeaderMenu';
+import { LanguagePill } from './components/LanguagePill';
 import { DayTimeline } from './components/DayTimeline';
 import { clearAuth, getStoredUser, getToken } from './lib/auth';
 import { emitAck } from './lib/bill';
@@ -66,41 +67,82 @@ function CurrentStopBar({
   );
 }
 
-/** Brand + title on the left, one menu button on the right. The subtitle splits on "｜" into small chips. */
+/** "2027-02-12～18" → "2/12–2/18". Anything else is shown as typed. */
+function shortRange(part: string) {
+  const m = /^\d{4}-(\d{2})-(\d{2})\s*[～~–-]\s*(?:\d{4}-)?(?:(\d{2})-)?(\d{2})$/.exec(part);
+  if (!m) return part;
+  const [, m1, d1, m2, d2] = m;
+  return `${Number(m1)}/${Number(d1)}–${Number(m2 ?? m1)}/${Number(d2)}`;
+}
+
+/**
+ * Fits the title without an ugly cut: one line at full size, then one line a little smaller,
+ * then two balanced lines, then two smaller lines. Watches size and text (also edits made outside React).
+ */
+function useFitTitle() {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      for (const step of ['1', '2', '3', '4']) {
+        el.setAttribute('data-fit', step);
+        const over = step <= '2' ? el.scrollWidth > el.clientWidth + 1 : el.scrollHeight > el.clientHeight + 1;
+        if (!over) return;
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el.parentElement ?? el);
+    const mo = new MutationObserver(fit);
+    mo.observe(el, { childList: true, characterData: true, subtree: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, []);
+  return ref;
+}
+
+/**
+ * Brand badge, the trip title as the hero (up to two lines), one quiet meta line,
+ * then the language pill and the menu button.
+ */
 function AppHeader({ subtitle, menu, className = '' }: { subtitle?: string; menu: ReactNode; className?: string }) {
   const { locale } = useI18n();
   const heading = pageHeading(locale);
-  const parts = (subtitle ?? '')
+  const titleRef = useFitTitle();
+  const meta = (subtitle ?? '')
     .split('｜')
-    .map((part) => part.trim())
-    .filter(Boolean);
+    .map((part) => shortRange(part.trim()))
+    .filter(Boolean)
+    .join(' · ');
   return (
     <header
       className={`app-header th-glass relative z-20 shrink-0 overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 text-ink ${className}`}
     >
       <HeaderSky />
       <div className="relative flex min-h-[3.75rem] items-center gap-2.5 px-3 py-2 sm:px-4">
-        <span className="brand-mascot mascot-bob shrink-0">
-          <Mascot size={38} />
-        </span>
-        <span className="brand-mark" aria-hidden>
-          雪
+        <span className="brand-badge" aria-hidden>
+          <span className="brand-mascot mascot-bob">
+            <Mascot size={30} />
+          </span>
+          <span className="brand-mark">雪</span>
         </span>
         <div className="min-w-0 flex-1">
-          <h1 className="header-title truncate text-base font-bold leading-tight tracking-wide sm:text-lg" title={heading}>
-            {heading}
+          <h1 ref={titleRef} className="header-title" title={heading}>
+            <span className="header-title-text">{heading}</span>
           </h1>
-          {parts.length > 0 && (
-            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-[11px] font-semibold leading-4 text-slate-600">
-              {parts.map((part) => (
-                <span key={part} className="header-chip rounded-full bg-white/70 px-2">
-                  {part}
-                </span>
-              ))}
+          {meta && (
+            <p className="header-meta" title={subtitle}>
+              {meta}
             </p>
           )}
         </div>
-        {menu}
+        <div className="flex shrink-0 items-center gap-2">
+          <LanguagePill />
+          {menu}
+        </div>
       </div>
     </header>
   );
@@ -385,7 +427,8 @@ export default function App() {
   if (!trip) {
     return (
       <div className="cute-paper relative min-h-full flex items-center justify-center text-ink">
-        <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))]">
+        <div className="absolute right-3 top-[max(0.75rem,var(--safe-top))] flex items-center gap-2">
+          <LanguagePill />
           <HeaderMenu
             open={headerOpen}
             onOpenChange={setHeaderOpen}

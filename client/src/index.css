@@ -462,17 +462,12 @@ html.theme-fade * {
     display: none !important;
   }
   html[data-theme='b']:not(.share-capturing) .brand-mark {
-    display: flex;
-    height: 2rem;
-    width: 2rem;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgb(var(--c-crab-500));
+    display: block;
     color: rgb(var(--c-crab-500));
     font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif TC', serif;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
+    line-height: 1;
   }
   /* A thin chevron marks the chosen day instead of the mascot. */
   html[data-theme='b']:not(.share-capturing) .day-mascot {
@@ -703,6 +698,184 @@ html.theme-fade * {
     animation: none !important;
   }
   .burger span {
+    transition: none !important;
+  }
+}
+
+/* ---------- App header: brand badge, hero title, quiet meta, language pill ---------- */
+.brand-badge {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: var(--bw) solid rgb(var(--c-ink));
+  border-radius: 9999px;
+  background: rgb(var(--c-snow-50));
+  box-shadow: var(--shadow-sticker-sm);
+}
+.brand-mascot {
+  display: block;
+  margin-top: 2px;
+}
+.header-title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.24;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+/* useFitTitle steps: 1–2 single line, 3–4 two balanced lines. */
+.header-title[data-fit='1'],
+.header-title[data-fit='2'] {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.header-title[data-fit='2'],
+.header-title[data-fit='3'] {
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+.header-title[data-fit='3'] {
+  max-height: 2.5em;
+  overflow: hidden;
+  text-wrap: balance;
+}
+.header-title[data-fit='4'] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 13.5px;
+  letter-spacing: 0;
+}
+/* Theme A: a soft lavender marker stroke under the title. */
+.header-title-text {
+  padding: 0 0.1em;
+  background-image: linear-gradient(
+    transparent 60%,
+    rgb(var(--c-lavender-200)) 60%,
+    rgb(var(--c-lavender-200)) 90%,
+    transparent 90%
+  );
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.header-meta {
+  margin-top: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--c-slate-500));
+}
+.header-meta::before {
+  content: '❄';
+  margin-right: 0.3em;
+  color: rgb(var(--c-ice-400));
+}
+.lang-chevron {
+  transition: transform 220ms ease;
+}
+.lang-pill[data-open] .lang-chevron {
+  transform: rotate(180deg);
+}
+.lang-pop {
+  transform-origin: 85% 0;
+}
+.lang-pop[data-state='open'] {
+  animation: drop-in 200ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+.lang-pop[data-state='closed'] {
+  pointer-events: none;
+  animation: drop-out 150ms ease-in both;
+}
+
+@media screen {
+  /* B: hanko seal, spaced serif title, hairline before the meta. */
+  html[data-theme='b']:not(.share-capturing) .brand-badge {
+    height: 2.25rem;
+    width: 2.25rem;
+    border-radius: 0;
+    border-color: rgb(var(--c-crab-500));
+    background: transparent;
+  }
+  html[data-theme='b']:not(.share-capturing) .header-title {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+  }
+  html[data-theme='b']:not(.share-capturing) :is(.header-title[data-fit='2'], .header-title[data-fit='3']) {
+    font-size: 15.5px;
+    letter-spacing: 0.06em;
+  }
+  html[data-theme='b']:not(.share-capturing) .header-title[data-fit='4'] {
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+  html[data-theme='b']:not(.share-capturing) .header-title-text {
+    padding: 0;
+    background-image: none;
+  }
+  html[data-theme='b']:not(.share-capturing) .header-meta {
+    margin-top: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+  }
+  html[data-theme='b']:not(.share-capturing) .header-meta::before {
+    content: '';
+    display: inline-block;
+    width: 1rem;
+    height: 1px;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+    background: rgb(var(--c-lavender-600));
+  }
+  html[data-theme='b']:not(.share-capturing) .lang-code {
+    border-width: 1px;
+  }
+
+  /* C: glowing glass badge, aurora gradient title. */
+  html[data-theme='c']:not(.share-capturing) .brand-badge {
+    border-color: rgb(160 178 255 / 0.35);
+    background: radial-gradient(circle at 30% 28%, rgb(155 127 255 / 0.5), rgb(20 27 68 / 0.85) 70%);
+    box-shadow: 0 0 16px -2px rgb(123 92 240 / 0.65);
+  }
+  html[data-theme='c']:not(.share-capturing) .header-title-text {
+    padding: 0;
+    background-image: linear-gradient(92deg, #b8ffe0 0%, #8fd8ff 45%, #d6c9ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  html[data-theme='c']:not(.share-capturing) .header-title {
+    filter: drop-shadow(0 0 10px rgb(91 224 255 / 0.3));
+  }
+  html[data-theme='c']:not(.share-capturing) .header-meta {
+    color: #a9b1e0;
+  }
+  html[data-theme='c']:not(.share-capturing) .header-meta::before {
+    content: '✦';
+    color: #3dffa8;
+  }
+  html[data-theme='c']:not(.share-capturing) .lang-pop {
+    background-color: rgb(14 20 56 / 0.9);
+  }
+  html[data-theme='c']:not(.share-capturing) .lang-pill[data-open] {
+    box-shadow: 0 0 0 1px rgb(185 163 255 / 0.55), 0 0 16px -2px rgb(123 92 240 / 0.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lang-pop {
+    animation: none !important;
+  }
+  .lang-chevron {
     transition: none !important;
   }
 }
