@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_TILE_ATTRIBUTION?: string;
   readonly VITE_MAP_PROVIDER?: string;
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
+  /** `ws` for the Cloudflare Workers build; unset keeps Socket.io. */
+  readonly VITE_REALTIME?: string;
 }
 
 interface ImportMeta {

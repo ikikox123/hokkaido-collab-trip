@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { connectRealtime, type RealtimeSocket } from './lib/realtime';
 import type { FxView } from '../../server/src/fx.js';
 import { LoginModal } from './components/LoginModal';
 import { TripAlerts } from './components/TripAlerts';
@@ -63,7 +63,7 @@ export default function App() {
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
   );
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [socket, setSocket] = useState<RealtimeSocket | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [notCompanion, setNotCompanion] = useState(false);
   const [placeDialog, setPlaceDialog] = useState<
@@ -81,7 +81,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const s = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
+    const s = connectRealtime();
     setSocket(s);
     s.on('trip:update', (state: TripState) => {
       setNotCompanion(false);

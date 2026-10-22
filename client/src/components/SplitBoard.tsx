@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Socket } from 'socket.io-client';
+import type { RealtimeSocket } from '../lib/realtime';
 import type { FxView } from '../../../server/src/fx.js';
 import {
   billToCsv,
@@ -29,7 +29,7 @@ type Props = {
   canEdit: boolean;
   userId: string | null;
   username: string | null;
-  socket: Socket | null;
+  socket: RealtimeSocket | null;
   token: string | null;
   fx: FxView | null;
   composeToken: number;

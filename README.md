@@ -217,3 +217,7 @@ node server/src/backup.js restore --id <備份時間戳>
 - tenki.jp 沒有可串接的免費 API，服務條款也不允許自動抓取，所以沒有接 tenki.jp
 - 沒有 Google transit 結果時，地鐵／JR／巴士時間不是時刻表。Google transit 用查詢當下的 `departure_time`，不是 2027 年的班表
 - 種子座標先用公開資料（Wikipedia、OpenStreetMap、訂房頁）。伺服器若有 `GOOGLE_MAPS_SERVER_KEY`，啟動時會對每個種子站以「名稱＋札幌／小樽／旭川／美瑛／千歲等城市」做 Find Place，失敗再 Geocoding，並更新記憶體與 `data/state.json`。標題已被改過的站不會被蓋掉。也可執行 `node server/src/seedGeocode.js`（加 `--write` 會把座標寫回 `server/src/seed.js` 的 `SEED_COORDINATES`，過程不印出金鑰）
+
+## Cloudflare Workers 版
+
+免費託管的替代方案在 [`worker/`](worker/README.md)：Durable Object 負責即時同步與儲存，前端同一份程式碼用 `VITE_REALTIME=ws` 建置。部署、從 Railway 搬資料、檢查外部來源的步驟都寫在 `worker/README.md`。

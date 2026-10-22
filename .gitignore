@@ -43,3 +43,7 @@ Thumbs.db
 coverage/
 .cache/
 *.tsbuildinfo
+
+# Cloudflare Workers
+worker/.wrangler/
+worker/.dev.vars

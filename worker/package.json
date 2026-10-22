@@ -1,0 +1,19 @@
+{
+  "name": "hokkaido-collab-trip-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:client": "npm ci --prefix ../client && VITE_REALTIME=ws npm run build --prefix ../client",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "import": "node scripts/import.mjs",
+    "export": "node scripts/export.mjs",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.3"
+  }
+}

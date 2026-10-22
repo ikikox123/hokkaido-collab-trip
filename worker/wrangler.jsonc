@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hokkaido-collab-trip",
+  "main": "src/index.js",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Builds client/dist (with the WebSocket transport) before every dev or deploy.
+  "build": {
+    "command": "npm run build:client"
+  },
+  "assets": {
+    "directory": "../client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/ws"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "TRIP_HUB", "class_name": "TripHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TripHub"] }],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "ROOM_CODE": "HOKKAIDO2027"
+  },
+  "observability": { "enabled": true }
+  // Secrets (set in the dashboard or with `wrangler secret put`, never here):
+  //   JWT_SECRET              required
+  //   ADMIN_TOKEN             for scripts/import.mjs and export.mjs (16+ chars)
+  //   GOOGLE_MAPS_SERVER_KEY  optional, Directions / Places
+  //   OSRM_BASE_URL           optional
+}

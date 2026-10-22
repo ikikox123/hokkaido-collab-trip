@@ -1,7 +1,7 @@
-import type { Socket } from 'socket.io-client';
+import type { RealtimeSocket } from './realtime';
 
 export function emitAck(
-  socket: Socket,
+  socket: RealtimeSocket,
   event: string,
   payload: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string }> {
