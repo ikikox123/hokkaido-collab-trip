@@ -655,6 +655,17 @@ export const catalog = {
   menuDisplaySection: { 'zh-Hant': '顯示', ja: '表示', en: 'Display' },
   menuAccountSection: { 'zh-Hant': '帳號', ja: 'アカウント', en: 'Account' },
   signedInAs: { 'zh-Hant': '已登入：{name}', ja: 'ログイン中：{name}', en: 'Signed in as {name}' },
+  dayLabelEdit: { 'zh-Hant': '重新命名「{day}」', ja: '「{day}」の名前を変更', en: 'Rename “{day}”' },
+  dayLabelInput: { 'zh-Hant': '這一天的名稱', ja: 'この日の名前', en: 'Name for this day' },
+  dayLabelHint: {
+    'zh-Hant': '最多 {max} 字，留空會恢復成「{fallback}」',
+    ja: '最大 {max} 文字。空欄にすると「{fallback}」に戻ります',
+    en: 'Up to {max} characters. Leave blank to reset to “{fallback}”',
+  },
+  dayLabelSaved: { 'zh-Hant': '已更新天數名稱', ja: '日の名前を更新しました', en: 'Day name updated' },
+  dayLabelTooLong: { 'zh-Hant': '天數名稱最多 24 個字', ja: '日の名前は 24 文字までです', en: 'Day names can be up to 24 characters' },
+  dayLabelBad: { 'zh-Hant': '天數名稱格式不正確', ja: '日の名前の形式が正しくありません', en: 'That day name is not valid' },
+  dayNotFound: { 'zh-Hant': '找不到這一天', ja: 'この日が見つかりません', en: 'That day could not be found' },
 } satisfies Record<string, Entry>;
 
 export type MessageKey = keyof typeof catalog;

@@ -9,6 +9,7 @@ import {
 import { lookupPlace, placeFailureMessage, redactSecrets, serverMapsKey } from '../../server/src/googleMaps.js';
 import { applyStopPatch } from '../../server/src/stopEdit.js';
 import { applyLodgingPatch } from '../../server/src/lodgingEdit.js';
+import { applyDayLabel } from '../../server/src/dayLabel.js';
 import {
   addMember,
   addSettlement,
@@ -703,6 +704,16 @@ export class TripHub extends DurableObject {
       this.tripState = result.state;
       this.publish(this.roomOf(ws), { enrich: false });
       ack({ ok: true });
+    },
+
+    async 'trip:setDayLabel'(ws, { day, label, token }, ack) {
+      if (!(await this.requireTripMember(ws, token, ack))) return;
+      const result = applyDayLabel(this.tripState, { day, label });
+      if (!result.ok) return this.editError(ws, ack, result);
+      if (result.unchanged) return ack({ ok: true, unchanged: true, label: result.label });
+      this.tripState = result.state;
+      this.publish(this.roomOf(ws), { enrich: false });
+      ack({ ok: true, label: result.label });
     },
 
     async 'trip:reset'(ws, { token }, ack) {

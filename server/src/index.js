@@ -21,6 +21,7 @@ import { lookupPlace, placeFailureMessage, redactSecrets, serverMapsKey } from '
 import { correctSeedState } from './seedGeocode.js';
 import { applyStopPatch } from './stopEdit.js';
 import { applyLodgingPatch } from './lodgingEdit.js';
+import { applyDayLabel } from './dayLabel.js';
 import { getWeather } from './weather.js';
 import { getJmaWarnings } from './jmaWarnings.js';
 import { getJrStatus } from './jrStatus.js';
@@ -591,6 +592,23 @@ io.on('connection', (socket) => {
     tripState = result.state;
     publish(joinedRoom || ROOM_CODE, { enrich: false });
     ackResult(ack, { ok: true });
+  });
+
+  socket.on('trip:setDayLabel', ({ day, label, token }, ack) => {
+    if (!requireTripMember(socket, token, ack)) return;
+    const result = applyDayLabel(tripState, { day, label });
+    if (!result.ok) {
+      socket.emit('error:edit', { error: result.error });
+      ackResult(ack, result);
+      return;
+    }
+    if (result.unchanged) {
+      ackResult(ack, { ok: true, unchanged: true, label: result.label });
+      return;
+    }
+    tripState = result.state;
+    publish(joinedRoom || ROOM_CODE, { enrich: false });
+    ackResult(ack, { ok: true, label: result.label });
   });
 
   socket.on('trip:reset', ({ token }, ack) => {

@@ -110,9 +110,10 @@ export function DayTimeline({ days, selectedDay, onSelect }: Props) {
                   {d.date.slice(5).replace('-', '/')}
                 </span>
                 <span
-                  className={`mt-0.5 max-w-[5.5rem] truncate text-xs font-semibold ${
+                  className={`mt-0.5 max-w-[4.4rem] truncate text-xs font-semibold ${
                     active ? 'text-ink' : 'text-slate-500'
                   }`}
+                  title={displayDayLabel(locale, d.label)}
                 >
                   {displayDayLabel(locale, d.label)}
                 </span>

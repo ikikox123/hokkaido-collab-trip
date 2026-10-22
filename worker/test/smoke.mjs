@@ -98,6 +98,15 @@ const exp = await a.emit('expense:upsert', {
 assert.equal(exp.ok, true, exp.error);
 await expenseSeen;
 
+const originalLabel = trip.days[0].label;
+const renamedSeen = b.next('trip:update', (t) => t.days[0].label === 'Smoke 雪祭り');
+assert.deepEqual(await a.emit('trip:setDayLabel', { day, label: '  Smoke   雪祭り ', token }), { ok: true, label: 'Smoke 雪祭り' });
+await renamedSeen;
+assert.equal((await a.emit('trip:setDayLabel', { day, label: 'x'.repeat(25), token })).ok, false);
+assert.equal((await b.emit('trip:setDayLabel', { day, label: 'nope', token: 'garbage' })).ok, false);
+const relabeled = await a.emit('trip:setDayLabel', { day, label: originalLabel, token });
+assert.equal(relabeled.ok, true, relabeled.error);
+
 const forbidden = await b.emit('trip:reset', { token: 'garbage' });
 assert.equal(forbidden.ok, false);
 

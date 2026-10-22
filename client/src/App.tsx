@@ -13,6 +13,7 @@ import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
 import { DayScene, FlightCard, Fox, HeaderSky, HokkaidoBand, Mascot } from './components/Cute';
+import { DayLabelEditButton, DayLabelEditor } from './components/DayLabelEditor';
 import { HeaderMenu } from './components/HeaderMenu';
 import { LanguagePill } from './components/LanguagePill';
 import { DayTimeline } from './components/DayTimeline';
@@ -29,25 +30,60 @@ type MobileTab = 'list' | 'map' | 'split';
 function CurrentStopBar({
   stop,
   day,
+  position,
+  rawLabel,
   dayLabel,
   lodgingName,
+  onRenameDay,
 }: {
   stop: Stop | null;
   day: number;
+  /** 1-based position of the day in the trip. */
+  position: number;
+  /** Stored days[].label, edited as typed. */
+  rawLabel: string;
+  /** Label shown on screen (locale-adjusted D-prefix). */
   dayLabel: string;
   lodgingName: string;
+  /** Present only for trip companions. */
+  onRenameDay?: (label: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const { t, locale } = useI18n();
+  const [editing, setEditing] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+
+  useEffect(() => setEditing(false), [day]);
+  useEffect(() => {
+    if (wasEditing.current && !editing) editButtonRef.current?.focus({ preventScroll: true });
+    wasEditing.current = editing;
+  }, [editing]);
+
   return (
     <div className="z-20 shrink-0 bg-snow-50 px-3 py-2">
       <div
         key={`${day}-${stop?.id ?? 'none'}`}
-        className="cute-enter cute-pop flex min-h-touch items-center gap-3 rounded-2xl border-2 border-ink bg-lavender-100 p-2 shadow-sticker"
+        className={`day-card cute-enter flex min-h-touch items-center gap-3 rounded-2xl border-2 border-ink bg-lavender-100 p-2 shadow-sticker ${
+          editing ? '' : 'cute-pop'
+        }`}
       >
-        <DayScene day={day} className="h-12 w-[4.25rem] shrink-0" />
+        {!editing && <DayScene day={day} className="h-12 w-[4.25rem] shrink-0" />}
+        {editing && onRenameDay ? (
+          <div className="min-w-0 flex-1">
+            <DayLabelEditor label={rawLabel} position={position} onSave={onRenameDay} onClose={() => setEditing(false)} />
+          </div>
+        ) : (
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-            <span className="truncate">{dayLabel}</span>
+            <span className="day-card-label truncate">{dayLabel}</span>
+            {onRenameDay && (
+              <DayLabelEditButton
+                label={rawLabel}
+                shownLabel={dayLabel}
+                buttonRef={editButtonRef}
+                onOpen={() => setEditing(true)}
+              />
+            )}
             <span className="shrink-0 rounded-full border-[1.5px] border-ink bg-white px-1.5 text-[11px] font-bold leading-4 text-ink">
               {t('currentStop')}
             </span>
@@ -62,6 +98,7 @@ function CurrentStopBar({
           )}
           <p className="truncate text-xs text-slate-500">{t('lodgingLine', { name: lodgingName })}</p>
         </div>
+        )}
       </div>
     </div>
   );
@@ -332,6 +369,17 @@ export default function App() {
     socket.emit(event, { ...payload, token });
   }
 
+  async function renameDay(label: string) {
+    if (!socket || !token) {
+      showToast(t('loginToEdit'));
+      setLoginOpen(true);
+      return { ok: false, error: '請先登入才能編輯' };
+    }
+    const result = await emitAck(socket, 'trip:setDayLabel', { day: selectedDay, label, token });
+    if (result.ok) showToast(t('dayLabelSaved'));
+    return result;
+  }
+
   function joinRoom() {
     const code = (roomCode || DEFAULT_ROOM).toUpperCase();
     setRoomCode(code);
@@ -538,8 +586,11 @@ export default function App() {
         <CurrentStopBar
           stop={dayStops.find((s) => s.id === selectedId) ?? null}
           day={selectedDay}
+          position={Math.max(1, trip.days.findIndex((d) => d.day === selectedDay) + 1)}
+          rawLabel={trip.days.find((d) => d.day === selectedDay)?.label ?? ''}
           dayLabel={displayDayLabel(locale, trip.days.find((d) => d.day === selectedDay)?.label ?? `D${selectedDay}`)}
           lodgingName={trip.lodging?.name?.trim() || t('lodgingUnset')}
+          onRenameDay={isTripCompanion ? renameDay : undefined}
         />
       )}
 
