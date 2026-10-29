@@ -500,7 +500,9 @@ export default function App() {
   }
 
   return (
-    <div className="app-enter h-[100dvh] flex flex-col bg-snow-50 text-ink overflow-hidden pt-[var(--safe-top)]">
+    <div className={`app-enter flex flex-col bg-snow-50 text-ink pt-[var(--safe-top)] pb-[calc(4.75rem+var(--safe-bottom))] md:h-[100dvh] md:overflow-hidden md:pb-0 ${
+        mobileTab === 'map' ? 'h-[100dvh] overflow-hidden' : 'min-h-[100dvh]'
+      }`}>
       {/* Top bar: brand and title on the left, everything else behind one menu button */}
       <AppHeader
         subtitle={trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
@@ -597,9 +599,9 @@ export default function App() {
       {!mobileSplit && <TripAlerts />}
 
       {/* Main: stacked on mobile via tabs; side-by-side on md+ */}
-      <main className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <main className={`flex flex-1 flex-col md:min-h-0 md:flex-row ${mobileTab === 'map' ? 'min-h-0' : ''}`}>
         <section
-          className={`cute-paper min-h-0 flex-1 flex-col border-ink md:w-[42%] md:max-w-md md:border-r-2 ${
+          className={`cute-paper flex-1 flex-col border-ink md:min-h-0 md:w-[42%] md:max-w-md md:border-r-2 ${
             mobileTab === 'map' ? 'hidden md:flex' : 'flex'
           }`}
         >
@@ -629,7 +631,7 @@ export default function App() {
               ))}
             </div>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="flex-1 md:min-h-0">
           {mobileTab === 'split' ? (
             <SplitBoard
               trip={trip}
@@ -720,7 +722,7 @@ export default function App() {
 
       <nav
         aria-label={t('tabNav')}
-        className="shrink-0 border-t-2 border-ink bg-snow-50 px-3 pt-2 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-ink bg-snow-50 px-3 pt-2 md:hidden"
         style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
       >
         <div

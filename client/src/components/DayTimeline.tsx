@@ -58,7 +58,7 @@ export function DayTimeline({ days, selectedDay, onSelect }: Props) {
   }, [selectedDay]);
 
   return (
-    <nav aria-label={t('dayNav')} className="z-20 shrink-0 border-b-2 border-ink bg-snow-50 bg-gradient-to-b from-snow-50 to-bluebell-100/60">
+    <nav aria-label={t('dayNav')} className="sticky top-[var(--safe-top)] z-20 shrink-0 border-b-2 border-ink bg-snow-50 bg-gradient-to-b from-snow-50 to-bluebell-100/60">
       <div className="overflow-x-auto no-scrollbar px-1">
         <div ref={trackRef} className="relative flex min-w-full pt-8">
           {geo && (

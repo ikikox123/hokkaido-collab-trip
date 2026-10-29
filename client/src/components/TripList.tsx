@@ -297,7 +297,7 @@ export function TripList({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col md:h-full">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
           <SectionBadge icon="pin" />
@@ -315,12 +315,13 @@ export function TripList({
           <span className="text-sm text-slate-500">{t('loginToEditHint')}</span>
         )}
       </div>
-      <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 pb-safe">
+      <div className="flex-1 px-3 py-2 pb-safe md:overflow-y-auto md:overscroll-contain">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        autoScroll={{ threshold: { x: 0.2, y: 0.25 } }}
       >
         <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           <ul>
