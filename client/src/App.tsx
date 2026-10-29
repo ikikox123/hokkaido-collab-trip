@@ -500,7 +500,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-enter flex flex-col bg-snow-50 text-ink pt-[var(--safe-top)] pb-[calc(4.75rem+var(--safe-bottom))] md:h-[100dvh] md:overflow-hidden md:pb-0 ${
+    <div className={`app-enter flex flex-col bg-snow-50 text-ink pt-[var(--safe-top)] pb-[calc(var(--tabbar-h)+1rem)] md:h-[100dvh] md:overflow-hidden md:pb-0 ${
         mobileTab === 'map' ? 'h-[100dvh] overflow-hidden' : 'min-h-[100dvh]'
       }`}>
       {/* Top bar: brand and title on the left, everything else behind one menu button */}

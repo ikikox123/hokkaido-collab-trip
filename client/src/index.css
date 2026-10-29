@@ -5,6 +5,8 @@
 :root {
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
+  /* Mobile tab bar: border 2 + pt 8 + pill (border 4 + p 8 + 44 button) + bottom padding */
+  --tabbar-h: calc(66px + max(0.5rem, var(--safe-bottom)));
 }
 
 html,
