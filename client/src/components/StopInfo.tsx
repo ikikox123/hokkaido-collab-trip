@@ -78,7 +78,7 @@ export function StopInlineNote({ stop }: { stop: Pick<Stop, 'hours' | 'notes'> }
   );
 }
 
-/** Icon-only pill (clock + pencil) beside the time capsule. Only rendered for trip companions. */
+/** Icon-only pill (clock + pencil) on the title row. Only rendered for trip companions. */
 export function StopInfoEditButton({
   title,
   onOpen,

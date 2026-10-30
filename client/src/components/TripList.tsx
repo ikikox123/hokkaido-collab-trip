@@ -127,22 +127,28 @@ function SortableItem({
         } ${isNext ? 'bg-crab-100' : selected ? '' : 'bg-white'}`}
       >
         {canEdit && (
-          <button
-            type="button"
-            className="flex min-h-touch min-w-touch shrink-0 touch-none cursor-grab items-center justify-center text-slate-400 active:cursor-grabbing active:text-ice-600"
-            aria-label={t('dragSort')}
-            {...attributes}
-            {...listeners}
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-              <circle cx="7" cy="5" r="1.5" />
-              <circle cx="13" cy="5" r="1.5" />
-              <circle cx="7" cy="10" r="1.5" />
-              <circle cx="13" cy="10" r="1.5" />
-              <circle cx="7" cy="15" r="1.5" />
-              <circle cx="13" cy="15" r="1.5" />
-            </svg>
-          </button>
+          // Handle and edit icon share the left column: no width taken from the title or note, no extra height.
+          <div className="flex shrink-0 flex-col items-center justify-center">
+            <button
+              type="button"
+              className="flex min-h-touch min-w-touch shrink-0 touch-none cursor-grab items-center justify-center text-slate-400 active:cursor-grabbing active:text-ice-600"
+              aria-label={t('dragSort')}
+              {...attributes}
+              {...listeners}
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                <circle cx="7" cy="5" r="1.5" />
+                <circle cx="13" cy="5" r="1.5" />
+                <circle cx="7" cy="10" r="1.5" />
+                <circle cx="13" cy="10" r="1.5" />
+                <circle cx="7" cy="15" r="1.5" />
+                <circle cx="13" cy="15" r="1.5" />
+              </svg>
+            </button>
+            {!editingInfo && (
+              <StopInfoEditButton title={stop.title} buttonRef={infoButton} onOpen={() => setEditingInfo(true)} />
+            )}
+          </div>
         )}
         <div className="min-w-0 flex-1 py-1" onClick={onSelect}>
           <div className="flex items-center gap-2">
@@ -169,9 +175,6 @@ function SortableItem({
               <span className="rounded-full border-2 border-ink bg-butter-100 px-2 font-bold leading-6 text-ink">
                 {stop.time || t('timeUnset')}
               </span>
-            )}
-            {canEdit && !editingInfo && (
-              <StopInfoEditButton title={stop.title} buttonRef={infoButton} onOpen={() => setEditingInfo(true)} />
             )}
             {!editingInfo && <StopInlineNote stop={stop} />}
           </div>
