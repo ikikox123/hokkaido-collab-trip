@@ -24,7 +24,7 @@ import { isTravelMode, MODE_COLORS, TRAVEL_MODES } from '../lib/travel';
 import { displayStopTitle } from '../i18n/stopNames';
 import { StopName } from './StopName';
 import { SectionBadge } from './Cute';
-import { StopInfoEditButton, StopInfoEditor, StopInfoLines } from './StopInfo';
+import { StopInfoEditButton, StopInfoEditor, StopInfoLines, StopInlineNote } from './StopInfo';
 import type { StopInfoPatch } from '../lib/stopInfo';
 
 type SaveResult = { ok: boolean; error?: string };
@@ -173,6 +173,7 @@ function SortableItem({
             {canEdit && !editingInfo && (
               <StopInfoEditButton title={stop.title} buttonRef={infoButton} onOpen={() => setEditingInfo(true)} />
             )}
+            {!editingInfo && <StopInlineNote stop={stop} />}
           </div>
           {editingInfo ? (
             <StopInfoEditor

@@ -24,21 +24,23 @@ export function ClockIcon({ size = 13 }: { size?: number }) {
   );
 }
 
-/** Read-only lines under the time row. Renders nothing when the stop has neither value. */
+/**
+ * Hours (one line) and, under them, the note clamped to two lines (tap to expand).
+ * Renders nothing unless the stop has hours: a note on its own stays inline beside the time
+ * (see StopInlineNote), so cards without hours keep the height they always had.
+ */
 export function StopInfoLines({ stop }: { stop: Pick<Stop, 'hours' | 'notes'> }) {
   const { t } = useI18n();
   const { hours, notes } = stopInfoView(stop);
   const [open, setOpen] = useState(false);
-  if (!hours && !notes) return null;
+  if (!hours) return null;
   return (
     <div className="stop-info mt-1 min-w-0 space-y-0.5" onClick={(e) => e.stopPropagation()}>
-      {hours && (
-        <p className="stop-hours flex min-w-0 items-center gap-1.5 text-sm font-semibold text-slate-700" title={hours}>
-          <ClockIcon />
-          <span className="sr-only">{t('stopInfoHoursLabel')}：</span>
-          <span className="min-w-0 truncate">{hours}</span>
-        </p>
-      )}
+      <p className="stop-hours flex min-w-0 items-center gap-1.5 text-sm font-semibold text-slate-700" title={hours}>
+        <ClockIcon />
+        <span className="sr-only">{t('stopInfoHoursLabel')}：</span>
+        <span className="min-w-0 truncate">{hours}</span>
+      </p>
       {notes && (
         <button
           type="button"
@@ -54,7 +56,29 @@ export function StopInfoLines({ stop }: { stop: Pick<Stop, 'hours' | 'notes'> })
   );
 }
 
-/** Pencil pill that opens the editor. Only rendered for trip companions. */
+/**
+ * A note without hours sits to the right of the time capsule on one line, as it always did.
+ * Tapping it opens the full text on its own row.
+ */
+export function StopInlineNote({ stop }: { stop: Pick<Stop, 'hours' | 'notes'> }) {
+  const { t } = useI18n();
+  const { hours, notes } = stopInfoView(stop);
+  const [open, setOpen] = useState(false);
+  if (hours || !notes) return null;
+  return (
+    <button
+      type="button"
+      className={`stop-note min-w-0 text-left ${open ? 'basis-full whitespace-pre-line break-words leading-snug' : 'flex-1 truncate'}`}
+      aria-expanded={open}
+      title={open ? t('stopNoteCollapse') : t('stopNoteExpand')}
+      onClick={() => setOpen((v) => !v)}
+    >
+      {notes}
+    </button>
+  );
+}
+
+/** Icon-only pill (clock + pencil) beside the time capsule. Only rendered for trip companions. */
 export function StopInfoEditButton({
   title,
   onOpen,
@@ -65,21 +89,23 @@ export function StopInfoEditButton({
   buttonRef: React.RefObject<HTMLButtonElement>;
 }) {
   const { t, locale } = useI18n();
+  const label = t('stopInfoEditAria', { title: displayStopTitle(locale, title) });
   return (
     <button
       ref={buttonRef}
       type="button"
-      className="stop-info-edit cute-press inline-flex min-h-touch items-center gap-1 rounded-full border-2 border-ink bg-butter-100 px-2.5 text-sm font-bold text-ink"
-      aria-label={t('stopInfoEditAria', { title: displayStopTitle(locale, title) })}
+      className="stop-info-edit cute-press inline-flex min-h-touch min-w-touch shrink-0 items-center justify-center gap-0.5 rounded-full border-2 border-ink bg-butter-100 text-ink"
+      aria-label={label}
+      title={label}
       onClick={(e) => {
         e.stopPropagation();
         onOpen();
       }}
     >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <ClockIcon size={14} />
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M4 20h4L19 9l-4-4L4 16v4z" />
       </svg>
-      {t('stopInfoEditShort')}
     </button>
   );
 }
