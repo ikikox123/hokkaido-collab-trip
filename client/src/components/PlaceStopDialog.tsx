@@ -3,7 +3,7 @@ import { cleanStopHours, STOP_HOURS_MAX } from '../../../server/src/stopInfo.js'
 import { localizeError } from '../i18n/errors';
 import { useI18n } from '../i18n/I18nProvider';
 import { loadGoogleMaps, type GoogleAutocomplete, type GoogleMapsNS } from '../lib/googleLoader';
-import { selectionFromPlace } from '../lib/placeLabel';
+import { looksLikeAddress, openingHoursNames, selectionFromPlace } from '../lib/placeLabel';
 import { holdPlaceSuggestions, releasePlaceSuggestions } from '../lib/placeSuggestions';
 
 export type PickedPlace = {
@@ -45,7 +45,9 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
   const hoursAuto = useRef(false); // the current value came from the lookup
   // The Autocomplete listener is registered once, so it must read these through a ref.
   const live = useRef({ mode, token });
+  const titleNow = useRef('');
   live.current = { mode, token };
+  titleNow.current = title;
   const { t } = useI18n();
 
   useEffect(() => {
@@ -107,7 +109,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
             setError('請從建議清單選一個地點，或按「伺服器搜尋」');
             return;
           }
-          applySelection(place.name, place.formatted_address, loc.lat(), loc.lng());
+          applySelection(place.name, place.formatted_address, loc.lat(), loc.lng(), inputRef.current?.value ?? '');
         });
         removeListenerRef.current = () => listener.remove();
         setSuggestState('ready');
@@ -130,8 +132,14 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
     formattedAddress: string | undefined,
     nextLat: number,
     nextLng: number,
+    searchText = '',
   ) {
     const picked = selectionFromPlace({ name, formattedAddress });
+    const typed = searchText.trim();
+    // Geocoding names a place by its address; the text the user searched for makes a better stop name.
+    if (looksLikeAddress(name, formattedAddress) && typed && !looksLikeAddress(typed, formattedAddress)) {
+      picked.title = typed;
+    }
     selectionLock.current = true;
     const restoreSearch = () => {
       const input = inputRef.current;
@@ -152,7 +160,11 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
       setHours('');
     }
     if (!hoursTyped.current) setHoursState('idle');
-    void lookupHours(name || picked.title, nextLat, nextLng);
+    void lookupHours(
+      openingHoursNames({ name, address: formattedAddress, searchText: typed, title: titleNow.current }),
+      nextLat,
+      nextLng,
+    );
     restoreSearch();
     window.setTimeout(restoreSearch, 0);
     window.setTimeout(restoreSearch, 50);
@@ -163,22 +175,26 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
    * hours when the OSM name matches and the object is within ~150 m; otherwise the field stays empty.
    * A reply is dropped if the place changed meanwhile or the user already typed something.
    */
-  async function lookupHours(name: string, nextLat: number, nextLng: number) {
+  async function lookupHours(names: string[], nextLat: number, nextLng: number) {
     const seq = ++hoursLookup.current;
     const { mode: nowMode, token: nowToken } = live.current;
-    if (nowMode !== 'add' || !nowToken || !name.trim()) return;
+    if (nowMode !== 'add' || !nowToken || names.length === 0) return;
     if (!hoursTyped.current) setHoursState('loading');
     let found: string | null = null;
-    try {
-      const qs = new URLSearchParams({ name, lat: String(nextLat), lng: String(nextLng) });
-      const res = await fetch(`/api/opening-hours?${qs}`, {
-        headers: { Authorization: `Bearer ${nowToken}` },
-        signal: AbortSignal.timeout(8000),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && typeof data.hours === 'string' && data.hours.trim()) found = data.hours.trim();
-    } catch {
-      // Lookup is a convenience; failing leaves the field for the user.
+    // At most two requests per pick, stopping at the first hit.
+    for (const name of names.slice(0, 2)) {
+      try {
+        const qs = new URLSearchParams({ name, lat: String(nextLat), lng: String(nextLng) });
+        const res = await fetch(`/api/opening-hours?${qs}`, {
+          headers: { Authorization: `Bearer ${nowToken}` },
+          signal: AbortSignal.timeout(8000),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && typeof data.hours === 'string' && data.hours.trim()) found = data.hours.trim();
+      } catch {
+        // Lookup is a convenience; failing leaves the field for the user.
+      }
+      if (found || seq !== hoursLookup.current) break;
     }
     if (seq !== hoursLookup.current || hoursTyped.current) return;
     hoursAuto.current = Boolean(found);
@@ -186,8 +202,8 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
     if (found) setHours(found);
   }
 
-  function applyPlace(place: { name?: string; address?: string; lat: number; lng: number }) {
-    applySelection(place.name, place.address, place.lat, place.lng);
+  function applyPlace(place: { name?: string; address?: string; lat: number; lng: number }, searchText = '') {
+    applySelection(place.name, place.address, place.lat, place.lng, searchText);
   }
 
   async function searchServer() {
@@ -211,7 +227,7 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
         setError(typeof data.error === 'string' ? data.error : '找不到地點');
         return;
       }
-      applyPlace({ name: data.name, address: data.address, lat: Number(data.lat), lng: Number(data.lng) });
+      applyPlace({ name: data.name, address: data.address, lat: Number(data.lat), lng: Number(data.lng) }, q);
     } catch {
       setError('地點查詢失敗');
     } finally {

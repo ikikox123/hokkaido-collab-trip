@@ -30,3 +30,39 @@ export function selectionFromPlace(input: {
     search: address || label,
   };
 }
+
+/**
+ * True when `name` is empty, is the address itself, contains the address, or has a postal mark (〒).
+ * Geocoding fallbacks name a place by its address, which can never match an OpenStreetMap name.
+ */
+export function looksLikeAddress(name: string | null | undefined, address: string | null | undefined): boolean {
+  const n = String(name ?? '').trim();
+  const a = String(address ?? '').trim();
+  if (!n) return true;
+  if (n.includes('〒')) return true;
+  return Boolean(a) && (n === a || n.includes(a));
+}
+
+/**
+ * Names to try for the free opening-hours lookup, best first, at most two.
+ * The place name comes first unless it is address-like; then what the user typed in the search box,
+ * then the stop name they have filled in. Address-like text is never sent.
+ */
+export function openingHoursNames(input: {
+  name?: string | null;
+  address?: string | null;
+  searchText?: string | null;
+  title?: string | null;
+}): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of [input.name, input.searchText, input.title]) {
+    const text = String(raw ?? '').trim();
+    if (!text || looksLikeAddress(text, input.address)) continue;
+    const key = text.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out.slice(0, 2);
+}

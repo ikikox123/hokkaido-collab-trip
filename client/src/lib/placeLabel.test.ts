@@ -35,3 +35,40 @@ test('missing name falls back without inventing a second copy of nothing', () =>
   assert.equal(picked.title, '大通公園');
   assert.equal(picked.search, '大通公園');
 });
+
+import { looksLikeAddress, openingHoursNames } from './placeLabel.ts';
+
+const ADDRESS = '日本、〒060-0001 北海道札幌市中央区北１条西２丁目';
+
+test('address-like names are recognised', () => {
+  assert.equal(looksLikeAddress('', ADDRESS), true);
+  assert.equal(looksLikeAddress(ADDRESS, ADDRESS), true);
+  assert.equal(looksLikeAddress('〒060-0001 札幌市', ''), true);
+  assert.equal(looksLikeAddress(`札幌市時計台 ${ADDRESS}`, ADDRESS), true);
+  assert.equal(looksLikeAddress('札幌市時計台', ADDRESS), false);
+});
+
+test('opening-hours lookup falls back to the typed search text when the name is an address', () => {
+  assert.deepEqual(
+    openingHoursNames({ name: ADDRESS, address: ADDRESS, searchText: ' 札幌市時計台 ', title: '' }),
+    ['札幌市時計台'],
+  );
+  assert.deepEqual(openingHoursNames({ name: '', address: ADDRESS, searchText: '北海道大学', title: '' }), ['北海道大学']);
+});
+
+test('a real place name goes first; at most two distinct candidates; never an address', () => {
+  assert.deepEqual(
+    openingHoursNames({ name: '札幌市時計台', address: ADDRESS, searchText: '時計台', title: '我的集合點' }),
+    ['札幌市時計台', '時計台'],
+  );
+  assert.deepEqual(
+    openingHoursNames({ name: ADDRESS, address: ADDRESS, searchText: '時計台', title: '我的集合點' }),
+    ['時計台', '我的集合點'],
+  );
+  assert.deepEqual(openingHoursNames({ name: '時計台', address: '', searchText: ' 時計　台 ', title: '時計台' }), ['時計台']);
+});
+
+test('nothing usable means no lookup at all, so the field stays empty', () => {
+  assert.deepEqual(openingHoursNames({ name: ADDRESS, address: ADDRESS, searchText: ADDRESS, title: ADDRESS }), []);
+  assert.deepEqual(openingHoursNames({ name: '', address: '', searchText: '  ', title: null }), []);
+});
