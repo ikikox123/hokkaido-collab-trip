@@ -135,3 +135,14 @@ test('missing lodging coordinates fall back to the Sapporo base point', () => {
   assert.equal(isShareTrip({ stops: [] }), false);
   assert.equal(isShareTrip(null), false);
 });
+
+test('share display carries hours when set and shows nothing extra for older stops', () => {
+  const older = shareStopDisplay('zh-Hant', trip.stops[0], 1);
+  assert.equal(older.hours, '');
+  assert.equal(older.notes, '圓山');
+  const withHours = shareStopDisplay('en', { ...trip.stops[0], hours: '09:00–17:00', notes: '預約\n帶現金' }, 1);
+  assert.equal(withHours.hours, '09:00–17:00');
+  assert.equal(withHours.notes, '預約\n帶現金');
+  const noNotes = { id: 'x', day: 1, date: '2027-02-12', title: 'x', time: '' };
+  assert.deepEqual([shareStopDisplay('ja', noNotes, 1).hours, shareStopDisplay('ja', noNotes, 1).notes], ['', '']);
+});

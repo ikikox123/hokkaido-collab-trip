@@ -22,6 +22,8 @@ import { correctSeedState } from './seedGeocode.js';
 import { applyStopPatch } from './stopEdit.js';
 import { applyLodgingPatch } from './lodgingEdit.js';
 import { applyDayLabel } from './dayLabel.js';
+import { cleanStopInfo } from './stopInfo.js';
+import { createOsmHoursLookup, parseOpeningHoursQuery } from './osmHours.js';
 import { getWeather } from './weather.js';
 import { getJmaWarnings } from './jmaWarnings.js';
 import { getJrStatus } from './jrStatus.js';
@@ -239,6 +241,22 @@ app.get('/api/places', authMiddleware, async (req, res) => {
     console.warn('[places]', error, detail.slice(0, 180));
     res.status(502).json({ error });
   }
+});
+
+const osmOpeningHours = createOsmHoursLookup();
+
+// Free OpenStreetMap hours for a picked place. Never asks Google for opening hours (Enterprise SKU).
+app.get('/api/opening-hours', authMiddleware, async (req, res) => {
+  if (!isTripMember(tripState, req.user.id)) {
+    return res.status(403).json({ error: '只有這趟行程的旅伴可以這樣做' });
+  }
+  const query = parseOpeningHoursQuery(new URLSearchParams({
+    name: String(req.query.name ?? ''),
+    lat: String(req.query.lat ?? ''),
+    lng: String(req.query.lng ?? ''),
+  }));
+  if (query.error) return res.status(query.status).json({ error: query.error });
+  res.json({ hours: await osmOpeningHours(query), source: 'osm' });
 });
 
 app.get('/api/route', async (req, res) => {
@@ -514,6 +532,12 @@ io.on('connection', (socket) => {
 
   socket.on('trip:add', ({ stop, token }, ack) => {
     if (!requireTripMember(socket, token, ack)) return;
+    const info = cleanStopInfo({ hours: stop?.hours, notes: stop?.notes });
+    if (!info.ok) {
+      socket.emit('error:edit', { error: info.error });
+      ackResult(ack, { ok: false, error: info.error });
+      return;
+    }
     const id = `s${Date.now()}`;
     const newStop = {
       id,
@@ -523,7 +547,7 @@ io.on('connection', (socket) => {
       time: stop.time || '',
       lat: Number(stop.lat) || 43.06,
       lng: Number(stop.lng) || 141.35,
-      notes: stop.notes || '',
+      ...info.set,
     };
     const idx = tripState.stops.findIndex((s) => s.day > newStop.day);
     const stops = [...tripState.stops];

@@ -25,7 +25,10 @@ export type Stop = {
   time: string;
   lat: number;
   lng: number;
-  notes: string;
+  /** Free-text note. Absent when empty; older saved stops may have '' or no key. */
+  notes?: string;
+  /** Opening hours, one line. Absent unless someone set it. */
+  hours?: string;
 };
 
 export type TravelMode = 'walk' | 'subway' | 'jr' | 'bus' | 'taxi' | 'car' | 'charter';

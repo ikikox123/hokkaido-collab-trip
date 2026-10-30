@@ -10,6 +10,8 @@ import { lookupPlace, placeFailureMessage, redactSecrets, serverMapsKey } from '
 import { applyStopPatch } from '../../server/src/stopEdit.js';
 import { applyLodgingPatch } from '../../server/src/lodgingEdit.js';
 import { applyDayLabel } from '../../server/src/dayLabel.js';
+import { cleanStopInfo } from '../../server/src/stopInfo.js';
+import { createOsmHoursLookup, parseOpeningHoursQuery } from '../../server/src/osmHours.js';
 import {
   addMember,
   addSettlement,
@@ -60,6 +62,7 @@ export class TripHub extends DurableObject {
     this.production = env.ENVIRONMENT === 'production';
     this.users = createUserStore(this.sql, { production: this.production });
     this.registerLimiter = createRegisterRateLimiter();
+    this.osmOpeningHours = createOsmHoursLookup();
     this.enrichGen = 0;
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
     ctx.blockConcurrencyWhile(async () => {
@@ -414,6 +417,18 @@ export class TripHub extends DurableObject {
       }
     }
 
+    if (method === 'GET' && pathname === '/api/opening-hours') {
+      const auth = await this.bearerUser(request);
+      if (auth.error) return auth.error;
+      if (!this.tripState || !isTripMember(this.tripState, auth.user.id)) {
+        return json({ error: '只有這趟行程的旅伴可以這樣做' }, 403);
+      }
+      const query = parseOpeningHoursQuery(url.searchParams);
+      if (query.error) return json({ error: query.error }, query.status);
+      // Free OpenStreetMap data only; Google's opening-hours fields are Enterprise-tier and never requested.
+      return json({ hours: await this.osmOpeningHours(query), source: 'osm' });
+    }
+
     return json({ error: 'Not found' }, 404);
   }
 
@@ -647,6 +662,8 @@ export class TripHub extends DurableObject {
     async 'trip:add'(ws, { stop, token }, ack) {
       if (!(await this.requireTripMember(ws, token, ack))) return;
       const input = stop && typeof stop === 'object' ? stop : {};
+      const info = cleanStopInfo({ hours: input.hours, notes: input.notes });
+      if (!info.ok) return this.editError(ws, ack, { ok: false, error: info.error });
       const state = this.tripState;
       const newStop = {
         id: `s${Date.now()}`,
@@ -656,7 +673,7 @@ export class TripHub extends DurableObject {
         time: input.time || '',
         lat: Number(input.lat) || 43.06,
         lng: Number(input.lng) || 141.35,
-        notes: input.notes || '',
+        ...info.set,
       };
       const stops = [...state.stops];
       let insertAt = stops.length;

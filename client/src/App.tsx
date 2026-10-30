@@ -13,6 +13,7 @@ import { displayDayLabel, pageHeading } from './i18n/screen.ts';
 import { displayStopTitle } from './i18n/stopNames';
 import { localizeError } from './i18n/errors';
 import { DayScene, FlightCard, Fox, HeaderSky, HokkaidoBand, Mascot } from './components/Cute';
+import { stopInfoView, type StopInfoPatch } from './lib/stopInfo';
 import { DayLabelEditButton, DayLabelEditor } from './components/DayLabelEditor';
 import { HeaderMenu } from './components/HeaderMenu';
 import { LanguagePill } from './components/LanguagePill';
@@ -380,6 +381,17 @@ export default function App() {
     return result;
   }
 
+  async function updateStopInfo(id: string, patch: StopInfoPatch) {
+    if (!socket || !token) {
+      showToast(t('loginToEdit'));
+      setLoginOpen(true);
+      return { ok: false, error: '請先登入才能編輯' };
+    }
+    const result = await emitAck(socket, 'trip:updateStop', { id, patch, token });
+    if (result.ok) showToast(t('stopInfoSaved'));
+    return result;
+  }
+
   function joinRoom() {
     const code = (roomCode || DEFAULT_ROOM).toUpperCase();
     setRoomCode(code);
@@ -695,6 +707,7 @@ export default function App() {
             }
             onUpdateTime={(id, time) => emitAuth('trip:updateStop', { id, patch: { time } })}
             onRename={(id, title) => emitAuth('trip:updateStop', { id, patch: { title } })}
+            onUpdateInfo={updateStopInfo}
           />
           )}
           </div>
@@ -815,7 +828,10 @@ export default function App() {
                 title: place.title,
                 lat: place.lat,
                 lng: place.lng,
-                ...(place.address ? { notes: place.address } : {}),
+                // The address becomes the note only when there is none; a written note is never replaced.
+                ...(place.address && !stopInfoView(trip.stops.find((s) => s.id === placeDialog.stopId)).notes
+                  ? { notes: place.address }
+                  : {}),
               },
             });
           } else {
@@ -829,6 +845,7 @@ export default function App() {
                 lat: place.lat,
                 lng: place.lng,
                 notes: place.address,
+                ...(place.hours ? { hours: place.hours } : {}),
               },
             });
           }

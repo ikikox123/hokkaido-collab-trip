@@ -16,6 +16,7 @@ export type ShareStop = {
   title: string;
   time: string;
   notes?: string;
+  hours?: string;
 };
 
 export type ShareDay = {
@@ -90,6 +91,7 @@ export function shareStopDisplay(locale: Locale, stop: ShareStop, number: number
     time: stop.time,
     title: displayStopTitle(locale, stop.title),
     notes: typeof stop.notes === 'string' ? stop.notes : '',
+    hours: typeof stop.hours === 'string' ? stop.hours : '',
   };
 }
 

@@ -67,12 +67,12 @@ export function createSeedStops() {
     { id: 's5', day: 1, date: '2027-02-12', title: 'MEGA 唐吉訶德', time: '19:00', ...at('s5'), notes: '補給日用品' },
     { id: 's6', day: 1, date: '2027-02-12', title: 'すすきの晚餐', time: '20:00', ...at('s6'), notes: '拉麵或居酒屋' },
     // D2 2/13
-    { id: 's7', day: 2, date: '2027-02-13', title: '札幌時計台', time: '09:30', ...at('s7'), notes: '' },
+    { id: 's7', day: 2, date: '2027-02-13', title: '札幌時計台', time: '09:30', ...at('s7'), hours: '（範例）09:00–17:00', notes: '（範例）週一可能休館，出發前再確認' },
     { id: 's8', day: 2, date: '2027-02-13', title: '札幌電視塔', time: '10:30', ...at('s8'), notes: '大通公園' },
     { id: 's9', day: 2, date: '2027-02-13', title: '北菓楼 札幌本館', time: '11:30', ...at('s9'), notes: '甜點午餐' },
     { id: 's10', day: 2, date: '2027-02-13', title: '北海道神宮', time: '13:30', ...at('s10'), notes: '圓山' },
     { id: 's11', day: 2, date: '2027-02-13', title: '北海道大學', time: '15:00', ...at('s11'), notes: '校園散步' },
-    { id: 's12', day: 2, date: '2027-02-13', title: '白い恋人パーク', time: '16:30', ...at('s12'), notes: '' },
+    { id: 's12', day: 2, date: '2027-02-13', title: '白い恋人パーク', time: '16:30', ...at('s12'), hours: '（範例）10:00–17:00', notes: '（範例）建議先預約導覽時段' },
     { id: 's13', day: 2, date: '2027-02-13', title: '大丸／寶可夢中心', time: '18:30', ...at('s13'), notes: '購物' },
     { id: 's14', day: 2, date: '2027-02-13', title: 'JRタワー夜景', time: '20:00', ...at('s14'), notes: '晚上夜景' },
     // D3 2/14 旭川／美瑛／中富良野
@@ -88,7 +88,7 @@ export function createSeedStops() {
     { id: 's22', day: 5, date: '2027-02-16', title: '三角市場', time: '10:00', ...at('s22'), notes: '海鮮丼' },
     { id: 's23', day: 5, date: '2027-02-16', title: '小樽運河', time: '11:30', ...at('s23'), notes: '' },
     { id: 's24', day: 5, date: '2027-02-16', title: '音樂盒堂', time: '13:30', ...at('s24'), notes: '' },
-    { id: 's25', day: 5, date: '2027-02-16', title: 'LeTAO 本店', time: '15:00', ...at('s25'), notes: '起司蛋糕' },
+    { id: 's25', day: 5, date: '2027-02-16', title: 'LeTAO 本店', time: '15:00', ...at('s25'), hours: '（範例）09:00–18:00', notes: '起司蛋糕\n（範例）內用要排隊，外帶比較快' },
     // D6 2/17
     { id: 's26', day: 6, date: '2027-02-17', title: '中島公園', time: '11:00', ...at('s26'), notes: '彈性／散步' },
     { id: 's27', day: 6, date: '2027-02-17', title: '市區購物', time: '14:00', ...at('s27'), notes: '狸小路／大丸彈性' },

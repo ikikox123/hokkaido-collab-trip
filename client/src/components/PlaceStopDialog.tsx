@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { cleanStopHours, STOP_HOURS_MAX } from '../../../server/src/stopInfo.js';
 import { localizeError } from '../i18n/errors';
 import { useI18n } from '../i18n/I18nProvider';
 import { loadGoogleMaps, type GoogleAutocomplete, type GoogleMapsNS } from '../lib/googleLoader';
@@ -10,6 +11,8 @@ export type PickedPlace = {
   lat: number;
   lng: number;
   address: string;
+  /** Optional opening hours (add mode only). Empty when none. */
+  hours?: string;
 };
 
 type Props = {
@@ -34,6 +37,15 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [suggestState, setSuggestState] = useState<'loading' | 'ready' | 'off'>('loading');
+  const [hours, setHours] = useState('');
+  // 'found' = filled from OpenStreetMap and not edited since; 'edited' = the user typed or cleared it.
+  const [hoursState, setHoursState] = useState<'idle' | 'loading' | 'found' | 'none' | 'edited'>('idle');
+  const hoursLookup = useRef(0);
+  const hoursTyped = useRef(false); // the user typed or cleared the field: never overwrite it
+  const hoursAuto = useRef(false); // the current value came from the lookup
+  // The Autocomplete listener is registered once, so it must read these through a ref.
+  const live = useRef({ mode, token });
+  live.current = { mode, token };
   const { t } = useI18n();
 
   useEffect(() => {
@@ -44,6 +56,11 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
     setLat(null);
     setLng(null);
     setError(null);
+    setHours('');
+    setHoursState('idle');
+    hoursTyped.current = false;
+    hoursAuto.current = false;
+    hoursLookup.current += 1;
     setSuggestState('loading');
   }, [open, initialTitle]);
 
@@ -130,9 +147,43 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
     setLat(nextLat);
     setLng(nextLng);
     setError(null);
+    if (hoursAuto.current) {
+      hoursAuto.current = false;
+      setHours('');
+    }
+    if (!hoursTyped.current) setHoursState('idle');
+    void lookupHours(name || picked.title, nextLat, nextLng);
     restoreSearch();
     window.setTimeout(restoreSearch, 0);
     window.setTimeout(restoreSearch, 50);
+  }
+
+  /**
+   * Fill opening hours from the free OpenStreetMap lookup (never Google). The server only returns
+   * hours when the OSM name matches and the object is within ~150 m; otherwise the field stays empty.
+   * A reply is dropped if the place changed meanwhile or the user already typed something.
+   */
+  async function lookupHours(name: string, nextLat: number, nextLng: number) {
+    const seq = ++hoursLookup.current;
+    const { mode: nowMode, token: nowToken } = live.current;
+    if (nowMode !== 'add' || !nowToken || !name.trim()) return;
+    if (!hoursTyped.current) setHoursState('loading');
+    let found: string | null = null;
+    try {
+      const qs = new URLSearchParams({ name, lat: String(nextLat), lng: String(nextLng) });
+      const res = await fetch(`/api/opening-hours?${qs}`, {
+        headers: { Authorization: `Bearer ${nowToken}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && typeof data.hours === 'string' && data.hours.trim()) found = data.hours.trim();
+    } catch {
+      // Lookup is a convenience; failing leaves the field for the user.
+    }
+    if (seq !== hoursLookup.current || hoursTyped.current) return;
+    hoursAuto.current = Boolean(found);
+    setHoursState(found ? 'found' : 'none');
+    if (found) setHours(found);
   }
 
   function applyPlace(place: { name?: string; address?: string; lat: number; lng: number }) {
@@ -179,11 +230,17 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
       setError('請填站點名稱');
       return;
     }
+    const cleanedHours = cleanStopHours(hours);
+    if (!cleanedHours.ok) {
+      setError(cleanedHours.error);
+      return;
+    }
     onConfirm({
       title: pickedTitle,
       lat,
       lng,
       address,
+      ...(mode === 'add' && cleanedHours.value ? { hours: cleanedHours.value } : {}),
     });
   }
 
@@ -242,6 +299,33 @@ export function PlaceStopDialog({ open, mode, initialTitle, token, onClose, onCo
               {lat.toFixed(5)}, {lng.toFixed(5)}
             </span>
           </p>
+        )}
+        {mode === 'add' && (
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-slate-700" htmlFor="place-hours">
+              {t('stopInfoHoursLabel')}
+            </label>
+            <input
+              id="place-hours"
+              value={hours}
+              maxLength={STOP_HOURS_MAX * 2}
+              onChange={(e) => {
+                hoursTyped.current = true;
+                hoursAuto.current = false;
+                setHours(e.target.value);
+                setHoursState('edited');
+              }}
+              placeholder={t('stopInfoHoursPlaceholder')}
+              autoComplete="off"
+              aria-describedby="place-hours-note"
+              className="mt-1 w-full min-h-touch rounded-xl border border-slate-200 px-3 text-base outline-none focus:border-ice-500 focus:ring-2 focus:ring-ice-500/30"
+            />
+            <p id="place-hours-note" className="mt-1 min-h-[1rem] text-xs leading-snug text-slate-500" aria-live="polite">
+              {hoursState === 'loading' && t('hoursLookingUp')}
+              {hoursState === 'found' && t('hoursOsmSource')}
+              {hoursState === 'none' && !hours && t('hoursNotFound')}
+            </p>
+          </div>
         )}
         {error && <p className="mt-2 text-sm text-red-600">{localizeError(error, t)}</p>}
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">

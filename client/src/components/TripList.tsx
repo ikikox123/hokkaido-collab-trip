@@ -16,7 +16,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import type { Leg, Stop, TravelMode } from '../types/trip';
 import { useI18n } from '../i18n/I18nProvider';
 import { travelLabel } from '../i18n/labels';
@@ -24,6 +24,10 @@ import { isTravelMode, MODE_COLORS, TRAVEL_MODES } from '../lib/travel';
 import { displayStopTitle } from '../i18n/stopNames';
 import { StopName } from './StopName';
 import { SectionBadge } from './Cute';
+import { StopInfoEditButton, StopInfoEditor, StopInfoLines } from './StopInfo';
+import type { StopInfoPatch } from '../lib/stopInfo';
+
+type SaveResult = { ok: boolean; error?: string };
 
 type Props = {
   stops: Stop[];
@@ -36,6 +40,7 @@ type Props = {
   onAdd: () => void;
   onUpdateTime: (id: string, time: string) => void;
   onRename: (id: string, title: string) => void;
+  onUpdateInfo: (id: string, patch: StopInfoPatch) => Promise<SaveResult>;
   onSetMode: (fromStopId: string, toStopId: string, mode: TravelMode) => void;
   onEditPlace?: (id: string) => void;
 };
@@ -81,6 +86,7 @@ function SortableItem({
   onDelete,
   onUpdateTime,
   onRename,
+  onUpdateInfo,
   onEditPlace,
 }: {
   stop: Stop;
@@ -93,6 +99,7 @@ function SortableItem({
   onDelete: () => void;
   onUpdateTime: (time: string) => void;
   onRename: (title: string) => void;
+  onUpdateInfo: (patch: StopInfoPatch) => Promise<SaveResult>;
   onEditPlace?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -106,6 +113,8 @@ function SortableItem({
   };
 
   const { t } = useI18n();
+  const [editingInfo, setEditingInfo] = useState(false);
+  const infoButton = useRef<HTMLButtonElement>(null);
   const accent = isNext ? 'next' : selected ? 'selected' : 'default';
 
   return (
@@ -161,8 +170,23 @@ function SortableItem({
                 {stop.time || t('timeUnset')}
               </span>
             )}
-            {stop.notes && <span className="min-w-0 flex-1 truncate">{stop.notes}</span>}
+            {canEdit && !editingInfo && (
+              <StopInfoEditButton title={stop.title} buttonRef={infoButton} onOpen={() => setEditingInfo(true)} />
+            )}
           </div>
+          {editingInfo ? (
+            <StopInfoEditor
+              stop={stop}
+              onSave={onUpdateInfo}
+              onClose={() => {
+                setEditingInfo(false);
+                // The button is mounted again on the next render.
+                window.setTimeout(() => infoButton.current?.focus(), 0);
+              }}
+            />
+          ) : (
+            <StopInfoLines stop={stop} />
+          )}
         </div>
         {canEdit && (
           <div className="flex shrink-0 flex-col">
@@ -267,6 +291,7 @@ export function TripList({
   onAdd,
   onUpdateTime,
   onRename,
+  onUpdateInfo,
   onSetMode,
   onEditPlace,
 }: Props) {
@@ -346,6 +371,7 @@ export function TripList({
                     onDelete={() => onDelete(stop.id)}
                     onUpdateTime={(time) => onUpdateTime(stop.id, time)}
                     onRename={(title) => onRename(stop.id, title)}
+                    onUpdateInfo={(patch) => onUpdateInfo(stop.id, patch)}
                     onEditPlace={onEditPlace ? () => onEditPlace(stop.id) : undefined}
                   />
                   {next && (

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ClockIcon } from './StopInfo';
 import { LanguageMenu } from '../i18n/LanguageMenu';
 import { useI18n } from '../i18n/I18nProvider';
 import { pageHeading } from '../i18n/screen.ts';
@@ -414,6 +415,15 @@ export function SharePage() {
                                 {shown.time || t('timeUnset')}
                               </p>
                               <h3 className="share-stop-title text-base font-bold leading-snug text-slate-900">{shown.title}</h3>
+                              {shown.hours && (
+                                <p className="share-hours mt-0.5 flex items-start gap-1.5 text-sm font-semibold leading-snug text-slate-700 print:text-[10.5pt] print:text-black">
+                                  <span className="mt-[3px]">
+                                    <ClockIcon />
+                                  </span>
+                                  <span className="sr-only">{t('stopInfoHoursLabel')}：</span>
+                                  <span className="min-w-0 break-words">{shown.hours}</span>
+                                </p>
+                              )}
                               {shown.notes && (
                                 <p className="share-notes mt-1 whitespace-pre-wrap text-[15px] leading-relaxed text-slate-600 print:text-[10.5pt] print:leading-snug print:text-black">
                                   {shown.notes}

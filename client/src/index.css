@@ -981,6 +981,7 @@ html:has(.share-root) #root {
 
 .share-stop-title,
 .share-notes,
+.share-hours,
 .share-lodging p {
   overflow-wrap: anywhere;
 }
@@ -1069,7 +1070,44 @@ html.share-capturing [data-share-export-root] .print\:hidden {
     font-size: 12pt;
   }
 
-  html:has(.share-root) .share-notes {
+  html:has(.share-root) :is(.share-notes, .share-hours) {
     font-size: 10.5pt;
+  }
+}
+
+/* ---------- Stop hours + note (card lines and the small editor) ---------- */
+.stop-note {
+  cursor: pointer;
+}
+.stop-note:focus-visible,
+.stop-info-edit:focus-visible {
+  outline: 2px solid rgb(var(--c-ink));
+  outline-offset: 2px;
+}
+.stop-info-editor textarea,
+.stop-info-editor input {
+  max-width: 100%;
+}
+@media screen {
+  /* Theme B: quiet stationery. Hours become a hairline chip, the edit pill drops its sticker border. */
+  html[data-theme='b']:not(.share-capturing) .stop-hours {
+    color: rgb(var(--c-ink));
+    font-weight: 500;
+  }
+  html[data-theme='b']:not(.share-capturing) .stop-info-edit {
+    border-width: 1px;
+    background: transparent;
+    font-weight: 500;
+  }
+  html[data-theme='b']:not(.share-capturing) .stop-info-editor :is(input, textarea) {
+    border-radius: 0.5rem;
+  }
+  /* Theme C: aurora night. Light text on the dark card, aurora-green clock. */
+  html[data-theme='c']:not(.share-capturing) .stop-hours svg {
+    color: rgb(var(--c-mint-300, 110 231 183));
+  }
+  html[data-theme='c']:not(.share-capturing) .stop-info-edit {
+    background: rgb(var(--c-lavender-300) / 0.18);
+    color: rgb(var(--c-ink));
   }
 }

@@ -34,6 +34,7 @@ function copyDay(day) {
 function copyStop(stop) {
   if (!stop || typeof stop !== 'object' || Array.isArray(stop)) return null;
   if (typeof stop.id !== 'string' || !stop.id) return null;
+  const hours = text(stop.hours);
   return {
     id: stop.id,
     day: typeof stop.day === 'number' && Number.isFinite(stop.day) ? stop.day : 0,
@@ -41,6 +42,8 @@ function copyStop(stop) {
     title: text(stop.title),
     time: text(stop.time),
     notes: text(stop.notes),
+    // Only present when set, so stops saved before opening hours existed keep their old shape.
+    ...(hours ? { hours } : {}),
     lat: point(stop.lat),
     lng: point(stop.lng),
   };
