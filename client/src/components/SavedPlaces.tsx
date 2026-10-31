@@ -99,6 +99,9 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
         {area || (shared && place.addedBy ? t('savedAddedBy', { name: place.addedBy }) : ' ')}
       </p>
       {area && shared && place.addedBy && <p className="truncate text-xs text-slate-500">{t('savedAddedBy', { name: place.addedBy })}</p>}
+      {shared && place.alsoSavedBy && place.alsoSavedBy.length > 0 && (
+        <p className="saved-also truncate text-xs text-slate-500">{t('savedAlsoSaved', { names: place.alsoSavedBy.join('、') })}</p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] font-semibold">
         {place.sourceUrl && (
@@ -243,7 +246,7 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
     const result = await shareSaved(token, place.id);
     setBusyId(null);
     if (result?.ok) {
-      flash(t('savedShareDone'));
+      flash(result.data.duplicate ? t('savedShareDuplicate') : t('savedShareDone'));
       setLists((current) => ({ ...current, mine: (current.mine ?? []).map((p) => (p.id === place.id ? { ...p, sharedToTrip: true } : p)) }));
       void load('shared');
     } else flash(localizeError(result && !result.ok ? result.error : t('savedLoadFailed'), t));

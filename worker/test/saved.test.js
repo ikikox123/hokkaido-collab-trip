@@ -344,16 +344,88 @@ test('page fetch: only allow-listed pages are requested; a hostile redirect fall
   assert.equal(asked.length, 1, 'nothing else was requested');
 });
 
-test('the same source link updates one place instead of piling up', async () => {
-  const { call, tokens, makeKey } = await makeHub({ ai: goodAi() });
+test('the same source link saves one place: a repeat answers 已經收藏過了 with the existing id', async () => {
+  const ai = goodAi();
+  const { call, tokens, makeKey } = await makeHub({ ai });
   const key = await makeKey();
   const first = await (await ingest(call, key, { url: 'https://www.instagram.com/p/abc/?igsh=1', text: '空' })).json();
-  const again = await (await ingest(call, key, { url: 'https://www.instagram.com/p/abc/?igsh=2', text: '空 札幌' })).json();
+  const res = await ingest(call, key, { url: 'https://instagram.com/p/abc?utm_source=x&igshid=2', text: '空 札幌' });
+  assert.equal(res.status, 200);
+  const again = await res.json();
   assert.equal(first.created, true);
-  assert.equal(again.created, false);
-  assert.equal(again.place.id, first.place.id);
+  assert.deepEqual([again.duplicate, again.created, again.id, again.message], [true, false, first.place.id, '已經收藏過了']);
+  assert.equal(ai.calls, 1, 'answered before the model was used');
   const list = await (await call('GET', '/api/saved?scope=mine', { token: tokens.alice })).json();
   assert.equal(list.places.filter((p) => p.sourceUrl === 'https://www.instagram.com/p/abc').length, 1);
+});
+
+const near = async () => ({ lat: 43.0553, lng: 141.3412, address: 'Sumire, 札幌市', precision: 'place' });
+const mineOf = async (call, token) => (await (await call('GET', '/api/saved?scope=mine', { token })).json()).places.filter((p) => !p.name.startsWith('範例'));
+
+test('same shop under a different link is not saved twice; far or differently named shops are', async () => {
+  const where = { lat: 43.0553, lng: 141.3412 };
+  const { call, tokens, makeKey } = await makeHub({
+    ai: { async run(_m, req) { const text = req.messages[1].content; return { response: { name: /白樺/.test(text) ? '白樺山荘' : 'すみれ 拉麵', country: '日本', city: '札幌', district: '', type: 'eat', confidence: 0.9 } }; } },
+    geocode: async (f) => ({ ...where, ...(f.name === 'すみれ' && globalThis.__far ? { lat: 43.3, lng: 141.6 } : {}), address: `${f.name}, ${globalThis.__far ? '旭川市' : '札幌市'}`, precision: 'place' }),
+  });
+  const key = await makeKey();
+  const first = await (await ingest(call, key, { url: 'https://www.threads.net/@a/post/1', text: 'a' })).json();
+  assert.equal(first.place.name, 'すみれ');
+  const dup = await (await ingest(call, key, { url: 'https://www.threads.net/@b/post/2', text: 'b' })).json();
+  assert.deepEqual([dup.duplicate, dup.id, dup.message], [true, first.place.id, '已經收藏過了']);
+  assert.equal((await mineOf(call, tokens.alice)).length, 1);
+
+  const other = await (await ingest(call, key, { url: 'https://www.threads.net/@c/post/3', text: '白樺 c' })).json();
+  assert.equal(other.created, true, 'different name, same spot');
+  globalThis.__far = true;
+  const far = await (await ingest(call, key, { url: 'https://www.threads.net/@d/post/4', text: 'd' })).json();
+  delete globalThis.__far;
+  assert.equal(far.created, true, 'same name, far away');
+  assert.equal((await mineOf(call, tokens.alice)).length, 3);
+});
+
+test('sharing a place the trip already has records who else saved it, and shows it', async () => {
+  const { call, tokens, makeKey } = await makeHub({ ai: goodAi({ name: 'すみれ 拉麵' }), geocode: near });
+  const aliceKey = await makeKey('alice');
+  const bobKey = await makeKey('bob');
+  const a = await (await ingest(call, aliceKey, { url: 'https://www.threads.net/@a/post/1', text: 'x' })).json();
+  const b = await (await ingest(call, bobKey, { url: 'https://www.threads.net/@b/post/2', text: 'y' })).json();
+  assert.equal(b.created, true, 'personal lists are separate');
+
+  const first = await call('POST', `/api/saved/${a.place.id}/share`, { token: tokens.alice });
+  assert.equal(first.status, 201);
+  const sharedId = (await first.json()).place.id;
+  assert.deepEqual((await (await call('GET', '/api/saved?scope=shared', { token: tokens.bob })).json()).places[0].alsoSavedBy, []);
+
+  const dup = await call('POST', `/api/saved/${b.place.id}/share`, { token: tokens.bob });
+  const body = await dup.json();
+  assert.equal(dup.status, 200);
+  assert.deepEqual([body.already, body.duplicate, body.message, body.place.id], [true, true, '已經有人分享過', sharedId]);
+  assert.deepEqual(body.place.alsoSavedBy, ['Bob']);
+
+  // again by bob: not twice; one shared card in total; the sharer is not listed
+  await call('POST', `/api/saved/${b.place.id}/share`, { token: tokens.bob });
+  const shared = (await (await call('GET', '/api/saved?scope=shared', { token: tokens.alice })).json()).places.filter((p) => !p.name.startsWith('範例'));
+  assert.equal(shared.length, 1);
+  assert.deepEqual(shared[0].alsoSavedBy, ['Bob']);
+  assert.equal(shared[0].addedBy, 'Alice');
+
+  // both personal cards read as shared
+  assert.equal((await mineOf(call, tokens.bob))[0].sharedToTrip, true);
+  assert.equal((await mineOf(call, tokens.alice))[0].sharedToTrip, true);
+  // others still cannot edit it
+  assert.equal((await call('PATCH', `/api/saved/${sharedId}`, { token: tokens.bob, body: { name: 'x' } })).status, 403);
+});
+
+test('also-saved-by survives the sharer re-running their own place', async () => {
+  const { call, tokens, makeKey } = await makeHub({ ai: goodAi({ name: 'すみれ' }), geocode: near });
+  const a = await (await ingest(call, await makeKey('alice'), { text: 'x' })).json();
+  const b = await (await ingest(call, await makeKey('bob'), { text: 'y' })).json();
+  await call('POST', `/api/saved/${a.place.id}/share`, { token: tokens.alice });
+  await call('POST', `/api/saved/${b.place.id}/share`, { token: tokens.bob });
+  await call('POST', `/api/saved/${a.place.id}/reextract`, { token: tokens.alice, body: { text: '📍すみれ 新' } });
+  const shared = (await (await call('GET', '/api/saved?scope=shared', { token: tokens.alice })).json()).places.filter((p) => !p.name.startsWith('範例'));
+  assert.deepEqual(shared.map((p) => p.alsoSavedBy), [['Bob']]);
 });
 
 test('privacy: others cannot read, change, delete, re-run or share my places', async () => {

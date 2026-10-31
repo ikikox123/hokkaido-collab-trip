@@ -18,7 +18,8 @@ import { cleanPlacePatch, parseIngestBody, readLimitedText, resolveDistrict, res
 import { runIngest } from '../../server/src/savedIngest.js';
 import { isTripMember } from '../../server/src/split.js';
 import { createSavedRateLimiter } from '../../server/src/savedRateLimit.js';
-import { MAX_PLACES_PER_LIST, SHARED_COPY_COLUMNS, presentPlace } from './savedStore.js';
+import { findDuplicate, sourceKey } from '../../server/src/savedDedupe.js';
+import { MAX_PLACES_PER_LIST, SHARED_COPY_COLUMNS, parseAlsoBy, presentPlace } from './savedStore.js';
 
 const NOT_MEMBER = '只有這趟行程的旅伴可以這樣做';
 const TOO_MANY = '請求太頻繁，請稍後再試';
@@ -40,17 +41,22 @@ function tooMany(result) {
   return json({ error: TOO_MANY }, 429, { 'Retry-After': String(result.retryAfterSec ?? 60) });
 }
 
+const ALREADY_SAVED = '已經收藏過了';
+const ALREADY_SHARED = '已經有人分享過';
 const SHARER_ONLY = '只有分享的人可以修改或刪除';
 
 function isMember(hub, userId) {
   return Boolean(hub.tripState && isTripMember(hub.tripState, userId));
 }
 
-function present(hub, row, viewerId = null) {
+/** `sharedRows`: the trip's shared list, loaded once by callers that present many rows. */
+function present(hub, row, viewerId = null, sharedRows = null) {
+  const shared = row.scope === 'shared';
   return presentPlace(row, {
-    ownerName: row.scope === 'shared' ? hub.users.publicById(row.user_id)?.displayName ?? null : null,
+    ownerName: shared ? hub.users.publicById(row.user_id)?.displayName ?? null : null,
     viewerId,
-    sharedToTrip: row.scope === 'personal' && Boolean(hub.saved.findSharedCopy(row.id)),
+    sharedToTrip: !shared && (sharedRows ?? hub.saved.list('shared')).some((r) => r.shared_from === row.id || findDuplicate(row, [r])),
+    alsoSavedBy: shared ? parseAlsoBy(row.also_by).map((id) => hub.users.publicById(id)?.displayName).filter(Boolean) : [],
   });
 }
 
@@ -91,6 +97,11 @@ async function extractColumns(hub, { url, text }) {
   };
 }
 
+function duplicateReply(hub, row) {
+  const place = present(hub, row);
+  return json({ ok: true, duplicate: true, created: false, id: row.id, status: place.status, message: ALREADY_SAVED, place });
+}
+
 async function ingest(hub, request) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const ipCheck = hub.savedLimits.ip.attempt(`ip:${ip}`);
@@ -113,30 +124,35 @@ async function ingest(hub, request) {
   const body = parseIngestBody(read.text);
   if (!body.ok) return json({ error: body.error }, body.status);
 
+  // Same link as one already saved: answer before spending the model / geocoder budget.
+  const mine = hub.saved.list('personal', userId);
+  const linkKey = body.url ? sourceKey(body.url) : '';
+  const sameLink = linkKey ? mine.find((r) => sourceKey(r.source_url) === linkKey) : null;
+  if (sameLink) return duplicateReply(hub, sameLink);
+
   const { result, columns } = await extractColumns(hub, { url: body.url, text: body.text });
   if (!result.sourceUrl && !body.text) return json({ error: '不支援這個網址，請一併分享文字內容' }, 400);
 
-  const existing = hub.saved.findBySource(userId, result.sourceUrl);
-  if (!existing && hub.saved.count('personal', userId) >= MAX_PLACES_PER_LIST) return json({ error: FULL }, 409);
-  const stored = existing
-    ? hub.saved.update(existing.id, { ...columns, source_text: body.text || existing.source_text })
-    : hub.saved.insert({
-        scope: 'personal',
-        user_id: userId,
-        ...columns,
-        source_url: result.sourceUrl,
-        source_text: body.text,
-      });
-  if (existing) syncSharedCopy(hub, stored);
+  // Short links are now expanded, and the position is known: same post or same shop as an earlier one.
+  const dupe = findDuplicate({ ...columns, source_url: result.sourceUrl }, mine);
+  if (dupe) return duplicateReply(hub, dupe.row);
+  if (mine.length >= MAX_PLACES_PER_LIST) return json({ error: FULL }, 409);
+  const stored = hub.saved.insert({
+    scope: 'personal',
+    user_id: userId,
+    ...columns,
+    source_url: result.sourceUrl,
+    source_text: body.text,
+  });
   const place = present(hub, stored);
   console.log(`[saved] ingest extractor=${result.via} ai=${result.ai}`);
   return json({
     ok: true,
     extractor: result.via,
     ai: result.ai,
-    created: !existing,
+    created: true,
     status: place.status,
-    message: resultMessage(place, { created: !existing }),
+    message: resultMessage(place, { created: true }),
     place,
   });
 }
@@ -171,7 +187,8 @@ export async function handleSaved(hub, request, url) {
     const scope = url.searchParams.get('scope') === 'shared' ? 'shared' : 'mine';
     if (scope === 'shared' && !isMember(hub, user.id)) return json({ error: NOT_MEMBER }, 403);
     const rows = hub.saved.list(scope === 'shared' ? 'shared' : 'personal', user.id);
-    return json({ scope, places: rows.map((row) => present(hub, row, user.id)) });
+    const sharedRows = scope === 'mine' ? hub.saved.list('shared') : null;
+    return json({ scope, places: rows.map((row) => present(hub, row, user.id, sharedRows)) });
   }
 
   const id = parts[2];
@@ -249,6 +266,12 @@ export async function handleSaved(hub, request, url) {
     if (!isMember(hub, user.id)) return json({ error: NOT_MEMBER }, 403);
     const copy = hub.saved.findSharedCopy(row.id);
     if (copy) return json({ place: present(hub, copy, user.id), already: true });
+    // Someone (maybe the same person) already shared this post or shop: no second card, just record who else saved it.
+    const dupe = findDuplicate(row, hub.saved.list('shared'));
+    if (dupe) {
+      const noted = hub.saved.addAlsoSavedBy(dupe.row.id, user.id);
+      return json({ place: present(hub, noted, user.id), already: true, duplicate: true, message: ALREADY_SHARED });
+    }
     if (hub.saved.count('shared', user.id) >= MAX_PLACES_PER_LIST) return json({ error: FULL }, 409);
     const { id: sourceId, scope, user_id, created_at, updated_at, source_text, ...rest } = row;
     void scope; void user_id; void created_at; void updated_at; void source_text;

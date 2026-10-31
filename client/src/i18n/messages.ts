@@ -713,6 +713,8 @@ export const catalog = {
   savedGoogleMap: { 'zh-Hant': 'Google 地圖', ja: 'Google マップ', en: 'Google Maps' },
   savedShare: { 'zh-Hant': '分享到行程', ja: '行程に共有', en: 'Share to trip' },
   savedShareDone: { 'zh-Hant': '已放進行程共用清單', ja: '行程の共有リストに入れました', en: 'Added to the shared list' },
+  savedAlsoSaved: { 'zh-Hant': '誰也收藏了：{names}', ja: '他にも保存：{names}', en: 'Also saved by: {names}' },
+  savedShareDuplicate: { 'zh-Hant': '已經有人分享過', ja: 'すでに誰かが共有しています', en: 'Someone already shared this' },
   savedSharedMark: { 'zh-Hant': '已分享', ja: '共有済み', en: 'Shared' },
   savedRerun: { 'zh-Hant': '重跑', ja: '再抽出', en: 'Re-run' },
   savedRerunTitle: { 'zh-Hant': '貼上描述重新抽取', ja: '説明を貼って再抽出', en: 'Paste a description to re-read' },

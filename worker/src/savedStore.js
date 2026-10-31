@@ -17,7 +17,7 @@ function randomId() {
 /** Columns copied from a person's own place to its copy in the trip's shared list. */
 export const SHARED_COPY_COLUMNS = ['name', 'type', 'country', 'city', 'district', 'address', 'lat', 'lng', 'precision', 'status', 'confidence'];
 
-export function presentPlace(row, { ownerName = null, viewerId = null, sharedToTrip = false } = {}) {
+export function presentPlace(row, { ownerName = null, viewerId = null, sharedToTrip = false, alsoSavedBy = [] } = {}) {
   // Older rows may hold 札幌 / a street address as district: show them the way new rows are stored.
   const city = normalizeCityName(row.city);
   const district = cleanDistrict(row.district, city);
@@ -44,9 +44,19 @@ export function presentPlace(row, { ownerName = null, viewerId = null, sharedToT
   if (row.scope === 'personal') place.sharedToTrip = sharedToTrip;
   if (row.scope === 'shared') {
     place.addedBy = ownerName;
+    place.alsoSavedBy = alsoSavedBy;
     place.mine = viewerId != null && row.user_id === viewerId;
   }
   return place;
+}
+
+export function parseAlsoBy(value) {
+  try {
+    const list = JSON.parse(value || '[]');
+    return Array.isArray(list) ? list.filter((v) => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 export function createSavedStore(sql) {
@@ -78,6 +88,11 @@ export function createSavedStore(sql) {
   )`);
   try {
     sql.exec('ALTER TABLE saved_places ADD COLUMN precision TEXT'); // older rows keep NULL
+  } catch {
+    // column already there
+  }
+  try {
+    sql.exec("ALTER TABLE saved_places ADD COLUMN also_by TEXT NOT NULL DEFAULT '[]'"); // user ids who also saved a shared place
   } catch {
     // column already there
   }
@@ -169,7 +184,7 @@ export function createSavedStore(sql) {
     update(id, set) {
       const columns = Object.keys(set);
       if (!columns.length) return this.get(id);
-      const allowed = new Set(['name', 'type', 'country', 'city', 'district', 'address', 'lat', 'lng', 'precision', 'source_url', 'source_text', 'status', 'confidence']);
+      const allowed = new Set(['name', 'type', 'country', 'city', 'district', 'address', 'lat', 'lng', 'precision', 'source_url', 'source_text', 'status', 'confidence', 'also_by']);
       const safe = columns.filter((c) => allowed.has(c));
       sql.exec(
         `UPDATE saved_places SET ${safe.map((c) => `${c} = ?`).join(', ')}, updated_at = ? WHERE id = ?`,
@@ -178,6 +193,14 @@ export function createSavedStore(sql) {
         id,
       );
       return this.get(id);
+    },
+    /** Add a user to "also saved by" of a shared place. Never the sharer, never twice. */
+    addAlsoSavedBy(id, userId) {
+      const row = this.get(id);
+      if (!row || row.user_id === userId) return row;
+      const ids = parseAlsoBy(row.also_by);
+      if (ids.includes(userId)) return row;
+      return this.update(id, { also_by: JSON.stringify([...ids, userId]) });
     },
     remove(id) {
       sql.exec('DELETE FROM saved_places WHERE id = ?', id);

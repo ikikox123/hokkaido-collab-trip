@@ -10,7 +10,7 @@ import { checkFetchUrl, fetchPage } from './safeFetch.js';
  * `fields` has name/country/city/district/type/confidence/status; `geo` is { lat, lng, address, precision } or null.
  */
 export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
-  const cleanUrl = url ? canonicalSourceUrl(url) : '';
+  let cleanUrl = url ? canonicalSourceUrl(url) : '';
   const allowed = cleanUrl ? checkFetchUrl(cleanUrl).ok : false;
   let meta = null;
   let fetched = 'skipped';
@@ -19,6 +19,10 @@ export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
     if (page.ok) {
       meta = extractHtmlMeta(page.html);
       fetched = 'ok';
+      // A short link (instagram.com/share/..., threads.net/t/...) is stored as the post it redirected to.
+      // finalUrl already passed the allow-list on every hop; a login wall is not the post.
+      const expanded = canonicalSourceUrl(page.finalUrl);
+      if (expanded && checkFetchUrl(expanded).ok && !/\/(accounts\/)?login\b/.test(expanded)) cleanUrl = expanded;
     } else {
       fetched = 'failed';
     }

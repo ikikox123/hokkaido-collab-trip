@@ -28,6 +28,8 @@ export type SavedPlace = {
   hasText: boolean;
   addedBy?: string | null;
   mine?: boolean;
+  /** Shared places: display names of people (besides who shared it) who also saved this place. */
+  alsoSavedBy?: string[];
   /** Personal places only: a copy of this place is already in the trip's shared list. Absent on older servers. */
   sharedToTrip?: boolean;
   createdAt: string;
@@ -77,7 +79,7 @@ export const listSaved = (token: string, scope: SavedScope) =>
   call<{ places: SavedPlace[] }>(token, 'GET', `/api/saved?scope=${scope}`);
 export const deleteSaved = (token: string, id: string) => call<{ ok: true }>(token, 'DELETE', `/api/saved/${id}`);
 export const shareSaved = (token: string, id: string) =>
-  call<{ place: SavedPlace; already: boolean }>(token, 'POST', `/api/saved/${id}/share`);
+  call<{ place: SavedPlace; already: boolean; duplicate?: boolean }>(token, 'POST', `/api/saved/${id}/share`);
 export const reextractSaved = (token: string, id: string, text?: string) =>
   call<{ place: SavedPlace }>(token, 'POST', `/api/saved/${id}/reextract`, text ? { text } : {});
 export const patchSaved = (
