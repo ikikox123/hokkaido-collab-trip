@@ -6,7 +6,8 @@ import { createSavedRateLimiter } from './savedRateLimit.js';
 test('keys are prefixed, high entropy, and unique', async () => {
   const a = await generateSavedKey();
   const b = await generateSavedKey();
-  assert.match(a.key, /^hks_[0-9a-f]{8}_[A-Za-z0-9_-]{43}$/);
+  assert.match(a.key, /^hks_[0-9a-f]{16}_[A-Za-z0-9_-]{43}$/);
+  assert.equal(a.keyId.length, 16);
   assert.notEqual(a.key, b.key);
   const parsed = parseSavedKey(a.key);
   assert.equal(parsed.keyId, a.keyId);
@@ -57,4 +58,11 @@ test('rate limiter: 10 per minute, 200 per day, windows reset', () => {
   assert.equal(limiter.attempt('k').ok, false);
   t += 24 * 60 * 60 * 1000;
   assert.equal(limiter.attempt('k').ok, true);
+});
+
+test('keys with the older 8-hex id still parse', () => {
+  const old = `hks_0a1b2c3d_${'a'.repeat(43)}`;
+  assert.deepEqual(parseSavedKey(old), { keyId: '0a1b2c3d', secret: 'a'.repeat(43) });
+  assert.equal(parseSavedKey(`hks_0a1b2c_${'a'.repeat(43)}`), null);
+  assert.equal(parseSavedKey(`hks_${'0'.repeat(33)}_${'a'.repeat(43)}`), null);
 });

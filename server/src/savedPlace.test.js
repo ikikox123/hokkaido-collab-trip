@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  AI_INPUT_CHARS, AI_MAX_TOKENS, aiExtract, buildAiRequest, buildExtractionInput, canonicalSourceUrl, cleanPlacePatch,
+  AI_INPUT_CHARS, AI_MAX_TOKENS, aiExtract, buildAiRequest, buildExtractionInput, canonicalSourceUrl, cleanLine, cleanPlacePatch,
   decideExtraction, extractHtmlMeta, looksLikePlaceName, googleMapsSearchUrl, heuristicExtract, parseAiAnswer, parseIngestBody,
   normalizeAreaName, readLimitedText, resultMessage, statusWithGeo,
 } from './savedPlace.js';
@@ -391,4 +391,20 @@ test('login-wall and generic platform pages yield no meta, so the place stays un
   assert.equal(out.fields.name, '');
   assert.equal(out.status, 'pending');
   assert.match(resultMessage({ name: out.fields.name }), /（未命名）/);
+});
+
+test('cleanLine removes < and >', () => {
+  assert.equal(cleanLine('a<b>c <script>x</script>', 50), 'abc scriptx/script');
+});
+
+test('runIngest reports the AI state: unbound, error, answered', async () => {
+  const unbound = await runIngest({ text: '店' });
+  assert.equal(unbound.ai, 'unbound');
+  const failed = await runIngest({ text: '店', ai: { run: async () => { throw new Error('3036'); } } });
+  assert.equal(failed.ai, 'error');
+  assert.equal(failed.via, 'heuristic');
+  const answered = await runIngest({ text: '店', ai: goodAi({ confidence: 0.1 }) });
+  assert.equal(answered.ai, 'answered');
+  assert.equal(answered.via, 'heuristic');
+  assert.equal((await runIngest({ text: '店', ai: goodAi() })).ai, 'answered');
 });

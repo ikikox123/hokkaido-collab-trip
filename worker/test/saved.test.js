@@ -124,6 +124,59 @@ test('making a new key replaces the old one; revoking removes it', async () => {
   assert.equal((await (await call('GET', '/api/saved/key', { token: tokens.alice })).json()).hasKey, false);
 });
 
+test('regenerating leaves exactly one key, the new one', async () => {
+  const { makeKey, db } = await makeHub();
+  const first = await makeKey();
+  const second = await makeKey();
+  const rows = db.prepare('SELECT key_id FROM saved_keys').all();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].key_id, parseSavedKey(second).keyId);
+  assert.notEqual(rows[0].key_id, parseSavedKey(first).keyId);
+});
+
+test('if storing the new key fails, the old key is kept', async () => {
+  const db = new DatabaseSync(':memory:');
+  const real = sqlOver(db);
+  let failInsert = false;
+  const store = createSavedStore({
+    exec(query, ...args) {
+      if (failInsert && /INSERT INTO saved_keys/.test(query)) throw new Error('disk full');
+      return real.exec(query, ...args);
+    },
+  });
+  const { key } = await store.createKey('u1');
+  failInsert = true;
+  await assert.rejects(store.createKey('u1'), /disk full/);
+  failInsert = false;
+  const rows = db.prepare('SELECT key_id FROM saved_keys').all();
+  assert.deepEqual(rows.map((r) => r.key_id), [parseSavedKey(key).keyId]);
+});
+
+test('ingest reports extractor and ai state, and logs only that', async () => {
+  const lines = [];
+  const original = console.log;
+  console.log = (...args) => lines.push(args.join(' '));
+  try {
+    for (const [options, via, ai] of [
+      [{}, 'heuristic', 'unbound'],
+      [{ ai: { run: async () => { throw new Error('3036'); } } }, 'heuristic', 'error'],
+      [{ ai: goodAi() , geocode: async () => ({ lat: 1, lng: 2, address: 'x', precision: 'place' }) }, 'ai', 'answered'],
+    ]) {
+      const { call, makeKey } = await makeHub(options);
+      const body = await (await ingest(call, await makeKey(), { text: '秘密の店 https://example.com/secret' })).json();
+      assert.equal(body.extractor, via);
+      assert.equal(body.ai, ai);
+    }
+  } finally {
+    console.log = original;
+  }
+  assert.deepEqual(lines.filter((l) => l.startsWith('[saved]')), [
+    '[saved] ingest extractor=heuristic ai=unbound',
+    '[saved] ingest extractor=heuristic ai=error',
+    '[saved] ingest extractor=ai ai=answered',
+  ]);
+});
+
 test('wrong, malformed, missing and revoked keys get 401', async () => {
   const { call, makeKey } = await makeHub();
   const key = await makeKey();

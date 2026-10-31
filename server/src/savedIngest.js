@@ -6,7 +6,7 @@ import { canonicalSourceUrl, extractHtmlMeta, buildExtractionInput, heuristicExt
 import { checkFetchUrl, fetchPage } from './safeFetch.js';
 
 /**
- * Returns { sourceUrl, fetched: 'ok'|'failed'|'skipped', fields, via, geo }.
+ * Returns { sourceUrl, fetched: 'ok'|'failed'|'skipped', fields, via, ai: 'unbound'|'error'|'answered'|'skipped' (skipped: bound but nothing to send), geo }.
  * `fields` has name/country/city/district/type/confidence/status; `geo` is { lat, lng, address, precision } or null.
  */
 export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
@@ -25,7 +25,24 @@ export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
   }
   const input = buildExtractionInput({ meta, text });
   const heuristic = heuristicExtract({ meta, text });
-  const aiResult = input ? await aiExtract(ai, input, model) : null;
+  // aiExtract swallows errors, so watch the binding to tell "no AI" from "AI failed" from "AI answered".
+  let aiState = ai && typeof ai.run === 'function' ? 'skipped' : 'unbound';
+  const watched =
+    aiState === 'unbound'
+      ? ai
+      : {
+          async run(...args) {
+            try {
+              const answer = await ai.run(...args);
+              aiState = 'answered';
+              return answer;
+            } catch (error) {
+              aiState = 'error';
+              throw error;
+            }
+          },
+        };
+  const aiResult = input ? await aiExtract(watched, input, model) : null;
   const decided = decideExtraction({ ai: aiResult, heuristic, text: text || cleanUrl });
   const { status, via, ...fields } = decided;
   let geo = null;
@@ -36,5 +53,5 @@ export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
       geo = null;
     }
   }
-  return { sourceUrl: allowed ? cleanUrl : '', fetched, fields, status: statusWithGeo(status, geo), via, geo, rejectedUrl: Boolean(url) && !allowed };
+  return { sourceUrl: allowed ? cleanUrl : '', fetched, fields, status: statusWithGeo(status, geo), via, ai: aiState, geo, rejectedUrl: Boolean(url) && !allowed };
 }

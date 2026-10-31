@@ -119,8 +119,11 @@ async function ingest(hub, request) {
         source_text: body.text,
       });
   const place = present(hub, stored);
+  console.log(`[saved] ingest extractor=${result.via} ai=${result.ai}`);
   return json({
     ok: true,
+    extractor: result.via,
+    ai: result.ai,
     created: !existing,
     status: place.status,
     message: resultMessage(place, { created: !existing }),

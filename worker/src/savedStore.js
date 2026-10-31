@@ -85,8 +85,14 @@ export function createSavedStore(sql) {
     async createKey(userId) {
       const { key, keyId, hash } = await generateSavedKey();
       const createdAt = new Date().toISOString();
-      sql.exec('DELETE FROM saved_keys WHERE user_id = ?', userId);
-      sql.exec('INSERT INTO saved_keys (key_id, user_id, secret_hash, created_at) VALUES (?, ?, ?, ?)', keyId, userId, hash, createdAt);
+      // user_id is UNIQUE, so the new row is an upsert: one statement either swaps in the new key or throws
+      // with the old one untouched. Only then are any other rows of this user removed.
+      sql.exec(
+        `INSERT INTO saved_keys (key_id, user_id, secret_hash, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET key_id = excluded.key_id, secret_hash = excluded.secret_hash, created_at = excluded.created_at`,
+        keyId, userId, hash, createdAt,
+      );
+      sql.exec('DELETE FROM saved_keys WHERE user_id = ? AND key_id != ?', userId, keyId);
       return { key, createdAt };
     },
     keyInfo(userId) {

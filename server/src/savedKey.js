@@ -1,12 +1,13 @@
 /**
  * Per-user "saved places" key for the iOS Shortcut. Shared by the Worker and its tests.
  *
- * Format: hks_<8 hex id>_<43 base64url chars = 32 random bytes>. The id only finds the row;
+ * Format: hks_<16 hex id>_<43 base64url chars = 32 random bytes>. The id only finds the row;
  * the secret is never stored. The database keeps SHA-256(secret) and the comparison is constant time.
  * A key works on POST /api/saved/ingest and nowhere else.
  */
 export const KEY_PREFIX = 'hks_';
-const KEY_PATTERN = /^hks_([0-9a-f]{8})_([A-Za-z0-9_-]{43})$/;
+// 8-32 hex: keys made before the id grew to 16 hex still parse.
+const KEY_PATTERN = /^hks_([0-9a-f]{8,32})_([A-Za-z0-9_-]{43})$/;
 
 const encoder = new TextEncoder();
 
@@ -36,7 +37,7 @@ export function constantTimeEqual(a, b) {
 
 /** Returns { key, keyId, hash }. `key` is shown to the user once and never stored. */
 export async function generateSavedKey() {
-  const keyId = toHex(crypto.getRandomValues(new Uint8Array(4)));
+  const keyId = toHex(crypto.getRandomValues(new Uint8Array(8)));
   const secret = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
   const key = `${KEY_PREFIX}${keyId}_${secret}`;
   return { key, keyId, hash: await sha256Hex(secret) };

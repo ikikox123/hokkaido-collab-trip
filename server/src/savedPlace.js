@@ -20,7 +20,7 @@ export const DEFAULT_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
 const CONTROLS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f​‎‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 
 export function cleanLine(value, max) {
-  const text = String(value ?? '').replace(CONTROLS, '').replace(/\s+/g, ' ').trim();
+  const text = String(value ?? '').replace(CONTROLS, '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
   return Array.from(text).slice(0, max).join('');
 }
 
