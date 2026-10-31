@@ -6,6 +6,9 @@
  * Request budget per place: up to MAX_REQUESTS_PER_PLACE (3) search requests, plus at most
  * MAX_REVERSE_PER_PLACE (1) reverse request (a pasted street address is the first of those searches), made only when the result has precision 'place'
  * (so 4 Nominatim requests at most). The reverse request does not use up the search budget.
+ * A street-address hit is usually the middle of a block: right after it, one POI search (shop name + city, counted in the
+ * 3 searches) looks for the shop itself. A POI (amenity / shop / tourism ...) within POI_MAX_METERS of the address replaces
+ * the address position (precision 'poi'); otherwise the address position stays (precision 'address').
  * Reverse looks up the OSM administrative district (the AI's district is not trusted); it shares
  * the 1 req/s queue, User-Agent, timeout and cache (key: coordinates rounded to 4 decimals).
  */
@@ -22,6 +25,22 @@ const CACHE_MAX = 500;
 const MAX_PENDING = 6;
 export const MAX_REQUESTS_PER_PLACE = 3;
 export const MAX_REVERSE_PER_PLACE = 1;
+export const POI_MAX_METERS = 300;
+const POI_CLASSES = new Set(['amenity', 'shop', 'tourism', 'leisure', 'craft', 'office']);
+const POI_CANDIDATES = 5;
+
+/** Nominatim result of a shop-like thing (jsonv2 `category`, older `class`). */
+export function isPoiResult(item) {
+  return POI_CLASSES.has(String(item?.category ?? item?.class ?? ''));
+}
+
+function metersBetween(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
 
 /**
  * Administrative district (区 / 町 / 村) from a Nominatim reverse `address` object, in the local language; '' when absent.
@@ -103,18 +122,19 @@ export function createPlaceGeocoder({ fetchImpl, now = () => Date.now(), sleep }
     return run;
   }
 
-  function search(query, cc) {
+  function search(query, cc, poiOnly = false) {
     return throttled(async () => {
       const url = new URL(NOMINATIM_SEARCH);
       url.searchParams.set('q', query);
       url.searchParams.set('format', 'jsonv2');
-      url.searchParams.set('limit', '1');
+      url.searchParams.set('limit', poiOnly ? String(POI_CANDIDATES) : '1');
       if (cc) url.searchParams.set('countrycodes', cc);
-      const first = (await request(url))?.[0];
+      const list = (await request(url)) ?? [];
+      const first = poiOnly ? list.find(isPoiResult) : list[0];
       const lat = Number(first?.lat);
       const lng = Number(first?.lon);
       return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
-        ? { lat, lng, address: cleanLine(first.display_name, 200) }
+        ? { lat, lng, address: cleanLine(first.display_name, 200), poi: isPoiResult(first) }
         : null;
     });
   }
@@ -141,9 +161,32 @@ export function createPlaceGeocoder({ fetchImpl, now = () => Date.now(), sleep }
     }
   }
 
-  /** Resolves { lat, lng, address, precision: 'place' | 'area', district? (OSM, place only), matched? ('address' when the pasted street address was found) } or null. Never throws. */
+  /** POI near `origin` (shop name + city / district), or null. `spend()` is truthy while the search budget allows another request. */
+  async function findShop(steps, fields, origin, spend) {
+    const query = join(fields.name, fields.city || fields.district);
+    if (!fields.name || !query) return null;
+    const cc = isJapan(fields.country) || steps[0]?.cc === 'jp' ? 'jp' : '';
+    const key = `poi|${cc}|${query.normalize('NFKC').toLowerCase()}`;
+    const cached = cache.get(key);
+    let hit;
+    if (cached && cached.expires > now()) {
+      hit = cached.value;
+    } else {
+      if (!spend()) return null;
+      try {
+        hit = await search(query, cc, true);
+      } catch {
+        return null;
+      }
+      remember(key, hit);
+    }
+    return hit && metersBetween(origin, hit) < POI_MAX_METERS ? { lat: hit.lat, lng: hit.lng, address: hit.address || origin.address } : null;
+  }
+
+  /** Resolves { lat, lng, address, precision: 'poi' | 'address' | 'place' | 'area', district? (OSM, place only), matched? ('address' when the pasted street address was found) } or null. Never throws. */
   return async function geocode(fields) {
-    const steps = geocodeSteps(fields ?? {});
+    fields = fields ?? {};
+    const steps = geocodeSteps(fields);
     if (!steps.length) return null;
     if (pending >= MAX_PENDING) return null;
     pending += 1;
@@ -166,7 +209,19 @@ export function createPlaceGeocoder({ fetchImpl, now = () => Date.now(), sleep }
           remember(key, value);
         }
         if (value) {
-          const out = { ...value, precision: step.precision, ...(step.via ? { matched: step.via } : {}) };
+          const { poi, ...position } = value;
+          let found = position;
+          let precision = step.precision === 'place' && poi ? 'poi' : step.precision;
+          if (step.via === 'address' && precision !== 'poi') {
+            // The address is a block centre at best: look for the shop itself, within the same request budget.
+            precision = 'address';
+            const shop = await findShop(steps, fields, position, () => requests < MAX_REQUESTS_PER_PLACE && ++requests);
+            if (shop) {
+              found = shop;
+              precision = 'poi';
+            }
+          }
+          const out = { ...found, precision, ...(step.via ? { matched: step.via } : {}) };
           if (step.precision === 'place') {
             const district = await reverseDistrict(value.lat, value.lng); // budget: MAX_REVERSE_PER_PLACE, separate from searches
             if (district) out.district = district;

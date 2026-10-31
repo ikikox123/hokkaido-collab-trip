@@ -580,10 +580,10 @@ test('a pasted full address is searched first and the place is not pending', asy
   const ai = goodAi({ name: '味の時計台 拉麵', city: '札幌', district: '中央区北1条西3丁目', confidence: 0.5 });
   const out = await runIngest({ text: PASTED, ai, geocode });
   assert.equal(calls[0], '/search?札幌市中央区北1条西3丁目', 'address first');
-  assert.equal(calls.filter((c) => c.startsWith('/search')).length, 1);
+  assert.equal(calls.filter((c) => c.startsWith('/search')).length, 2, 'address, then one shop (POI) lookup');
   assert.deepEqual([out.fields.name, out.fields.city, out.fields.district], ['味の時計台 駅前通り総本店', '札幌市', '中央区']);
   assert.equal(out.status, 'ready');
-  assert.equal(out.geo.precision, 'place');
+  assert.equal(out.geo.precision, 'address');
 
   // heuristic only (no AI)
   const heur = await runIngest({ text: PASTED, geocode: createPlaceGeocoder({ fetchImpl, now: clock().now, sleep: clock().sleep }) });

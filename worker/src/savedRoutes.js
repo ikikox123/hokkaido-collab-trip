@@ -43,6 +43,7 @@ function tooMany(result) {
 
 const ALREADY_SAVED = '已經收藏過了';
 const ALREADY_SHARED = '已經有人分享過';
+const SAME_SHOP = '已經有同一家店的收藏';
 const SHARER_ONLY = '只有分享的人可以修改或刪除';
 
 function isMember(hub, userId) {
@@ -95,6 +96,25 @@ async function extractColumns(hub, { url, text }) {
       confidence: fields.confidence,
     },
   };
+}
+
+/**
+ * An edit or re-run that would turn `row` into a second card for the same link / shop (same name and < 100 m) as another one:
+ * the other row, or null. Checks the row's own list and, for a personal place, the copy it shared to the trip.
+ */
+function findEditConflict(hub, row, next) {
+  const candidate = { ...row, ...next };
+  const own = hub.saved.list(row.scope, row.scope === 'personal' ? row.user_id : undefined).filter((r) => r.id !== row.id);
+  const hit = findDuplicate(candidate, own);
+  if (hit) return hit.row;
+  if (row.scope !== 'personal') return null;
+  const copy = hub.saved.findSharedCopy(row.id);
+  if (!copy) return null;
+  return findDuplicate(candidate, hub.saved.list('shared').filter((r) => r.id !== copy.id))?.row ?? null;
+}
+
+function conflictReply(other) {
+  return json({ error: SAME_SHOP, duplicate: true, id: other.id }, 409);
 }
 
 function duplicateReply(hub, row) {
@@ -237,6 +257,9 @@ export async function handleSaved(hub, request, url) {
       set.precision = geo?.precision ?? null;
       set.address = geo?.address ?? '';
     }
+    const touched = moved || ['name', 'lat', 'lng', 'address', 'source_url'].some((k) => k in patch.set);
+    const conflict = touched ? findEditConflict(hub, row, set) : null;
+    if (conflict) return conflictReply(conflict);
     const updated = hub.saved.update(row.id, set);
     syncSharedCopy(hub, updated);
     return json({ place: present(hub, updated, user.id) });
@@ -256,6 +279,8 @@ export async function handleSaved(hub, request, url) {
     }
     if (!text && !row.source_url) return json({ error: '請貼上描述文字' }, 400);
     const { columns } = await extractColumns(hub, { url: row.source_url, text });
+    const conflict = findEditConflict(hub, row, columns);
+    if (conflict) return conflictReply(conflict);
     const updated = hub.saved.update(row.id, { ...columns, source_text: text });
     syncSharedCopy(hub, updated);
     return json({ place: present(hub, updated, user.id) });

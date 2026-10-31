@@ -58,7 +58,7 @@ export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
     }
   }
   // A pasted street address that Nominatim found is the exact spot: no need for a human look.
-  const byAddress = geo?.matched === 'address' && geo.precision === 'place';
+  const byAddress = geo?.matched === 'address' && geo.precision !== 'area';
   const area = resolveDistrict(fields, geo, byAddress ? 'ready' : statusWithGeo(status, geo));
   return { sourceUrl: allowed ? cleanUrl : '', fetched, fields: { ...fields, district: area.district }, status: area.status, via, ai: aiState, geo, rejectedUrl: Boolean(url) && !allowed };
 }

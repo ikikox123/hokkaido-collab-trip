@@ -20,7 +20,7 @@ export type SavedPlace = {
   lat: number | null;
   lng: number | null;
   /** 'place' = exact spot, 'area' = only the district/city centre; absent on older servers. */
-  precision?: 'place' | 'area' | null;
+  precision?: 'poi' | 'address' | 'block' | 'place' | 'area' | null;
   status: 'ready' | 'pending';
   confidence: number;
   sourceUrl: string | null;

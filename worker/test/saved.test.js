@@ -601,3 +601,86 @@ test('old rows are shown with the new rules: street-address district trimmed, ci
   assert.equal(presentPlace({ ...row, city: '小樽', district: '色内' }, {}).district, '');
   assert.equal(presentPlace({ ...row, city: '札幌', district: '狸小路' }, {}).district, '');
 });
+
+const byText = { async run(_m, req) { const text = req.messages[1].content; return { response: { name: /白樺/.test(text) ? '白樺山荘' : 'すみれ 拉麵', country: '日本', city: '札幌', district: '', type: 'eat', confidence: 0.9 } }; } };
+const sharedOf = async (call, token) => (await (await call('GET', '/api/saved?scope=shared', { token })).json()).places.filter((p) => !p.name.startsWith('範例'));
+
+test('renaming a place to the same shop as another one is refused with 409 (PATCH and re-run)', async () => {
+  const { call, tokens, makeKey } = await makeHub({ ai: byText, geocode: near });
+  const key = await makeKey('alice');
+  const a = await (await ingest(call, key, { url: 'https://www.threads.net/@a/post/1', text: 'a' })).json();
+  const b = await (await ingest(call, key, { url: 'https://www.threads.net/@b/post/2', text: '白樺 b' })).json();
+  assert.equal(b.created, true);
+
+  const clash = await call('PATCH', `/api/saved/${b.place.id}`, { token: tokens.alice, body: { name: 'すみれ' } });
+  assert.equal(clash.status, 409);
+  const clashBody = await clash.json();
+  assert.deepEqual([clashBody.duplicate, clashBody.id, clashBody.error], [true, a.place.id, '已經有同一家店的收藏']);
+  const rerun = await call('POST', `/api/saved/${b.place.id}/reextract`, { token: tokens.alice, body: { text: 'すみれ 拉麵 again' } });
+  assert.equal(rerun.status, 409);
+  const list = await mineOf(call, tokens.alice);
+  assert.equal(list.length, 2);
+  assert.equal(list.find((p) => p.id === b.place.id).name, '白樺山荘', 'nothing was changed');
+
+  // an edit that does not make it a duplicate, and one that leaves the name alone, still work
+  assert.equal((await call('PATCH', `/api/saved/${b.place.id}`, { token: tokens.alice, body: { name: '白樺山荘 本店' } })).status, 200);
+  assert.equal((await call('PATCH', `/api/saved/${b.place.id}`, { token: tokens.alice, body: { type: 'sight' } })).status, 200);
+});
+
+test('renaming the shared copy, or a shared personal place, into another shared shop is refused too', async () => {
+  const { call, tokens, makeKey } = await makeHub({ ai: byText, geocode: near });
+  const key = await makeKey('alice');
+  const a = await (await ingest(call, key, { url: 'https://www.threads.net/@a/post/1', text: 'a' })).json();
+  const b = await (await ingest(call, key, { url: 'https://www.threads.net/@b/post/2', text: '白樺 b' })).json();
+  const sharedA = (await (await call('POST', `/api/saved/${a.place.id}/share`, { token: tokens.alice })).json()).place;
+  const sharedB = (await (await call('POST', `/api/saved/${b.place.id}/share`, { token: tokens.alice })).json()).place;
+  assert.equal((await call('PATCH', `/api/saved/${sharedB.id}`, { token: tokens.alice, body: { name: 'すみれ' } })).status, 409);
+  assert.equal((await call('PATCH', `/api/saved/${sharedA.id}`, { token: tokens.alice, body: { name: '白樺山荘' } })).status, 409);
+  // the personal card would drag its shared copy onto the other shared card
+  assert.equal((await call('PATCH', `/api/saved/${b.place.id}`, { token: tokens.alice, body: { name: 'すみれ' } })).status, 409);
+  assert.deepEqual((await sharedOf(call, tokens.bob)).map((p) => p.name).sort(), ['すみれ', '白樺山荘']);
+});
+
+test('duplicate sharing only adds the sharer to also_by: content stays, and they still cannot edit or delete', async () => {
+  const { call, tokens, makeKey } = await makeHub({ ai: goodAi({ name: 'すみれ 拉麵' }), geocode: near });
+  const a = await (await ingest(call, await makeKey('alice'), { url: 'https://www.threads.net/@a/post/1', text: 'x' })).json();
+  const b = await (await ingest(call, await makeKey('bob'), { url: 'https://www.threads.net/@b/post/2', text: 'y' })).json();
+  const shared = (await (await call('POST', `/api/saved/${a.place.id}/share`, { token: tokens.alice })).json()).place;
+  // bob edits his own card first; none of it may reach the shared card
+  await call('PATCH', `/api/saved/${b.place.id}`, { token: tokens.bob, body: { type: 'sight', district: '北区' } });
+  const before = (await sharedOf(call, tokens.alice))[0];
+  const dup = await call('POST', `/api/saved/${b.place.id}/share`, { token: tokens.bob });
+  assert.equal((await dup.json()).duplicate, true);
+  const after = (await sharedOf(call, tokens.alice))[0];
+  assert.deepEqual({ ...after, alsoSavedBy: [], updatedAt: 0 }, { ...before, alsoSavedBy: [], updatedAt: 0 });
+  assert.deepEqual(after.alsoSavedBy, ['Bob']);
+  assert.equal(after.addedBy, 'Alice');
+  // being listed in also_by gives no edit rights
+  assert.equal((await call('PATCH', `/api/saved/${shared.id}`, { token: tokens.bob, body: { name: 'x' } })).status, 403);
+  assert.equal((await call('DELETE', `/api/saved/${shared.id}`, { token: tokens.bob })).status, 403);
+  assert.equal((await sharedOf(call, tokens.alice)).length, 1);
+  // and an outsider cannot add themselves
+  const { place: cp } = await (await ingest(call, await makeKey('carol'), { text: 'z' })).json();
+  assert.equal((await call('POST', `/api/saved/${cp.id}/share`, { token: tokens.carol })).status, 403);
+  assert.deepEqual((await sharedOf(call, tokens.alice))[0].alsoSavedBy, ['Bob']);
+});
+
+test('ingest stores the shop position (precision poi) when the real geocoder finds one near the address', async () => {
+  const { createPlaceGeocoder } = await import('../../server/src/nominatimGeocode.js');
+  const fetchImpl = async (url) => {
+    const u = new URL(url);
+    if (u.pathname === '/reverse') return Response.json({ address: { city_district: '中央区' } });
+    const q = u.searchParams.get('q');
+    return Response.json(
+      /^札幌市中央区北1条西3丁目$/.test(q)
+        ? [{ lat: '43.0600', lon: '141.3500', display_name: '北1条西3丁目', category: 'place' }]
+        : [{ lat: '43.0605', lon: '141.3504', display_name: '味の時計台', category: 'amenity' }],
+    );
+  };
+  const geocode = createPlaceGeocoder({ fetchImpl, now: () => 0, sleep: async () => {} });
+  const { call, makeKey } = await makeHub({ geocode });
+  const out = await (await ingest(call, await makeKey(), { text: '📍味の時計台 札幌市中央区北1条西3丁目 味噌拉麵' })).json();
+  assert.equal(out.place.precision, 'poi');
+  assert.equal(out.place.lat, 43.0605);
+  assert.equal(out.status, 'ready');
+});
