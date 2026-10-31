@@ -35,6 +35,9 @@ import { signJwt, verifyJwt } from './jwt.js';
 import { createUserStore } from './userStore.js';
 import { loadDoc, saveDoc } from './docStore.js';
 import { migrateSplitFields } from './migrate.js';
+import { createSavedStore } from './savedStore.js';
+import { createSavedLimiters, handleSaved } from './savedRoutes.js';
+import { createPlaceGeocoder } from '../../server/src/nominatimGeocode.js';
 
 const FX_POLL_MS = 3 * 60 * 1000;
 const FX_MIN_INTERVAL_MS = 90 * 1000;
@@ -63,11 +66,15 @@ export class TripHub extends DurableObject {
     this.users = createUserStore(this.sql, { production: this.production });
     this.registerLimiter = createRegisterRateLimiter();
     this.osmOpeningHours = createOsmHoursLookup();
+    this.saved = createSavedStore(this.sql);
+    this.savedLimits = createSavedLimiters();
+    this.placeGeocoder = createPlaceGeocoder();
     this.enrichGen = 0;
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
     ctx.blockConcurrencyWhile(async () => {
       await this.users.init();
       this.loadTrip();
+      if (!this.production) this.saved.seedDemo((name) => loadDoc(this.sql, name), (name, value) => saveDoc(this.sql, name, value));
     });
   }
 
@@ -372,6 +379,9 @@ export class TripHub extends DurableObject {
       this.autoJoinCompanion(result.user);
       return json(await this.signUser(result.user), 201);
     }
+
+    const savedResponse = await handleSaved(this, request, url);
+    if (savedResponse) return savedResponse;
 
     if (method === 'GET' && pathname === '/api/fx') return json(await this.refreshFx());
 
