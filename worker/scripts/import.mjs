@@ -11,11 +11,12 @@ if (!base || !statePath || !usersPath || !token) {
   process.exit(1);
 }
 
+const USER_AGENT = 'hokkaido-trip-scripts/1.0 (+https://github.com/ikikox123)'; // Cloudflare answers 1010 to some default script UAs
 const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
 const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
 const res = await fetch(new URL('/api/admin/import', base), {
   method: 'POST',
-  headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+  headers: { 'user-agent': USER_AGENT, 'content-type': 'application/json', authorization: `Bearer ${token}` },
   body: JSON.stringify({ state, users, force: flag === '--force' }),
 });
 const body = await res.json().catch(() => ({}));

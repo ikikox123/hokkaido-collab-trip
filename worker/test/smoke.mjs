@@ -8,7 +8,7 @@ const wsUrl = base.replace(/^http/, 'ws') + '/ws';
 async function api(path, init = {}) {
   const res = await fetch(base + path, {
     ...init,
-    headers: { 'content-type': 'application/json', ...(init.headers || {}) },
+    headers: { 'user-agent': 'hokkaido-trip-smoke/1.0', 'content-type': 'application/json', ...(init.headers || {}) },
   });
   return { status: res.status, body: await res.json().catch(() => null) };
 }

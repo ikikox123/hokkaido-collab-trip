@@ -97,6 +97,12 @@ Production 不會自動建立種子行程；匯入前，行程相關 API 都會�
 
 任何一項 `ok: false`，畫面上原本的失敗提示都會照常顯示（沿用上一次成功的匯率、JR 官方連結），不會讓網站壞掉。
 
+## 腳本打 API 回 403「error code: 1010」
+
+原因：Cloudflare（workers.dev 平台層）會擋 Python 預設的 User-Agent（`Python-urllib/3.x`），請求到不了 worker，回 `403 error code: 1010`。2026-10-31 實測預覽站 `/api/saved/ingest`：`Python-urllib/3.12` 被擋；iOS 捷徑（`Shortcuts/… CFNetwork/… Darwin/…`、`BackgroundShortcutRunner/…`）和 `curl/…` 都能到達 worker。所以 iOS 捷徑不受影響，帳號設定不用改。
+
+解法：自己的腳本請設定明確的 User-Agent，例如 `User-Agent: my-script/1.0`。Python 範例：`urllib.request.Request(url, headers={"User-Agent": "my-script/1.0"})`。本 repo 的 `scripts/*.mjs` 與冒煙測試都已設定。
+
 ## 免費方案注意事項
 
 - Workers 免費方案：每天 10 萬個請求；Durable Objects 免費方案也夠一群朋友用

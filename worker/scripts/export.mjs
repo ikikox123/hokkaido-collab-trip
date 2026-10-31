@@ -10,7 +10,8 @@ if (!base || !token) {
   console.error('Usage: ADMIN_TOKEN=... node scripts/export.mjs <baseUrl> [outDir]');
   process.exit(1);
 }
-const res = await fetch(new URL('/api/admin/export', base), { headers: { authorization: `Bearer ${token}` } });
+const USER_AGENT = 'hokkaido-trip-scripts/1.0 (+https://github.com/ikikox123)'; // Cloudflare answers 1010 to some default script UAs
+const res = await fetch(new URL('/api/admin/export', base), { headers: { 'user-agent': USER_AGENT, authorization: `Bearer ${token}` } });
 const body = await res.json().catch(() => ({}));
 if (!res.ok) {
   console.error(`Export failed (${res.status}): ${body.error || 'unknown error'}`);
