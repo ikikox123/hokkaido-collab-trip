@@ -10,6 +10,8 @@ export const AI_MAX_TOKENS = 300;
 export const CONFIDENCE_THRESHOLD = 0.6;
 export const HEURISTIC_MAX_CONFIDENCE = 0.4;
 export const NAME_MAX = 80;
+export const NAME_SENTENCE_MAX = 30;
+export const AI_NAME_MIN_CONFIDENCE = 0.3;
 export const AREA_MAX = 40;
 export const PLACE_TYPES = ['eat', 'sight', 'stay', 'shop'];
 export const DEFAULT_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
@@ -184,6 +186,20 @@ const TYPE_WORDS = {
   shop: /商店街|百貨|デパート|アウトレット|ショッピング|購物|雑貨|ドン・?キホーテ|唐吉|藥妝|outlet|mall|shopping|market/i,
   sight: /公園|神社|寺|展望台|博物館|美術館|水族館|動物園|タワー|時計台|景點|観光|夜景|滑雪|スキー|park|museum|shrine|temple|tower|observatory|aquarium/i,
 };
+const REVIEW_WORDS = /好吃|好喝|好棒|好讚|超讚|超好|推薦|推荐|必吃|必去|下次|還要|还要|再來|再来|回訪|回访|美味|好評|太愛|很愛|愛了|おいしい|美味しい|おすすめ|オススメ|また行|最高|最強|行きたい|行ってきた|delicious|yummy|amazing|must[- ]try|so good|love it|highly recommend/i;
+const SHOP_FEATURE = /店|屋|亭|館|馆|庵|堂|軒|苑|園|園|宿|莊|荘|ホテル|カフェ|食堂|ラーメン|拉麵|咖啡|公園|神社|寺|cafe|café|coffee|restaurant|bar\b|hotel|inn\b|hostel|shop|store|park|museum|ramen|sushi|bakery/i;
+const SENTENCE_PUNCT = /[。！？!?…]|[，,、]\s*\S+[，,、]/;
+
+/** False for text that reads like a sentence or a review rather than the name of a place. */
+export function looksLikePlaceName(value) {
+  const name = cleanLine(value, NAME_MAX).replace(/[#＃]\S+/g, '').trim();
+  if (!name) return false;
+  if (Array.from(name).length > NAME_SENTENCE_MAX) return false;
+  if (SENTENCE_PUNCT.test(name)) return false;
+  if (REVIEW_WORDS.test(name) && !SHOP_FEATURE.test(name)) return false;
+  return true;
+}
+
 const NAME_MARKERS = [
   /(?:📍|📌|🏠|🍜|☕|🏨)\s*([^\n\r|｜#@]{2,60})/u,
   /(?:店名|店舗名|名稱|名称|地點|場所|spot|place|location)\s*[:：]\s*([^\n\r|｜#]{2,60})/i,
@@ -217,15 +233,19 @@ export function heuristicExtract({ meta, text }) {
   let confidence = 0.1;
   for (const marker of NAME_MARKERS) {
     const found = marker.exec(haystack);
-    if (found) {
-      name = cleanLine(found[1], NAME_MAX);
+    const candidate = found ? cleanLine(found[1].split(/[。！？!?]/)[0], NAME_MAX) : '';
+    if (candidate && looksLikePlaceName(candidate)) {
+      name = candidate;
       confidence = 0.35;
       break;
     }
   }
   if (!name && meta?.ogTitle) {
-    name = stripSiteBoilerplate(meta.ogTitle);
-    if (name) confidence = 0.2;
+    const title = stripSiteBoilerplate(meta.ogTitle);
+    if (looksLikePlaceName(title)) {
+      name = title;
+      confidence = 0.2;
+    }
   }
   const city = CITY_RE.exec(haystack);
   const district = DISTRICT_RE.exec(haystack);
@@ -293,7 +313,7 @@ export function parseAiAnswer(answer) {
   const confidence = Number(data.confidence);
   const type = typeof data.type === 'string' ? data.type.toLowerCase() : '';
   return {
-    name: cleanLine(data.name, NAME_MAX),
+    name: looksLikePlaceName(data.name) ? cleanLine(data.name, NAME_MAX) : '',
     country: normalizeAreaName(data.country),
     city: normalizeAreaName(data.city),
     district: normalizeAreaName(data.district),
@@ -320,7 +340,7 @@ export async function aiExtract(ai, input, model = DEFAULT_AI_MODEL) {
  * Status is "ready" only for a confident model answer with a name.
  */
 export function decideExtraction({ ai, heuristic, text }) {
-  const usable = ai && ai.name;
+  const usable = ai && ai.name && ai.confidence >= AI_NAME_MIN_CONFIDENCE;
   const base = usable ? ai : heuristic;
   const fill = (key) => base[key] || heuristic[key] || '';
   const fields = {
@@ -331,7 +351,7 @@ export function decideExtraction({ ai, heuristic, text }) {
     type: base.type || heuristic.type || null,
     confidence: usable ? ai.confidence : heuristic.confidence,
   };
-  if (!fields.name) fields.name = cleanLine(String(text || '').split('\n')[0], 30);
+  // No clear place name: leave it empty (stored as 「（未命名）」, pending) rather than reusing the post text.
   const status = usable && ai.confidence >= CONFIDENCE_THRESHOLD ? 'ready' : 'pending';
   return { ...fields, status, via: usable ? 'ai' : 'heuristic' };
 }

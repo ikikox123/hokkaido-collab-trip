@@ -20,6 +20,8 @@ type Props = {
   lang: ShareLang;
   account?: Account | null;
   onLogin?: () => void;
+  /** Saved places entry points. Left out when the server has no such API. */
+  saved?: { onOpen: () => void; onOpenKey: () => void };
   /** Extra trip sections (room, lodging, flights...) rendered between share and display. */
   children?: ReactNode;
 };
@@ -70,7 +72,7 @@ function ThemePicker() {
 }
 
 /** One round header button that opens a sheet (phone) or dropdown (desktop) with every header action. */
-export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLogin, children }: Props) {
+export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLogin, saved, children }: Props) {
   const { t } = useI18n();
   const id = useId();
   const titleId = `${id}-title`;
@@ -170,6 +172,27 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
                 </div>
               </section>
               {children}
+              {saved && (
+                <section className="menu-section">
+                  <h3 className="menu-heading">{t('savedTitle')}</h3>
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      close();
+                      saved.onOpen();
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0">
+                      <path d="M6 3h12v18l-6-4-6 4z" />
+                    </svg>
+                    <span className="min-w-0">
+                      <span className="block">{t('savedOpen')}</span>
+                      <span className="block truncate text-xs font-normal text-slate-500">{t('savedMenuHint')}</span>
+                    </span>
+                  </button>
+                </section>
+              )}
               <section className="menu-section">
                 <h3 className="menu-heading">{t('menuDisplaySection')}</h3>
                 <div className="space-y-3">
@@ -187,6 +210,7 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
                 <section className="menu-section">
                   <h3 className="menu-heading">{t('menuAccountSection')}</h3>
                   {account ? (
+                    <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700" title={account.name}>
                         {t('signedInAs', { name: account.name })}
@@ -201,6 +225,23 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
                       >
                         {t('logOut')}
                       </button>
+                    </div>
+                    {saved && (
+                      <button
+                        type="button"
+                        className={menuItemClass}
+                        onClick={() => {
+                          close();
+                          saved.onOpenKey();
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0">
+                          <circle cx="8" cy="15" r="4" />
+                          <path d="M11 12l9-9M16 7l3 3M14 9l2 2" />
+                        </svg>
+                        {t('savedKeyTitle')}
+                      </button>
+                    )}
                     </div>
                   ) : (
                     <button

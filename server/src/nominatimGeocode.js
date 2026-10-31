@@ -31,7 +31,10 @@ export function geocodeSteps({ name, district, city, country }) {
   const steps = [
     { query: join(name, district, city, country), cc: '', precision: 'place' },
     { query: join(name, city), cc: '', precision: 'place' },
-    { query: join(name), cc, precision: 'place' },
+    // With district and city known, the name alone could match a same-named shop elsewhere: use the district centre instead.
+    district && city
+      ? { query: join(district, city), cc, precision: 'area' }
+      : { query: join(name), cc, precision: 'place' },
     { query: join(district, city), cc, precision: 'area' },
     { query: join(city), cc, precision: 'area' },
   ];

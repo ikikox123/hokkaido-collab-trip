@@ -6,6 +6,9 @@ import { TripAlerts } from './components/TripAlerts';
 import { TripList } from './components/TripList';
 import { MapView } from './components/MapView';
 import { LodgingDialog, type LodgingDraft } from './components/LodgingDialog';
+import { SavedPlaces, TYPE_LABEL } from './components/SavedPlaces';
+import { SavedKeyDialog } from './components/SavedKeyDialog';
+import { probeSaved, stopFromSaved, type SavedPlace } from './lib/saved';
 import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
 import { SplitBoard } from './components/SplitBoard';
 import { useI18n } from './i18n/I18nProvider';
@@ -212,6 +215,9 @@ export default function App() {
     { mode: 'add' } | { mode: 'edit'; stopId: string } | null
   >(null);
   const [lodgingOpen, setLodgingOpen] = useState(false);
+  const [savedAvailable, setSavedAvailable] = useState(false);
+  const [savedView, setSavedView] = useState<'browse' | 'pick' | null>(null);
+  const [keyOpen, setKeyOpen] = useState(false);
   const googlePlaces = usesGoogleMaps();
   const { locale, t } = useI18n();
   const tRef = useRef(t);
@@ -221,6 +227,19 @@ export default function App() {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   }, []);
+
+  // Saved places exist only on servers that have the API; elsewhere the entry points stay hidden.
+  useEffect(() => {
+    if (!token) {
+      setSavedAvailable(false);
+      return;
+    }
+    let live = true;
+    void probeSaved(token).then((ok) => live && setSavedAvailable(ok));
+    return () => {
+      live = false;
+    };
+  }, [token]);
 
   useEffect(() => {
     const s = connectRealtime();
@@ -526,6 +545,7 @@ export default function App() {
             lang={locale}
             account={user ? { name: user.displayName, onLogout: handleLogout } : null}
             onLogin={user ? undefined : () => setLoginOpen(true)}
+            saved={savedAvailable ? { onOpen: () => setSavedView('browse'), onOpenKey: () => setKeyOpen(true) } : undefined}
           >
             <section className="menu-section">
               <h3 className="menu-heading">{t('menuTripSection')}</h3>
@@ -702,6 +722,7 @@ export default function App() {
                 },
               });
             }}
+            onPickSaved={savedAvailable ? () => setSavedView('pick') : undefined}
             onEditPlace={
               googlePlaces ? (id) => setPlaceDialog({ mode: 'edit', stopId: id }) : undefined
             }
@@ -852,6 +873,42 @@ export default function App() {
           setPlaceDialog(null);
         }}
       />
+
+      {token && savedAvailable && (
+        <SavedPlaces
+          open={savedView !== null}
+          mode={savedView ?? 'browse'}
+          token={token}
+          canShare={isTripCompanion}
+          day={selectedDay}
+          onClose={() => setSavedView(null)}
+          onPick={(place: SavedPlace) => {
+            const dayMeta = trip.days.find((d) => d.day === selectedDay);
+            const fields = stopFromSaved(
+              place,
+              {
+                lat: dayStops[0]?.lat ?? trip.lodging?.lat ?? SAPPORO_BASE.lat,
+                lng: dayStops[0]?.lng ?? trip.lodging?.lng ?? SAPPORO_BASE.lng,
+              },
+              place.type ? t(TYPE_LABEL[place.type]) : null,
+            );
+            emitAuth('trip:add', {
+              stop: {
+                day: selectedDay,
+                date: dayMeta?.date,
+                title: fields.title,
+                time: '12:00',
+                lat: fields.lat,
+                lng: fields.lng,
+                notes: fields.notes,
+              },
+            });
+            setSavedView(null);
+            showToast(t('savedPickAdded', { name: place.name }));
+          }}
+        />
+      )}
+      {keyOpen && token && <SavedKeyDialog token={token} onClose={() => setKeyOpen(false)} />}
 
       {toastNode}
     </div>

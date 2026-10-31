@@ -38,6 +38,8 @@ type Props = {
   onReorder: (orderedIds: string[]) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  /** Opens the saved-places picker. Absent when the server has no such API. */
+  onPickSaved?: () => void;
   onUpdateTime: (id: string, time: string) => void;
   onRename: (id: string, title: string) => void;
   onUpdateInfo: (id: string, patch: StopInfoPatch) => Promise<SaveResult>;
@@ -293,6 +295,7 @@ export function TripList({
   onReorder,
   onDelete,
   onAdd,
+  onPickSaved,
   onUpdateTime,
   onRename,
   onUpdateInfo,
@@ -333,13 +336,27 @@ export function TripList({
           {t('stopsTitle')}
         </h2>
         {canEdit ? (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="cute-pop min-h-touch min-w-touch rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker"
-          >
-            {t('addStopButton')}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {onPickSaved && (
+              <button
+                type="button"
+                onClick={onPickSaved}
+                className="cute-pop inline-flex min-h-touch items-center gap-1.5 rounded-full border-2 border-ink bg-white px-3 text-sm font-bold text-ink shadow-sticker"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M6 3h12v18l-6-4-6 4z" />
+                </svg>
+                {t('savedPickButton')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onAdd}
+              className="cute-pop min-h-touch min-w-touch rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker"
+            >
+              {t('addStopButton')}
+            </button>
+          </div>
         ) : (
           <span className="text-sm text-slate-500">{t('loginToEditHint')}</span>
         )}

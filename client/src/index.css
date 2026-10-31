@@ -1111,3 +1111,84 @@ html.share-capturing [data-share-export-root] .print\:hidden {
     color: rgb(var(--c-ink));
   }
 }
+
+/* ---------- Saved places ----------
+   Motion moves only transform and opacity and is off under prefers-reduced-motion. */
+.saved-panel {
+  animation: saved-panel-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes saved-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+.saved-sheet {
+  animation: saved-panel-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.saved-card {
+  animation: saved-card-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms + 80ms);
+  scroll-snap-stop: always;
+}
+@keyframes saved-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px) scale(0.98);
+  }
+}
+.saved-group {
+  animation: saved-group-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--g, 0) * 90ms);
+}
+@keyframes saved-group-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.saved-rail {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+.saved-rail::-webkit-scrollbar {
+  display: none;
+}
+.saved-rail:focus-visible {
+  outline: 3px solid rgb(var(--c-lavender-500) / 0.6);
+  outline-offset: 2px;
+  border-radius: var(--r-lg);
+}
+@media (hover: hover) {
+  .saved-rail {
+    scroll-behavior: smooth;
+  }
+}
+.saved-card[data-pending] {
+  background-image: repeating-linear-gradient(135deg, transparent 0 9px, rgb(var(--c-butter-300) / 0.16) 9px 10px);
+}
+.saved-skeleton {
+  animation: saved-pulse 1.4s ease-in-out infinite;
+}
+@keyframes saved-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.saved-key-reveal {
+  animation: saved-card-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .saved-panel,
+  .saved-sheet,
+  .saved-card,
+  .saved-group,
+  .saved-skeleton,
+  .saved-key-reveal {
+    animation: none !important;
+  }
+  .saved-rail {
+    scroll-behavior: auto !important;
+  }
+}

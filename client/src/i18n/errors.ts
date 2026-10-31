@@ -122,6 +122,12 @@ export const KNOWN_ERRORS: Record<string, MessageKey> = {
   名稱不可空白: 'nameBlank',
   缺少瀏覽器地圖金鑰: 'missingMapKey',
   'Google 地圖無法載入': 'googleLoadFailed',
+  '請求太頻繁，請稍後再試': 'savedRateLimited',
+  '收藏已達上限，請先刪除一些': 'savedFull',
+  找不到這筆收藏: 'savedNotFound',
+  請貼上描述文字: 'savedNeedText',
+  文字太長: 'savedTextTooLong',
+  請填店名: 'savedNameRequired',
   '預報來自 Open-Meteo；警報來自氣象廳；tenki.jp 無公開可串接 API（需付費商業授權）。': 'alertsNotice',
 };
 

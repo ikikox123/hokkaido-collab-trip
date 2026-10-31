@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AI_INPUT_CHARS, AI_MAX_TOKENS, aiExtract, buildAiRequest, buildExtractionInput, canonicalSourceUrl, cleanPlacePatch,
-  decideExtraction, extractHtmlMeta, googleMapsSearchUrl, heuristicExtract, parseAiAnswer, parseIngestBody,
+  decideExtraction, extractHtmlMeta, looksLikePlaceName, googleMapsSearchUrl, heuristicExtract, parseAiAnswer, parseIngestBody,
   normalizeAreaName, readLimitedText, resultMessage, statusWithGeo,
 } from './savedPlace.js';
 import { runIngest } from './savedIngest.js';
@@ -234,15 +234,30 @@ function ladder(answer) {
 }
 const SHOP = { name: '空', district: '中央区', city: '札幌', country: '日本' };
 
-test('Nominatim ladder: tries name+district+city+country, name+city, name only (jp), then district+city, then city', async () => {
+test('Nominatim ladder: tries name+district+city+country, name+city, then district+city (area), then city', async () => {
   const l = ladder(() => null);
   const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: clock().now, sleep: clock().sleep });
   assert.equal(await geocode(SHOP), null);
   assert.deepEqual(l.calls, [
     { q: '空 中央区 札幌 日本', cc: null },
     { q: '空 札幌', cc: null },
-    { q: '空', cc: 'jp' },
-  ], 'stops after 3 requests');
+    { q: '中央区 札幌', cc: 'jp' },
+  ], 'stops after 3 requests; name-only is skipped when district and city are known');
+});
+
+test('Nominatim ladder: name-only lookup stays when the district or city is missing', async () => {
+  const l = ladder(() => null);
+  const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: clock().now, sleep: clock().sleep });
+  await geocode({ name: '空', city: '札幌', country: '日本' });
+  assert.deepEqual(l.calls.map((c) => c.q), ['空 札幌 日本', '空 札幌', '空']);
+});
+
+test('Nominatim ladder: the district-centre step is an "area" position', async () => {
+  const l = ladder((q) => (q === '中央区 札幌' ? '中央区' : null));
+  const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: clock().now, sleep: clock().sleep });
+  const out = await geocode(SHOP);
+  assert.equal(out.precision, 'area');
+  assert.equal(l.calls.length, 3);
 });
 
 test('Nominatim ladder: the first hit stops the search and is a "place"', async () => {
@@ -283,11 +298,11 @@ test('Nominatim ladder: every step shares the 1/s throttle and the cache', async
   await geocode(SHOP);
   assert.equal(c.sleeps.length, 2, 'requests 2 and 3 waited');
   assert.ok(c.sleeps.every((ms) => ms > 0 && ms <= MIN_INTERVAL_MS));
-  // cached misses cost no budget, so the second try reaches the two area steps
+  // cached misses cost no budget, so the second try reaches the city step
   await geocode(SHOP);
-  assert.deepEqual(l.calls.slice(3).map((x) => x.q), ['中央区 札幌', '札幌']);
+  assert.deepEqual(l.calls.slice(3).map((x) => x.q), ['札幌']);
   await geocode(SHOP);
-  assert.equal(l.calls.length, 5, 'everything is cached now');
+  assert.equal(l.calls.length, 4, 'everything is cached now');
 });
 
 test('Nominatim ladder: a timeout stops the whole lookup and is not cached', async () => {
@@ -326,4 +341,40 @@ test('English / romaji city and ward names become Japanese; unknown names stay',
   ]) assert.equal(normalizeAreaName(from), to, from);
   const parsed = parseAiAnswer({ response: { name: 'Cafe', country: 'Japan', city: 'Sapporo', district: 'Chuo-ku', type: 'eat', confidence: 0.9 } });
   assert.deepEqual([parsed.country, parsed.city, parsed.district], ['日本', '札幌', '中央区']);
+});
+
+test('review-only text is not a place name', () => {
+  for (const bad of ['這家好好吃 下次還要去', '超好吃！下次還要再來', 'おいしかった。また行きたい', 'Amazing food, must try', '一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三']) {
+    assert.equal(looksLikePlaceName(bad), false, bad);
+  }
+  for (const ok of ['空 ラーメン', '札幌拉麵店 好吃屋', 'Cafe Aoi', '大通公園', '六花亭']) {
+    assert.equal(looksLikePlaceName(ok), true, ok);
+  }
+});
+
+test('heuristic never takes a review sentence as the name', () => {
+  const h = heuristicExtract({ meta: { ogTitle: '這家好好吃 下次還要去 on Threads' }, text: '這家好好吃 下次還要去' });
+  assert.equal(h.name, '');
+  const marked = heuristicExtract({ meta: null, text: '【這家好好吃 下次還要去】' });
+  assert.equal(marked.name, '');
+  assert.equal(heuristicExtract({ meta: null, text: '📍空 ラーメン 札幌' }).name, '空 ラーメン 札幌');
+});
+
+test('AI answers: a review sentence or low confidence drops the name; the place stays pending as unnamed', async () => {
+  assert.equal(parseAiAnswer({ name: '這家好好吃 下次還要去', confidence: 0.9 }).name, '');
+  const lowConfidence = decideExtraction({
+    ai: { name: '空', country: '', city: '', district: '', type: null, confidence: 0.1 },
+    heuristic: { name: '', country: '', city: '', district: '', type: null, confidence: 0.1 },
+    text: '這家好好吃 下次還要去',
+  });
+  assert.equal(lowConfidence.name, '');
+  assert.equal(lowConfidence.status, 'pending');
+  const sentence = await runIngest({
+    text: '這家好好吃 下次還要去',
+    ai: { run: async () => ({ response: { name: '這家好好吃 下次還要去', country: '', city: '', district: '', type: 'eat', confidence: 0.95 } }) },
+    geocode: async () => { throw new Error('no name, no lookup'); },
+  });
+  assert.equal(sentence.fields.name, '');
+  assert.equal(sentence.status, 'pending');
+  assert.equal(resultMessage({ name: '', status: 'pending' }), '已收藏：（未命名）（待確認）');
 });
