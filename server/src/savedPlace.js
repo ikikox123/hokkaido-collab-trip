@@ -148,6 +148,20 @@ function metaContent(html, attr, name) {
   return '';
 }
 
+// Platform names and login-wall / landing-page phrases (several languages). Text made only of these carries no place info.
+const GENERIC_PAGE_WORDS = [
+  'threads', 'instagram', 'facebook', 'meta', 'ログイン', 'log in', 'login', 'sign in', 'signin', 'sign up', 'signup',
+  '登入', '登錄', '登录', '註冊', '注册', '加入', 'の写真と動画', '写真と動画', '照片和影片', '照片和视频', 'photos and videos',
+  'instagram photos and videos', 'on', 'to', 'or', 'with', 'and', 'で', 'または', '或', '和', '與', '与',
+].sort((a, b) => b.length - a.length);
+
+/** True when a title/description is only a platform name plus login / generic wording. */
+export function isGenericPlatformText(value) {
+  let rest = String(value || '').toLowerCase().normalize('NFKC');
+  for (const word of GENERIC_PAGE_WORDS) rest = rest.split(word.normalize('NFKC')).join(' ');
+  return !rest.replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
 /** og:title, og:description, description, <title>, and a short visible-text snippet. */
 export function extractHtmlMeta(html) {
   const source = String(html || '');
@@ -157,13 +171,15 @@ export function extractHtmlMeta(html) {
       .replace(/<(script|style|noscript|svg|head)\b[\s\S]*?<\/\1>/gi, ' ')
       .replace(/<[^>]*>/g, ' '),
   );
+  const usable = (value) => (isGenericPlatformText(value) ? '' : value);
   return {
-    ogTitle: metaContent(source, 'property', 'og:title') || metaContent(source, 'name', 'twitter:title'),
-    ogDescription:
+    ogTitle: usable(metaContent(source, 'property', 'og:title') || metaContent(source, 'name', 'twitter:title')),
+    ogDescription: usable(
       metaContent(source, 'property', 'og:description') || metaContent(source, 'name', 'twitter:description'),
-    description: metaContent(source, 'name', 'description'),
-    title: title ? cleanLine(decodeEntities(title[1]), 200) : '',
-    snippet: cleanLine(bodyText, 500),
+    ),
+    description: usable(metaContent(source, 'name', 'description')),
+    title: usable(title ? cleanLine(decodeEntities(title[1]), 200) : ''),
+    snippet: usable(cleanLine(bodyText, 500)),
   };
 }
 

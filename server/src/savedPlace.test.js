@@ -378,3 +378,17 @@ test('AI answers: a review sentence or low confidence drops the name; the place 
   assert.equal(sentence.status, 'pending');
   assert.equal(resultMessage({ name: '', status: 'pending' }), '已收藏：（未命名）（待確認）');
 });
+
+test('login-wall and generic platform pages yield no meta, so the place stays unnamed and pending', async () => {
+  for (const title of ['Threads • ログイン', 'Threads • Log in', 'Instagram', 'Login • Instagram', 'Instagram • 登入', 'Threads • 登录', 'Sign up • Threads', 'Instagram の写真と動画', 'Instagram photos and videos']) {
+    assert.equal(extractHtmlMeta(`<meta property="og:title" content="${title}">`).ogTitle, '', title);
+  }
+  assert.equal(extractHtmlMeta('<meta property="og:title" content="札幌ラーメン on Threads">').ogTitle, '札幌ラーメン on Threads');
+  const wall = '<html><head><title>Threads • ログイン</title><meta property="og:title" content="Threads • ログイン"></head><body></body></html>';
+  const out = await runIngest({
+    url: 'https://www.threads.net/p/1', text: 'この店 好好吃 下次還要去', fetchImpl: async () => htmlRes(wall),
+  });
+  assert.equal(out.fields.name, '');
+  assert.equal(out.status, 'pending');
+  assert.match(resultMessage({ name: out.fields.name }), /（未命名）/);
+});
