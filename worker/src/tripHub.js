@@ -38,6 +38,7 @@ import { migrateSplitFields } from './migrate.js';
 import { createSavedStore } from './savedStore.js';
 import { createSavedLimiters, handleSaved } from './savedRoutes.js';
 import { createPlaceGeocoder } from '../../server/src/nominatimGeocode.js';
+import { isSavedKeyToken, KEY_ONLY_FOR_SAVING } from '../../server/src/savedKey.js';
 
 const FX_POLL_MS = 3 * 60 * 1000;
 const FX_MIN_INTERVAL_MS = 90 * 1000;
@@ -132,6 +133,7 @@ export class TripHub extends DurableObject {
     const header = request.headers.get('authorization') || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return { error: json({ error: '未登入' }, 401) };
+    if (isSavedKeyToken(token)) return { error: json({ error: KEY_ONLY_FOR_SAVING }, 403) };
     const parsed = await this.parseToken(token);
     if (parsed.status !== 'ok') return { error: json({ error: '登入已過期' }, 401) };
     return { user: parsed.user };

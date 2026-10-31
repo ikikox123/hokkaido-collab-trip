@@ -47,6 +47,7 @@ import { collaborativeTripReadable, NOT_COMPANION_ERROR, tripMemberAddAllowed } 
 import { clientIp } from './clientIp.js';
 import { createRegisterRateLimiter } from './registerRateLimit.js';
 import { toPublicShare } from './shareTrip.js';
+import { isSavedKeyToken, KEY_ONLY_FOR_SAVING } from './savedKey.js';
 
 export { clientIp };
 
@@ -130,6 +131,7 @@ function authMiddleware(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: '未登入' });
+  if (isSavedKeyToken(token)) return res.status(403).json({ error: KEY_ONLY_FOR_SAVING });
   const parsed = parseToken(token);
   if (parsed.status !== 'ok') return res.status(401).json({ error: '登入已過期' });
   req.user = parsed.user;

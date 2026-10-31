@@ -9,7 +9,7 @@
  *   PATCH  /api/saved/:id               login: edit fields and confirm (owner; shared: companions)
  *   DELETE /api/saved/:id               login: owner (shared: companions)
  *   POST   /api/saved/:id/reextract     login, owner: {text?} run extraction again
- *   POST   /api/saved/:id/share         login, owner + companion: copy into the shared list
+ *   POST   /api/saved/:id/share         login, owner + companion: copy into the shared list (a re-run or edit of the original updates the copy)
  *
  * A Shortcut key is accepted by ingest and by nothing else; a login token is not accepted by ingest.
  */
@@ -18,7 +18,7 @@ import { cleanPlacePatch, parseIngestBody, readLimitedText, resolveDistrict, res
 import { runIngest } from '../../server/src/savedIngest.js';
 import { isTripMember } from '../../server/src/split.js';
 import { createSavedRateLimiter } from '../../server/src/savedRateLimit.js';
-import { MAX_PLACES_PER_LIST, presentPlace } from './savedStore.js';
+import { MAX_PLACES_PER_LIST, SHARED_COPY_COLUMNS, presentPlace } from './savedStore.js';
 
 const NOT_MEMBER = '只有這趟行程的旅伴可以這樣做';
 const TOO_MANY = '請求太頻繁，請稍後再試';
@@ -50,7 +50,16 @@ function present(hub, row, viewerId = null) {
   return presentPlace(row, {
     ownerName: row.scope === 'shared' ? hub.users.publicById(row.user_id)?.displayName ?? null : null,
     viewerId,
+    sharedToTrip: row.scope === 'personal' && Boolean(hub.saved.findSharedCopy(row.id)),
   });
+}
+
+/** After a person re-runs or edits their own place, the copy they shared to the trip follows. */
+function syncSharedCopy(hub, row) {
+  if (row.scope !== 'personal') return;
+  const copy = hub.saved.findSharedCopy(row.id);
+  if (!copy) return;
+  hub.saved.update(copy.id, Object.fromEntries(SHARED_COPY_COLUMNS.map((column) => [column, row[column]])));
 }
 
 /** Run extraction and geocoding for a place; returns the column values to store. */
@@ -118,6 +127,7 @@ async function ingest(hub, request) {
         source_url: result.sourceUrl,
         source_text: body.text,
       });
+  if (existing) syncSharedCopy(hub, stored);
   const place = present(hub, stored);
   console.log(`[saved] ingest extractor=${result.via} ai=${result.ai}`);
   return json({
@@ -198,7 +208,11 @@ export async function handleSaved(hub, request, url) {
     const moved = ['name', 'city', 'district', 'country'].some((k) => k in patch.set && patch.set[k] !== row[k]);
     if (moved) {
       const geo = await hub.placeGeocoder?.({ ...row, ...patch.set });
-      const area = resolveDistrict({ district: 'district' in patch.set ? patch.set.district : row.district }, geo, 'ready');
+      const area = resolveDistrict(
+        { district: 'district' in patch.set ? patch.set.district : row.district, city: 'city' in patch.set ? patch.set.city : row.city },
+        geo,
+        'ready',
+      );
       set.district = area.district;
       set.status = area.status;
       set.lat = geo?.lat ?? null;
@@ -206,7 +220,9 @@ export async function handleSaved(hub, request, url) {
       set.precision = geo?.precision ?? null;
       set.address = geo?.address ?? '';
     }
-    return json({ place: present(hub, hub.saved.update(row.id, set), user.id) });
+    const updated = hub.saved.update(row.id, set);
+    syncSharedCopy(hub, updated);
+    return json({ place: present(hub, updated, user.id) });
   }
 
   if (parts.length === 4 && parts[3] === 'reextract' && method === 'POST') {
@@ -223,7 +239,9 @@ export async function handleSaved(hub, request, url) {
     }
     if (!text && !row.source_url) return json({ error: '請貼上描述文字' }, 400);
     const { columns } = await extractColumns(hub, { url: row.source_url, text });
-    return json({ place: present(hub, hub.saved.update(row.id, { ...columns, source_text: text })) });
+    const updated = hub.saved.update(row.id, { ...columns, source_text: text });
+    syncSharedCopy(hub, updated);
+    return json({ place: present(hub, updated, user.id) });
   }
 
   if (parts.length === 4 && parts[3] === 'share' && method === 'POST') {

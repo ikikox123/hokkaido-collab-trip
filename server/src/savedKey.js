@@ -50,6 +50,14 @@ export function parseSavedKey(value) {
   return match ? { keyId: match[1], secret: match[2] } : null;
 }
 
+/** True for a Shortcut key (hks_...) presented where a login token belongs. */
+export function isSavedKeyToken(token) {
+  return typeof token === 'string' && token.startsWith(KEY_PREFIX);
+}
+
+/** Shown (with HTTP 403) when a Shortcut key is used on any API but ingest. */
+export const KEY_ONLY_FOR_SAVING = '這把金鑰只能用來收藏';
+
 export function bearerToken(headerValue) {
   const header = String(headerValue || '');
   return header.startsWith('Bearer ') ? header.slice(7).trim() : null;

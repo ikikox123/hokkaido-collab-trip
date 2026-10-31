@@ -195,7 +195,9 @@ test('a Shortcut key cannot be used anywhere but ingest, and a login token canno
     ['GET', '/api/saved/key'], ['POST', '/api/saved/key'], ['DELETE', '/api/saved/key'],
     ['GET', '/api/places?q=x'], ['GET', '/api/opening-hours?name=a&lat=1&lng=1'],
   ]) {
-    assert.equal((await call(method, path, { token: key })).status, 401, `${method} ${path}`);
+    const res = await call(method, path, { token: key });
+    assert.equal(res.status, 403, `${method} ${path}`);
+    assert.equal((await res.json()).error, '這把金鑰只能用來收藏', `${method} ${path}`);
   }
   assert.equal((await call('POST', '/api/login', { token: key, body: { username: 'alice', password: key } })).status, 401);
   assert.equal((await call('POST', '/api/saved/ingest', { token: tokens.alice, body: { text: 'x' } })).status, 401);
@@ -388,7 +390,7 @@ test('shared list: companions read and write, outsiders get nothing', async () =
   assert.equal((await call('POST', `/api/saved/${place.id}/share`, { token: tokens.alice })).status, 201);
   assert.equal((await call('GET', '/api/saved?scope=shared', { token: tokens.carol })).status, 403);
   assert.equal((await call('GET', '/api/saved?scope=shared')).status, 401);
-  assert.equal((await call('GET', '/api/saved?scope=shared', { token: key })).status, 401);
+  assert.equal((await call('GET', '/api/saved?scope=shared', { token: key })).status, 403);
 
   const shared = await (await call('GET', '/api/saved?scope=shared', { token: tokens.bob })).json();
   const copy = shared.places.find((p) => p.name === '空');
@@ -475,4 +477,55 @@ test('the trip state is untouched by saving places', async () => {
   await ingest(call, key, { text: 'x' });
   assert.equal(JSON.stringify(db.prepare("SELECT * FROM doc_chunks WHERE name = 'state'").all()), before);
   assert.equal(hub.tripState.stops.length, stops);
+});
+
+test('a place shown as shared knows it is shared; the sharer re-run / edit updates the shared copy', async () => {
+  const { call, tokens, makeKey } = await makeHub({ ai: goodAi({ name: '味の時計台 拉麵', district: '中央区北1条西3丁目', confidence: 0.9 }) });
+  const key = await makeKey('alice');
+  const { place } = await (await ingest(call, key, { text: '📍味の時計台 拉麵' })).json();
+  assert.equal(place.sharedToTrip, false);
+  assert.equal(place.name, '味の時計台');
+  assert.equal(place.district, '中央区');
+  assert.equal(place.city, '札幌市');
+  const shared = (await (await call('POST', `/api/saved/${place.id}/share`, { token: tokens.alice })).json()).place;
+  const listed = async () => (await (await call('GET', '/api/saved?scope=mine', { token: tokens.alice })).json()).places.find((p) => p.id === place.id);
+  assert.equal((await listed()).sharedToTrip, true);
+  const sharedNow = async () => (await (await call('GET', '/api/saved?scope=shared', { token: tokens.bob })).json()).places.find((p) => p.id === shared.id);
+
+  // re-run: name, city, district, coordinates and status follow
+  const rerun = await call('POST', `/api/saved/${place.id}/reextract`, { token: tokens.alice, body: { text: '📍味の時計台 駅前通り総本店 札幌市中央区北1条西3丁目 味噌拉麵' } });
+  assert.equal(rerun.status, 200);
+  let copy = await sharedNow();
+  assert.equal(copy.scope, 'shared');
+  assert.equal(copy.name, '味の時計台 駅前通り総本店');
+  assert.equal(copy.city, '札幌市');
+  assert.equal(copy.district, '中央区');
+
+  // manual edit by the sharer
+  const patched = await (await call('PATCH', `/api/saved/${place.id}`, { token: tokens.alice, body: { name: '時計台', city: '小樽', district: '' } })).json();
+  assert.equal(patched.place.sharedToTrip, true);
+  copy = await sharedNow();
+  assert.deepEqual([copy.name, copy.city, copy.district, copy.status], ['時計台', '小樽市', '', patched.place.status]);
+  assert.equal(copy.addedBy, 'Alice');
+});
+
+test('the shared copy follows coordinates and status from a geocoded re-run', async () => {
+  const geocode = async () => ({ lat: 43.0626, lng: 141.3536, address: '北1条西3丁目', precision: 'place', matched: 'address', district: '中央区' });
+  const { call, tokens, makeKey } = await makeHub({ ai: goodAi({ confidence: 0.4 }), geocode });
+  const key = await makeKey('alice');
+  const { place } = await (await ingest(call, key, { text: 'x' })).json();
+  await call('POST', `/api/saved/${place.id}/share`, { token: tokens.alice });
+  const after = await (await call('POST', `/api/saved/${place.id}/reextract`, { token: tokens.alice, body: { text: '📍空 札幌市中央区北1条西3丁目' } })).json();
+  const copy = (await (await call('GET', '/api/saved?scope=shared', { token: tokens.bob })).json()).places[0];
+  assert.deepEqual([copy.lat, copy.lng, copy.status, copy.district], [after.place.lat, after.place.lng, after.place.status, '中央区']);
+  assert.equal(copy.lat, 43.0626);
+  assert.equal(copy.status, 'ready');
+});
+
+test('old rows are shown with the new rules: street-address district trimmed, city with 市', () => {
+  const row = { id: 'a', scope: 'personal', name: 'N', city: '札幌', district: '中央区北1条西3丁目', address: '', lat: null, lng: null, status: 'ready', confidence: 1, created_at: '', updated_at: '' };
+  const place = presentPlace(row, {});
+  assert.deepEqual([place.city, place.district], ['札幌市', '中央区']);
+  assert.equal(presentPlace({ ...row, city: '小樽', district: '色内' }, {}).district, '');
+  assert.equal(presentPlace({ ...row, city: '札幌', district: '狸小路' }, {}).district, '');
 });

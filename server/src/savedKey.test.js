@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bearerToken, constantTimeEqual, generateSavedKey, parseSavedKey, savedKeyMatches, sha256Hex } from './savedKey.js';
+import { bearerToken, constantTimeEqual, generateSavedKey, isSavedKeyToken, KEY_ONLY_FOR_SAVING, parseSavedKey, savedKeyMatches, sha256Hex } from './savedKey.js';
 import { createSavedRateLimiter } from './savedRateLimit.js';
 
 test('keys are prefixed, high entropy, and unique', async () => {
@@ -65,4 +65,12 @@ test('keys with the older 8-hex id still parse', () => {
   assert.deepEqual(parseSavedKey(old), { keyId: '0a1b2c3d', secret: 'a'.repeat(43) });
   assert.equal(parseSavedKey(`hks_0a1b2c_${'a'.repeat(43)}`), null);
   assert.equal(parseSavedKey(`hks_${'0'.repeat(33)}_${'a'.repeat(43)}`), null);
+});
+
+test('a Shortcut key is recognised where a login token belongs, with a clear message', async () => {
+  const { key } = await generateSavedKey();
+  assert.equal(isSavedKeyToken(key), true);
+  assert.equal(isSavedKeyToken('eyJhbGciOi.payload.sig'), false);
+  assert.equal(isSavedKeyToken(null), false);
+  assert.equal(KEY_ONLY_FOR_SAVING, '這把金鑰只能用來收藏');
 });

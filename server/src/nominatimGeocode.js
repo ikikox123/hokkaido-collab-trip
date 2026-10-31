@@ -4,13 +4,13 @@
  * and the place simply has no coordinates. No Google API is called.
  *
  * Request budget per place: up to MAX_REQUESTS_PER_PLACE (3) search requests, plus at most
- * MAX_REVERSE_PER_PLACE (1) reverse request, made only when the result has precision 'place'
+ * MAX_REVERSE_PER_PLACE (1) reverse request (a pasted street address is the first of those searches), made only when the result has precision 'place'
  * (so 4 Nominatim requests at most). The reverse request does not use up the search budget.
  * Reverse looks up the OSM administrative district (the AI's district is not trusted); it shares
  * the 1 req/s queue, User-Agent, timeout and cache (key: coordinates rounded to 4 decimals).
  */
 import { APP_USER_AGENT } from './remoteFetch.js';
-import { cleanLine, normalizeAreaName } from './savedPlace.js';
+import { cleanLine, cleanDistrict } from './savedPlace.js';
 
 const NOMINATIM_SEARCH = 'https://nominatim.openstreetmap.org/search';
 const NOMINATIM_REVERSE = 'https://nominatim.openstreetmap.org/reverse';
@@ -23,10 +23,13 @@ const MAX_PENDING = 6;
 export const MAX_REQUESTS_PER_PLACE = 3;
 export const MAX_REVERSE_PER_PLACE = 1;
 
-/** District from a Nominatim reverse `address` object, in the local language; '' when absent. */
+/**
+ * Administrative district (区 / 町 / 村) from a Nominatim reverse `address` object, in the local language; '' when absent.
+ * Neighbourhoods such as 色内 or street-like names are skipped: a city without wards (小樽市) has no district.
+ */
 export function districtFromAddress(address) {
   for (const key of ['city_district', 'suburb', 'quarter', 'neighbourhood']) {
-    const name = normalizeAreaName(address?.[key]);
+    const name = cleanDistrict(address?.[key], address?.city);
     if (name) return name;
   }
   return '';
@@ -43,9 +46,11 @@ export function geocodeQuery({ name, district, city, country }) {
  * Lookups to try in order; the first hit wins. 'place' steps look for the shop itself,
  * 'area' steps only find the middle of its district / city. Duplicate steps are dropped.
  */
-export function geocodeSteps({ name, district, city, country }) {
+export function geocodeSteps({ name, district, city, country, streetAddress }) {
   const cc = isJapan(country) ? 'jp' : '';
   const steps = [
+    // A full street address the poster wrote is searched first; a hit is the exact spot.
+    streetAddress ? { query: join(streetAddress), cc: 'jp', precision: 'place', via: 'address' } : null,
     { query: join(name, district, city, country), cc: '', precision: 'place' },
     { query: join(name, city), cc: '', precision: 'place' },
     // With district and city known, the name alone could match a same-named shop elsewhere: use the district centre instead.
@@ -57,7 +62,7 @@ export function geocodeSteps({ name, district, city, country }) {
   ];
   const seen = new Set();
   return steps.filter((step) => {
-    if (!step.query || (!name && step.precision === 'place')) return false;
+    if (!step || !step.query || (!name && step.precision === 'place' && !step.via)) return false;
     const key = `${step.cc}|${step.query.normalize('NFKC').toLowerCase()}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -136,7 +141,7 @@ export function createPlaceGeocoder({ fetchImpl, now = () => Date.now(), sleep }
     }
   }
 
-  /** Resolves { lat, lng, address, precision: 'place' | 'area', district? (OSM, place only) } or null. Never throws. */
+  /** Resolves { lat, lng, address, precision: 'place' | 'area', district? (OSM, place only), matched? ('address' when the pasted street address was found) } or null. Never throws. */
   return async function geocode(fields) {
     const steps = geocodeSteps(fields ?? {});
     if (!steps.length) return null;
@@ -161,7 +166,7 @@ export function createPlaceGeocoder({ fetchImpl, now = () => Date.now(), sleep }
           remember(key, value);
         }
         if (value) {
-          const out = { ...value, precision: step.precision };
+          const out = { ...value, precision: step.precision, ...(step.via ? { matched: step.via } : {}) };
           if (step.precision === 'place') {
             const district = await reverseDistrict(value.lat, value.lng); // budget: MAX_REVERSE_PER_PLACE, separate from searches
             if (district) out.district = district;

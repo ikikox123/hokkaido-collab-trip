@@ -169,6 +169,10 @@ test('public share, private trip, sealed sockets, and member adds', { timeout: 3
   assert.equal(anon.status, 401);
   const bad = await fetch(`${base}/api/trip`, { headers: { authorization: 'Bearer not-a-token' } });
   assert.equal(bad.status, 401);
+  // a saved-places Shortcut key is not a login: clear message, not "login expired"
+  const shortcutKey = await fetch(`${base}/api/trip`, { headers: { authorization: `Bearer hks_0123456789abcdef_${'A'.repeat(43)}` } });
+  assert.equal(shortcutKey.status, 403);
+  assert.equal((await shortcutKey.json()).error, '這把金鑰只能用來收藏');
 
   const alice = await postJson(`${base}/api/login`, { username: 'alice', password: 'demo1234' });
   const bob = await postJson(`${base}/api/login`, { username: 'bob', password: 'demo1234' });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   AI_INPUT_CHARS, AI_MAX_TOKENS, aiExtract, buildAiRequest, buildExtractionInput, canonicalSourceUrl, cleanLine, cleanPlacePatch,
   decideExtraction, extractHtmlMeta, looksLikePlaceName, googleMapsSearchUrl, heuristicExtract, parseAiAnswer, parseIngestBody,
-  normalizeAreaName, readLimitedText, resultMessage, statusWithGeo, resolveDistrict,
+  normalizeAreaName, normalizeCityName, cleanDistrict, stripNameCategory, extractStreetAddress, readLimitedText, resultMessage, statusWithGeo, resolveDistrict,
 } from './savedPlace.js';
 import { runIngest } from './savedIngest.js';
 import { createPlaceGeocoder, MIN_INTERVAL_MS, MAX_REVERSE_PER_PLACE } from './nominatimGeocode.js';
@@ -62,7 +62,7 @@ test('model input is capped', () => {
 test('heuristic never reaches the confidence threshold', () => {
   const h = heuristicExtract({ meta: extractHtmlMeta(PAGE), text: '' });
   assert.match(h.name, /^札幌ラーメン/);
-  assert.equal(h.city, '札幌');
+  assert.equal(h.city, '札幌市');
   assert.equal(h.district, '中央区');
   assert.equal(h.type, 'eat');
   assert.ok(h.confidence <= 0.4);
@@ -159,7 +159,7 @@ test('shortcut message marks pending places', () => {
 test('manual edits are validated', () => {
   assert.equal(cleanPlacePatch({ name: '  ' }).ok, false);
   assert.equal(cleanPlacePatch({ type: 'boat' }).ok, false);
-  assert.deepEqual(cleanPlacePatch({ name: ' A\nB ', type: 'eat', city: '札幌' }).set, { name: 'A B', type: 'eat', city: '札幌' });
+  assert.deepEqual(cleanPlacePatch({ name: ' A\nB ', type: 'eat', city: '札幌' }).set, { name: 'A B', type: 'eat', city: '札幌市' });
 });
 
 // ---------- Nominatim ----------
@@ -339,10 +339,10 @@ test('English / romaji city and ward names become Japanese; unknown names stay',
     ['Sapporo', '札幌'], ['sapporo city', '札幌'], ['Otaru', '小樽'], ['Asahikawa', '旭川'], ['Hakodate', '函館'],
     ['Biei', '美瑛'], ['Furano', '富良野'], ['Niseko', 'ニセコ'], ['Chitose', '千歳'], ['Tokyo', '東京'],
     ['Osaka', '大阪'], ['Kyoto', '京都'], ['Chuo-ku', '中央区'], ['Chūō Ward', '中央区'], ['Kita-ku', '北区'],
-    ['札幌市', '札幌'], ['札幌', '札幌'], ['Japan', '日本'], ['Atlantis', 'Atlantis'], ['ススキノ', 'ススキノ'],
+    ['札幌市', '札幌市'], ['札幌', '札幌'], ['色内', '色内'], ['Japan', '日本'], ['Atlantis', 'Atlantis'], ['ススキノ', 'ススキノ'],
   ]) assert.equal(normalizeAreaName(from), to, from);
   const parsed = parseAiAnswer({ response: { name: 'Cafe', country: 'Japan', city: 'Sapporo', district: 'Chuo-ku', type: 'eat', confidence: 0.9 } });
-  assert.deepEqual([parsed.country, parsed.city, parsed.district], ['日本', '札幌', '中央区']);
+  assert.deepEqual([parsed.country, parsed.city, parsed.district], ['日本', '札幌市', '中央区']);
 });
 
 test('review-only text is not a place name', () => {
@@ -444,10 +444,12 @@ test('reverse: falls back to suburb / quarter / neighbourhood when city_district
   const c = clock();
   const f = revFetch({ address: { neighbourhood: '薄野' } });
   const geocode = createPlaceGeocoder({ fetchImpl: f, now: c.now, sleep: c.sleep });
-  assert.equal((await geocode({ name: 'A', city: '札幌' })).district, '薄野');
+  assert.equal((await geocode({ name: 'A', city: '札幌' })).district, undefined, 'a neighbourhood is not an administrative district');
+  const ward = createPlaceGeocoder({ fetchImpl: revFetch({ address: { suburb: '色内', quarter: '手稲区' } }), now: c.now, sleep: c.sleep });
+  assert.equal((await ward({ name: 'B', city: '札幌' })).district, '手稲区');
 });
 
-test('reverse failure keeps the AI district; a non-administrative one becomes pending', async () => {
+test('reverse failure keeps the AI district; a non-administrative one is dropped', async () => {
   const c = clock();
   const down = createPlaceGeocoder({ fetchImpl: revFetch(new Error('down')), now: c.now, sleep: c.sleep });
   const ok = await runIngest({ text: '空', ai: goodAi({ district: '中央区' }), geocode: down });
@@ -455,12 +457,12 @@ test('reverse failure keeps the AI district; a non-administrative one becomes pe
   assert.equal(ok.status, 'ready');
   const nofield = createPlaceGeocoder({ fetchImpl: revFetch({ address: {} }), now: c.now, sleep: c.sleep });
   const vague = await runIngest({ text: '空', ai: goodAi({ district: '東南邊' }), geocode: nofield });
-  assert.equal(vague.fields.district, '東南邊');
-  assert.equal(vague.status, 'pending');
+  assert.equal(vague.fields.district, '', 'not 区/町/村: dropped');
+  assert.equal(vague.status, 'ready');
   const empty = await runIngest({ text: '空', ai: goodAi({ district: '' }), geocode: nofield });
   assert.equal(empty.status, 'ready');
-  assert.equal(resolveDistrict({ district: '南3条西5丁目' }, null, 'ready').status, 'ready');
-  assert.equal(resolveDistrict({ district: '東南邊' }, null, 'ready').status, 'pending');
+  assert.deepEqual(resolveDistrict({ district: '南3条西5丁目' }, null, 'ready'), { district: '', status: 'ready' });
+  assert.deepEqual(resolveDistrict({ district: '東南邊' }, null, 'ready'), { district: '', status: 'ready' });
 });
 
 test('reverse: only for precision place, at most once, beyond the 3 search requests, shared queue and cache', async () => {
@@ -508,4 +510,94 @@ test('reverse: only for precision place, at most once, beyond the 3 search reque
   assert.equal(f3.inits.length, 2);
   assert.equal(c3.sleeps.length, 1, 'reverse waited behind the search');
   assert.ok(f3.inits.every((i) => /hokkaido/.test(i.headers['User-Agent']) && i.headers['Accept-Language'] === 'ja'));
+});
+
+// ---------- v2: district rules, city, address, name ----------
+
+test('district: only administrative areas; street addresses and street names are dropped', () => {
+  assert.equal(cleanDistrict('中央区'), '中央区');
+  assert.equal(cleanDistrict('Chuo-ku'), '中央区');
+  assert.equal(cleanDistrict('中央区北1条西3丁目'), '中央区', 'old data: keep only the ward');
+  assert.equal(cleanDistrict('手稲町'), '手稲町');
+  for (const bad of ['北1条西3丁目', '南2条西5丁目', '狸小路', '狸小路商店街', '大通', '駅前通り', '色内1-1-1', '1番地', '薄野', '色内', '札幌市', '']) {
+    assert.equal(cleanDistrict(bad), '', bad);
+  }
+  assert.equal(cleanDistrict('小樽町', '小樽市'), '', 'the city itself is not a district');
+  const parsed = parseAiAnswer({ response: { name: '店', city: '札幌', district: '北1条西3丁目', type: 'eat', confidence: 0.9 } });
+  assert.equal(parsed.district, '');
+  assert.equal(parseAiAnswer({ response: { name: '店', city: '札幌', district: '狸小路', confidence: 0.9 } }).district, '');
+});
+
+test('city: 札幌 -> 札幌市, Otaru has no district, 色内 keeps its kanji', async () => {
+  assert.equal(normalizeCityName('札幌'), '札幌市');
+  assert.equal(normalizeCityName('Sapporo'), '札幌市');
+  assert.equal(normalizeCityName('小樽市'), '小樽市');
+  assert.equal(normalizeCityName('美瑛'), '美瑛町');
+  assert.equal(normalizeCityName('Atlantis'), 'Atlantis');
+  const f = revFetch({ address: { city: '小樽市', suburb: '色内', neighbourhood: '色内1丁目' } });
+  const geocode = createPlaceGeocoder({ fetchImpl: f, now: clock().now, sleep: clock().sleep });
+  const out = await runIngest({ text: '運河', ai: goodAi({ name: '小樽運河', city: '小樽', district: '色内' }), geocode });
+  assert.equal(out.fields.city, '小樽市');
+  assert.equal(out.fields.district, '');
+  assert.equal(normalizeAreaName('色内'), '色内');
+  assert.notEqual(normalizeAreaName('色内'), '色內');
+});
+
+test('trailing category words are removed from names, nothing else', () => {
+  for (const [from, to] of [
+    ['味の時計台 拉麵', '味の時計台'], ['すみれ ラーメン', 'すみれ'], ['空 味噌拉麵', '空'], ['空 味噌ラーメン', '空'],
+    ['空 醤油ラーメン', '空'], ['空 塩ラーメン', '空'], ['Garaku 湯咖哩', 'Garaku'], ['Garaku スープカレー', 'Garaku'],
+    ['すし善 壽司', 'すし善'], ['すし善 寿司', 'すし善'], ['魚民 居酒屋', '魚民'], ['Aoi 咖啡', 'Aoi'], ['Aoi カフェ', 'Aoi'],
+    ['麺屋 彩未', '麺屋 彩未'], ['ラーメン', 'ラーメン'], ['拉麵', '拉麵'], ['すみれ 札幌本店', 'すみれ 札幌本店'],
+  ]) assert.equal(stripNameCategory(from), to, from);
+  assert.equal(parseAiAnswer({ response: { name: '味の時計台 拉麵', city: '札幌', confidence: 0.9 } }).name, '味の時計台');
+  assert.equal(heuristicExtract({ meta: null, text: '📍すみれ ラーメン' }).name, 'すみれ');
+  assert.equal(heuristicExtract({ meta: null, text: '📍麺屋 彩未' }).name, '麺屋 彩未');
+});
+
+const PASTED = '📍味の時計台 駅前通り総本店 札幌市中央区北1条西3丁目 味噌拉麵';
+
+test('street address parsing', () => {
+  const a = extractStreetAddress(PASTED);
+  assert.deepEqual([a.text, a.city, a.district], ['札幌市中央区北1条西3丁目', '札幌市', '中央区']);
+  assert.equal(extractStreetAddress('小樽市色内1-1-1').district, '');
+  assert.equal(extractStreetAddress('小樽市色内1-1-1').city, '小樽市');
+  assert.equal(extractStreetAddress('市場食堂 おいしい'), null);
+  const h = heuristicExtract({ meta: null, text: PASTED });
+  assert.deepEqual([h.name, h.city, h.district], ['味の時計台 駅前通り総本店', '札幌市', '中央区']);
+});
+
+test('a pasted full address is searched first and the place is not pending', async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const u = new URL(url);
+    calls.push(u.pathname + '?' + (u.searchParams.get('q') ?? ''));
+    if (u.pathname === '/reverse') return Response.json({ address: { city_district: '中央区', suburb: '北1条西' } });
+    return Response.json([{ lat: '43.0626', lon: '141.3536', display_name: '北1条西3丁目, 中央区, 札幌市' }]);
+  };
+  const geocode = createPlaceGeocoder({ fetchImpl, now: clock().now, sleep: clock().sleep });
+  // The model only kept "味の時計台 拉麵", with a street address as district and low confidence.
+  const ai = goodAi({ name: '味の時計台 拉麵', city: '札幌', district: '中央区北1条西3丁目', confidence: 0.5 });
+  const out = await runIngest({ text: PASTED, ai, geocode });
+  assert.equal(calls[0], '/search?札幌市中央区北1条西3丁目', 'address first');
+  assert.equal(calls.filter((c) => c.startsWith('/search')).length, 1);
+  assert.deepEqual([out.fields.name, out.fields.city, out.fields.district], ['味の時計台 駅前通り総本店', '札幌市', '中央区']);
+  assert.equal(out.status, 'ready');
+  assert.equal(out.geo.precision, 'place');
+
+  // heuristic only (no AI)
+  const heur = await runIngest({ text: PASTED, geocode: createPlaceGeocoder({ fetchImpl, now: clock().now, sleep: clock().sleep }) });
+  assert.deepEqual([heur.fields.name, heur.fields.district, heur.status], ['味の時計台 駅前通り総本店', '中央区', 'ready']);
+
+  // address not found: falls through the usual steps, still within 3 searches, and stays pending
+  const searches2 = [];
+  const miss = async (url) => {
+    const u = new URL(url);
+    if (u.pathname === '/search') searches2.push(u.searchParams.get('q'));
+    return Response.json(u.pathname === '/reverse' ? { address: {} } : []);
+  };
+  const notFound = await runIngest({ text: PASTED, ai, geocode: createPlaceGeocoder({ fetchImpl: miss, now: clock().now, sleep: clock().sleep }) });
+  assert.ok(searches2.length <= 3);
+  assert.equal(notFound.status, 'pending');
+  assert.equal(notFound.fields.district, '中央区');
 });

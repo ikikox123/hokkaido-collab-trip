@@ -4,7 +4,7 @@
  * saved_places rows are 'personal' (readable by user_id alone) or 'shared' (the trip's list; user_id = who shared it).
  */
 import { generateSavedKey } from '../../server/src/savedKey.js';
-import { googleMapsSearchUrl } from '../../server/src/savedPlace.js';
+import { cleanDistrict, googleMapsSearchUrl, normalizeCityName } from '../../server/src/savedPlace.js';
 
 export const MAX_PLACES_PER_LIST = 300;
 
@@ -14,15 +14,21 @@ function randomId() {
   return `sp_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
-export function presentPlace(row, { ownerName = null, viewerId = null } = {}) {
+/** Columns copied from a person's own place to its copy in the trip's shared list. */
+export const SHARED_COPY_COLUMNS = ['name', 'type', 'country', 'city', 'district', 'address', 'lat', 'lng', 'precision', 'status', 'confidence'];
+
+export function presentPlace(row, { ownerName = null, viewerId = null, sharedToTrip = false } = {}) {
+  // Older rows may hold 札幌 / a street address as district: show them the way new rows are stored.
+  const city = normalizeCityName(row.city);
+  const district = cleanDistrict(row.district, city);
   const place = {
     id: row.id,
     scope: row.scope,
     name: row.name,
     type: row.type || null,
     country: row.country,
-    city: row.city,
-    district: row.district,
+    city,
+    district,
     address: row.address,
     lat: row.lat ?? null,
     lng: row.lng ?? null,
@@ -30,11 +36,12 @@ export function presentPlace(row, { ownerName = null, viewerId = null } = {}) {
     status: row.status,
     confidence: row.confidence,
     sourceUrl: row.source_url || null,
-    mapsUrl: googleMapsSearchUrl({ name: row.name, city: row.city, district: row.district, address: row.address }),
+    mapsUrl: googleMapsSearchUrl({ name: row.name, city, district, address: row.address }),
     hasText: Boolean(row.source_text),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+  if (row.scope === 'personal') place.sharedToTrip = sharedToTrip;
   if (row.scope === 'shared') {
     place.addedBy = ownerName;
     place.mine = viewerId != null && row.user_id === viewerId;
@@ -181,10 +188,10 @@ export function createSavedStore(sql) {
       if (loadFlag(SEED_FLAG)) return;
       saveFlag(SEED_FLAG, { at: new Date().toISOString() });
       const demo = [
-        { name: '範例｜札幌湯咖哩 Garaku 風', type: 'eat', city: '札幌', district: '中央区', address: '', lat: 43.0553, lng: 141.3412, status: 'ready', confidence: 0.9, source_url: 'https://www.threads.net/@example/post/sample1' },
-        { name: '範例｜小樽運河', type: 'sight', city: '小樽', district: '色內', address: '', lat: 43.1976, lng: 141.0044, status: 'ready', confidence: 0.85, source_url: 'https://www.instagram.com/p/sample2' },
-        { name: '範例｜薄野的深夜拉麵（名稱待確認）', type: 'eat', city: '札幌', district: '中央区', status: 'pending', confidence: 0.3, source_url: 'https://www.threads.net/@example/post/sample3' },
-        { name: '範例｜登別溫泉旅館', type: 'stay', city: '登別', district: '', lat: 42.4963, lng: 141.1459, status: 'ready', confidence: 0.8 },
+        { name: '範例｜札幌湯咖哩 Garaku 風', type: 'eat', city: '札幌市', district: '中央区', address: '', lat: 43.0553, lng: 141.3412, status: 'ready', confidence: 0.9, source_url: 'https://www.threads.net/@example/post/sample1' },
+        { name: '範例｜小樽運河', type: 'sight', city: '小樽市', district: '', address: '', lat: 43.1976, lng: 141.0044, status: 'ready', confidence: 0.85, source_url: 'https://www.instagram.com/p/sample2' },
+        { name: '範例｜薄野的深夜拉麵（名稱待確認）', type: 'eat', city: '札幌市', district: '中央区', status: 'pending', confidence: 0.3, source_url: 'https://www.threads.net/@example/post/sample3' },
+        { name: '範例｜登別溫泉旅館', type: 'stay', city: '登別市', district: '', lat: 42.4963, lng: 141.1459, status: 'ready', confidence: 0.8 },
       ];
       const inserted = demo.map((row, i) =>
         this.insert({

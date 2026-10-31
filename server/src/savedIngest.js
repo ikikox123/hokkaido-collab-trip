@@ -44,15 +44,17 @@ export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
         };
   const aiResult = input ? await aiExtract(watched, input, model) : null;
   const decided = decideExtraction({ ai: aiResult, heuristic, text: text || cleanUrl });
-  const { status, via, ...fields } = decided;
+  const { status, via, streetAddress, ...fields } = decided;
   let geo = null;
   if (geocode && fields.name && (via === 'ai' || fields.confidence >= 0.35)) {
     try {
-      geo = await geocode(fields);
+      geo = await geocode({ ...fields, streetAddress });
     } catch {
       geo = null;
     }
   }
-  const area = resolveDistrict(fields, geo, statusWithGeo(status, geo));
+  // A pasted street address that Nominatim found is the exact spot: no need for a human look.
+  const byAddress = geo?.matched === 'address' && geo.precision === 'place';
+  const area = resolveDistrict(fields, geo, byAddress ? 'ready' : statusWithGeo(status, geo));
   return { sourceUrl: allowed ? cleanUrl : '', fetched, fields: { ...fields, district: area.district }, status: area.status, via, ai: aiState, geo, rejectedUrl: Boolean(url) && !allowed };
 }
