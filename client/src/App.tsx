@@ -8,7 +8,7 @@ import { MapView } from './components/MapView';
 import { LodgingDialog, type LodgingDraft } from './components/LodgingDialog';
 import { SavedPlaces, TYPE_LABEL } from './components/SavedPlaces';
 import { SavedKeyDialog } from './components/SavedKeyDialog';
-import { probeSaved, stopFromSaved, type SavedPlace } from './lib/saved';
+import { lookupSavedHours, nextStopTime, probeSaved, stopFromSaved, type SavedPlace } from './lib/saved';
 import { PlaceStopDialog, type PickedPlace } from './components/PlaceStopDialog';
 import { SplitBoard } from './components/SplitBoard';
 import { useI18n } from './i18n/I18nProvider';
@@ -891,20 +891,27 @@ export default function App() {
                 lng: dayStops[0]?.lng ?? trip.lodging?.lng ?? SAPPORO_BASE.lng,
               },
               place.type ? t(TYPE_LABEL[place.type]) : null,
+              t('savedPickPendingNote'),
             );
-            emitAuth('trip:add', {
-              stop: {
-                day: selectedDay,
-                date: dayMeta?.date,
-                title: fields.title,
-                time: '12:00',
-                lat: fields.lat,
-                lng: fields.lng,
-                notes: fields.notes,
-              },
-            });
+            const day = selectedDay;
+            const time = nextStopTime(dayStops[dayStops.length - 1]?.time);
             setSavedView(null);
             showToast(t('savedPickAdded', { name: place.name }));
+            // Hours are a convenience: the stop is added either way, just a moment later when found.
+            void lookupSavedHours(token, place).then((hours) => {
+              emitAuth('trip:add', {
+                stop: {
+                  day,
+                  date: dayMeta?.date,
+                  title: fields.title,
+                  time,
+                  lat: fields.lat,
+                  lng: fields.lng,
+                  notes: fields.notes,
+                  ...(hours ? { hours } : {}),
+                },
+              });
+            });
           }}
         />
       )}

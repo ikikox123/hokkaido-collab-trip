@@ -80,6 +80,7 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
       className="saved-card flex w-[17.5rem] shrink-0 snap-start flex-col rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm"
       style={{ '--i': Math.min(index, 8) } as CSSProperties}
       data-pending={place.status === 'pending' || undefined}
+      onClick={mode === 'pick' ? (event) => { if (!(event.target as HTMLElement).closest('a,button')) onPick(place); } : undefined}
     >
       <div className="flex items-center justify-between gap-2">
         <span className={`inline-flex items-center gap-1 rounded-full border-2 border-ink px-2 py-0.5 text-[11px] font-bold text-ink ${TYPE_TONE[place.type ?? 'none']}`}>

@@ -17,6 +17,8 @@ export type SavedPlace = {
   address: string;
   lat: number | null;
   lng: number | null;
+  /** 'place' = exact spot, 'area' = only the district/city centre; absent on older servers. */
+  precision?: 'place' | 'area' | null;
   status: 'ready' | 'pending';
   confidence: number;
   sourceUrl: string | null;
@@ -112,15 +114,44 @@ export type StopFromSaved = {
   located: boolean;
 };
 
-/** Stop fields for trip:add. Without coordinates the fallback position is used (the card says so). */
+const NOTE_MAX = 300; // same limits as the server's stop note check (code points, 3 lines)
+const chars = (text: string) => Array.from(text);
+
+/** "12:00" style time one hour after the last stop of the day; 12:00 when there is none; never past 23:00. */
+export function nextStopTime(lastTime: string | null | undefined): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(lastTime ?? '').trim());
+  if (!match) return '12:00';
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  if (Number(match[1]) > 23 || Number(match[2]) > 59) return '12:00';
+  const next = Math.min(minutes + 60, 23 * 60);
+  return `${String(Math.floor(next / 60)).padStart(2, '0')}:${String(next % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Stop fields for trip:add. Without coordinates the fallback position is used (the card says so).
+ * Notes: "(pending) type・where" then the map link on its own line. The link is never cut: if it
+ * does not fit it is left out and only the text is trimmed.
+ */
 export function stopFromSaved(
   place: SavedPlace,
   fallback: { lat: number; lng: number },
   typeLabel: string | null,
+  pendingLabel = '（待確認位置）',
 ): StopFromSaved {
   const located = place.lat != null && place.lng != null;
+  const exact = located && place.precision !== 'area' && place.status !== 'pending';
   const where = place.address || areaLine(place);
-  const notes = [typeLabel, where].filter(Boolean).join('・').slice(0, 300);
+  const body = [typeLabel, where].filter(Boolean).join('・').replace(/\s+/g, ' ').trim();
+  const head = [exact ? '' : pendingLabel, body].filter(Boolean).join('');
+  const link = place.mapsUrl || '';
+  let notes: string;
+  if (link && chars(link).length + 1 < NOTE_MAX) {
+    const room = NOTE_MAX - chars(link).length - 1;
+    const text = chars(head).length > room ? chars(head).slice(0, room).join('') : head;
+    notes = text ? `${text}\n${link}` : link;
+  } else {
+    notes = chars(head).slice(0, NOTE_MAX).join('');
+  }
   return {
     title: place.name,
     lat: located ? (place.lat as number) : fallback.lat,
@@ -130,3 +161,18 @@ export function stopFromSaved(
   };
 }
 
+/** Opening hours from the OSM lookup for an exact place; null on any failure (never blocks adding). */
+export async function lookupSavedHours(token: string, place: SavedPlace): Promise<string | null> {
+  if (place.lat == null || place.lng == null || place.precision === 'area' || !place.name.trim()) return null;
+  try {
+    const qs = new URLSearchParams({ name: place.name, lat: String(place.lat), lng: String(place.lng) });
+    const res = await fetch(`/api/opening-hours?${qs}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json().catch(() => ({}));
+    return res.ok && typeof data.hours === 'string' && data.hours.trim() ? data.hours.trim() : null;
+  } catch {
+    return null;
+  }
+}

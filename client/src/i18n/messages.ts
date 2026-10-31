@@ -733,6 +733,7 @@ export const catalog = {
   savedPickTitle: { 'zh-Hant': '從收藏挑一個地點', ja: '保存からスポットを選ぶ', en: 'Pick a saved place' },
   savedPickAdd: { 'zh-Hant': '加入第 {day} 天', ja: '{day} 日目に追加', en: 'Add to day {day}' },
   savedPickNoCoords: { 'zh-Hant': '還沒有座標，會先放在當天第一站旁', ja: '座標がないため、当日の最初の地点の近くに置きます', en: 'No coordinates yet; it goes next to the day’s first stop' },
+  savedPickPendingNote: { 'zh-Hant': '（待確認位置）', ja: '（位置は要確認）', en: '(Location to confirm) ' },
   savedPickAdded: { 'zh-Hant': '已加入「{name}」', ja: '「{name}」を追加しました', en: 'Added “{name}”' },
   savedKeyTitle: { 'zh-Hant': '收藏金鑰', ja: '保存キー', en: 'Save key' },
   savedKeyHint: { 'zh-Hant': '給 iOS 捷徑「存旅遊」用，只能用來存收藏，不能登入。捷徑裡請不要放密碼。', ja: 'iOSショートカット「存旅遊」用です。保存にしか使えず、ログインはできません。ショートカットにパスワードは入れないでください。', en: 'For the “存旅遊” iOS Shortcut. It can only save places, not log in. Never put your password in a Shortcut.' },
