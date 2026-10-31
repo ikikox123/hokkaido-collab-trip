@@ -14,7 +14,7 @@ function randomId() {
   return `sp_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
-export function presentPlace(row, { ownerName = null } = {}) {
+export function presentPlace(row, { ownerName = null, viewerId = null } = {}) {
   const place = {
     id: row.id,
     scope: row.scope,
@@ -35,7 +35,10 @@ export function presentPlace(row, { ownerName = null } = {}) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-  if (row.scope === 'shared') place.addedBy = ownerName;
+  if (row.scope === 'shared') {
+    place.addedBy = ownerName;
+    place.mine = viewerId != null && row.user_id === viewerId;
+  }
   return place;
 }
 

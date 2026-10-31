@@ -141,12 +141,16 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
               <path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4" />
             </IconButton>
           )}
+          {(!shared || place.mine) && (
           <IconButton label={place.status === 'pending' ? t('savedEditTitle') : t('edit')} onClick={() => onEdit(place)} tone={place.status === 'pending' ? 'bg-butter-100' : ''}>
             <path d="M4 20l1-4L16 5l3 3L8 19zM14 7l3 3" />
           </IconButton>
+          )}
+          {(!shared || place.mine) && (
           <IconButton label={t('delete')} onClick={() => onDelete(place)}>
             <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />
           </IconButton>
+          )}
         </div>
       )}
     </li>

@@ -25,6 +25,7 @@ export type SavedPlace = {
   mapsUrl: string;
   hasText: boolean;
   addedBy?: string | null;
+  mine?: boolean;
   createdAt: string;
   updatedAt: string;
 };

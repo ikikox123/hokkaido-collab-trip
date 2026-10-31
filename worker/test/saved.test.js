@@ -350,13 +350,18 @@ test('shared list: companions read and write, outsiders get nothing', async () =
   const count = (await (await call('GET', '/api/saved?scope=shared', { token: tokens.bob })).json()).places.filter((p) => p.name === '空').length;
   assert.equal(count, 1);
 
-  // outsiders cannot touch the shared copy; companions can
+  // outsiders and other companions cannot change or remove it; only the sharer can
+  assert.equal(copy.mine, false);
   for (const [method, body] of [['PATCH', { name: 'x' }], ['DELETE', undefined]]) {
-    assert.equal((await call(method, `/api/saved/${copy.id}`, { token: tokens.carol, body })).status, 403);
+    for (const who of ['carol', 'bob']) {
+      assert.equal((await call(method, `/api/saved/${copy.id}`, { token: tokens[who], body })).status, 403);
+    }
   }
-  const edited = await call('PATCH', `/api/saved/${copy.id}`, { token: tokens.bob, body: { name: '空（改）', district: '中央区' } });
+  const aliceView = await (await call('GET', '/api/saved?scope=shared', { token: tokens.alice })).json();
+  assert.equal(aliceView.places.find((p) => p.id === copy.id).mine, true);
+  const edited = await call('PATCH', `/api/saved/${copy.id}`, { token: tokens.alice, body: { name: '空（改）', district: '中央区' } });
   assert.equal((await edited.json()).place.name, '空（改）');
-  assert.equal((await call('DELETE', `/api/saved/${copy.id}`, { token: tokens.bob })).status, 200);
+  assert.equal((await call('DELETE', `/api/saved/${copy.id}`, { token: tokens.alice })).status, 200);
   // the private original is still there
   const mine = await (await call('GET', '/api/saved?scope=mine', { token: tokens.alice })).json();
   assert.ok(mine.places.some((p) => p.id === place.id));
@@ -386,6 +391,15 @@ test('re-runs by a logged-in user are rate limited too', async () => {
   const { place } = await (await ingest(call, key, { text: 'x' })).json();
   let last;
   for (let i = 0; i < 11; i++) last = await call('POST', `/api/saved/${place.id}/reextract`, { token: tokens.alice, body: { text: `t${i}` } });
+  assert.equal(last.status, 429);
+});
+
+test('edits by a logged-in user are rate limited', async () => {
+  const { call, tokens, makeKey } = await makeHub();
+  const key = await makeKey();
+  const { place } = await (await ingest(call, key, { text: 'x' })).json();
+  let last;
+  for (let i = 0; i < 11; i++) last = await call('PATCH', `/api/saved/${place.id}`, { token: tokens.alice, body: { name: `n${i}` } });
   assert.equal(last.status, 429);
 });
 

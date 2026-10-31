@@ -40,12 +40,17 @@ function tooMany(result) {
   return json({ error: TOO_MANY }, 429, { 'Retry-After': String(result.retryAfterSec ?? 60) });
 }
 
+const SHARER_ONLY = '只有分享的人可以修改或刪除';
+
 function isMember(hub, userId) {
   return Boolean(hub.tripState && isTripMember(hub.tripState, userId));
 }
 
-function present(hub, row) {
-  return presentPlace(row, { ownerName: row.scope === 'shared' ? hub.users.publicById(row.user_id)?.displayName ?? null : null });
+function present(hub, row, viewerId = null) {
+  return presentPlace(row, {
+    ownerName: row.scope === 'shared' ? hub.users.publicById(row.user_id)?.displayName ?? null : null,
+    viewerId,
+  });
 }
 
 /** Run extraction and geocoding for a place; returns the column values to store. */
@@ -153,7 +158,7 @@ export async function handleSaved(hub, request, url) {
     const scope = url.searchParams.get('scope') === 'shared' ? 'shared' : 'mine';
     if (scope === 'shared' && !isMember(hub, user.id)) return json({ error: NOT_MEMBER }, 403);
     const rows = hub.saved.list(scope === 'shared' ? 'shared' : 'personal', user.id);
-    return json({ scope, places: rows.map((row) => present(hub, row)) });
+    return json({ scope, places: rows.map((row) => present(hub, row, user.id)) });
   }
 
   const id = parts[2];
@@ -163,12 +168,19 @@ export async function handleSaved(hub, request, url) {
   if (row.scope === 'personal' && row.user_id !== user.id) return json({ error: '找不到這筆收藏' }, 404);
   if (row.scope === 'shared' && !isMember(hub, user.id)) return json({ error: NOT_MEMBER }, 403);
 
+  // Companions can read and add a shared place to the plan; only who shared it can change or remove it.
+  if (row.scope === 'shared' && row.user_id !== user.id && (method === 'PATCH' || method === 'DELETE')) {
+    return json({ error: SHARER_ONLY }, 403);
+  }
+
   if (parts.length === 3 && method === 'DELETE') {
     hub.saved.remove(row.id);
     return json({ ok: true });
   }
 
   if (parts.length === 3 && method === 'PATCH') {
+    const limit = hub.savedLimits.user.attempt(`user:${user.id}`);
+    if (!limit.ok) return tooMany(limit);
     const read = await readLimitedText(request, MAX_BODY_BYTES);
     if (!read.ok) return json({ error: '內容太大' }, 413);
     let raw;
@@ -188,7 +200,7 @@ export async function handleSaved(hub, request, url) {
       set.precision = geo?.precision ?? null;
       set.address = geo?.address ?? '';
     }
-    return json({ place: present(hub, hub.saved.update(row.id, set)) });
+    return json({ place: present(hub, hub.saved.update(row.id, set), user.id) });
   }
 
   if (parts.length === 4 && parts[3] === 'reextract' && method === 'POST') {
@@ -212,12 +224,12 @@ export async function handleSaved(hub, request, url) {
     if (row.scope !== 'personal') return json({ error: '這筆已經在行程共用清單裡' }, 400);
     if (!isMember(hub, user.id)) return json({ error: NOT_MEMBER }, 403);
     const copy = hub.saved.findSharedCopy(row.id);
-    if (copy) return json({ place: present(hub, copy), already: true });
+    if (copy) return json({ place: present(hub, copy, user.id), already: true });
     if (hub.saved.count('shared', user.id) >= MAX_PLACES_PER_LIST) return json({ error: FULL }, 409);
     const { id: sourceId, scope, user_id, created_at, updated_at, source_text, ...rest } = row;
     void scope; void user_id; void created_at; void updated_at; void source_text;
     const shared = hub.saved.insert({ ...rest, scope: 'shared', user_id: user.id, shared_from: sourceId, source_text: '' });
-    return json({ place: present(hub, shared), already: false }, 201);
+    return json({ place: present(hub, shared, user.id), already: false }, 201);
   }
 
   return null;
