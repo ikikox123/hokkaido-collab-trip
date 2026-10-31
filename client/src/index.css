@@ -47,29 +47,27 @@ body {
   box-shadow: 0 0 0 3px rgb(var(--c-lavender-500) / 0.4);
 }
 
-/* Press and hover: a springy curve so the release overshoots into a small bounce. */
+/* Press and hover: 200ms expo-out, no bounce. Hover lift only on devices that can hover; transform only. */
 .cute-press,
-.cute-pop {
-  transition: transform 320ms cubic-bezier(0.34, 1.8, 0.64, 1);
+.cute-pop,
+.btn {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.cute-press:active {
-  transform: scale(0.93);
-}
-.cute-pop:active {
-  transform: scale(0.97) translateY(1px);
+.cute-press:active,
+.cute-pop:active,
+.btn:active {
+  transform: scale(0.96);
 }
 @media (hover: hover) {
-  .cute-pop:hover {
-    transform: translateY(-3px) rotate(-0.4deg);
-  }
-  .cute-press:hover {
+  .cute-pop:hover,
+  .cute-press:hover,
+  .btn:hover {
     transform: translateY(-2px);
   }
-  .cute-pop:active {
-    transform: scale(0.97) translateY(1px);
-  }
-  .cute-press:active {
-    transform: scale(0.93);
+  .cute-pop:active,
+  .cute-press:active,
+  .btn:active {
+    transform: scale(0.96);
   }
 }
 
@@ -104,9 +102,26 @@ body {
    each batch gets a staggered --reveal-delay. */
 .reveal-on [data-reveal]:not([data-shown]) {
   opacity: 0;
+  /* Failsafe: if the observer never fires, the content shows itself after 3s. */
+  animation: reveal-failsafe 1ms linear 3s forwards;
 }
 .reveal-on [data-reveal][data-shown] {
-  animation: cute-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms) backwards;
+  animation: reveal-rise 480ms cubic-bezier(0.16, 1, 0.3, 1) var(--reveal-delay, 0ms) backwards;
+}
+@keyframes reveal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes reveal-failsafe {
+  to {
+    opacity: 1;
+  }
 }
 html.share-capturing [data-reveal] {
   opacity: 1 !important;
@@ -820,6 +835,31 @@ html.theme-fade * {
   }
 }
 
+/* One quiet intro when the trip screen first mounts: title, then the chips. Opacity and transform only. */
+@keyframes header-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.app-header .header-title {
+  animation: header-in 600ms cubic-bezier(0.16, 1, 0.3, 1) 120ms backwards;
+}
+.app-header .header-meta {
+  animation: header-in 600ms cubic-bezier(0.16, 1, 0.3, 1) 260ms backwards;
+}
+/* The saved-places shortcut slides in once, when the server says the feature exists. */
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.saved-dock,
+.header-saved {
+  animation: dock-in 420ms cubic-bezier(0.16, 1, 0.3, 1) 240ms backwards;
+}
+
 /* ---------- Buttons: primary, secondary, icon. One height, one radius, one shadow step. ---------- */
 .btn {
   display: inline-flex;
@@ -1206,34 +1246,52 @@ html.share-capturing [data-share-export-root] .print\:hidden {
 /* ---------- Saved places ----------
    Motion moves only transform and opacity and is off under prefers-reduced-motion. */
 .saved-panel {
-  animation: saved-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: saved-panel-in 280ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 @keyframes saved-panel-in {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(32px);
   }
 }
+@keyframes saved-panel-out {
+  to {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+}
+.saved-layer[data-state='closed'] {
+  pointer-events: none;
+}
+.saved-layer[data-state='closed'] .saved-panel {
+  animation: saved-panel-out 200ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.saved-layer .menu-backdrop {
+  animation: fade-in 240ms ease-out backwards;
+}
+.saved-layer[data-state='closed'] .menu-backdrop {
+  animation: fade-out 200ms ease-out forwards;
+}
 .saved-sheet {
-  animation: saved-panel-in 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: saved-panel-in 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
+/* First 8 cards stagger by 50ms; later ones just appear. */
 .saved-card {
-  animation: saved-card-in 240ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(var(--i, 0) * 35ms + 40ms);
+  animation: saved-card-in 360ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 50ms + 80ms);
   scroll-snap-stop: always;
-  transition: transform 140ms ease-out;
 }
-.saved-card:active {
-  transform: scale(0.98);
+.saved-card[data-late] {
+  animation: none;
 }
 @keyframes saved-card-in {
   from {
     opacity: 0;
-    transform: translateX(12px);
+    transform: translateY(18px);
   }
 }
 .saved-group {
-  animation: saved-group-in 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: saved-group-in 280ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   animation-delay: calc(var(--g, 0) * 40ms);
 }
 @keyframes saved-group-in {
@@ -1277,7 +1335,12 @@ html.share-capturing [data-share-export-root] .print\:hidden {
 }
 @media (prefers-reduced-motion: reduce) {
   .saved-panel,
+  .saved-layer .menu-backdrop,
   .saved-sheet,
+  .app-header .header-title,
+  .app-header .header-meta,
+  .saved-dock,
+  .header-saved,
   .saved-card,
   .saved-group,
   .saved-skeleton,

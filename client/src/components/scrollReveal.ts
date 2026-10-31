@@ -2,7 +2,7 @@
 // MutationObserver so elements React mounts later (day switch, new expenses) are picked up.
 // Marks use a data attribute instead of a class so React className updates never clear them.
 
-const STAGGER_MS = 55;
+const STAGGER_MS = 50;
 const MAX_STAGGER = 8;
 
 export function startScrollReveal(root: HTMLElement = document.body): () => void {
@@ -19,7 +19,7 @@ export function startScrollReveal(root: HTMLElement = document.body): () => void
         if (!entry.isIntersecting) continue;
         const el = entry.target as HTMLElement;
         io.unobserve(el);
-        el.style.setProperty('--reveal-delay', `${Math.min(k, MAX_STAGGER) * STAGGER_MS}ms`);
+        el.style.setProperty('--reveal-delay', k < MAX_STAGGER ? `${k * STAGGER_MS}ms` : '0ms');
         el.setAttribute('data-shown', '');
         k += 1;
       }

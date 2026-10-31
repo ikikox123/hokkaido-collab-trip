@@ -78,7 +78,8 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
   return (
     <li
       className="saved-card flex w-[85%] max-w-[20rem] shrink-0 sm:w-[17.5rem] snap-start flex-col rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm"
-      style={{ '--i': Math.min(index, 8) } as CSSProperties}
+      style={{ '--i': index } as CSSProperties}
+      data-late={index >= 8 || undefined}
       data-pending={place.status === 'pending' || undefined}
       onClick={mode === 'pick' ? (event) => { if (!(event.target as HTMLElement).closest('a,button')) onPick(place); } : undefined}
     >
@@ -210,6 +211,19 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
     [token, t],
   );
 
+  // Keep the panel mounted for its exit animation (instant under reduced motion, never longer than 220ms).
+  const [shown, setShown] = useState(open);
+  useEffect(() => {
+    if (open) {
+      setShown(true);
+      return;
+    }
+    if (!shown) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timer = window.setTimeout(() => setShown(false), reduce ? 0 : 220);
+    return () => window.clearTimeout(timer);
+  }, [open, shown]);
+
   useEffect(() => {
     if (!open) return;
     setScope('mine');
@@ -228,7 +242,7 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose, sheet]);
 
-  if (!open) return null;
+  if (!open && !shown) return null;
 
   const places = lists[scope];
   const groups = places ? groupByArea(places) : [];
@@ -267,7 +281,7 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
   const tabs: [SavedScope, string][] = [['mine', t('savedTabMine')], ...(sharedAvailable ? ([['shared', t('savedTabShared')]] as [SavedScope, string][]) : [])];
 
   return (
-    <div className="saved-layer fixed inset-0 z-[2000] flex items-end justify-center md:items-center md:p-6" data-share-export-ignore="true">
+    <div className="saved-layer fixed inset-0 z-[2000] flex items-end justify-center md:items-center md:p-6" data-state={open ? 'open' : 'closed'} data-share-export-ignore="true">
       <div className="menu-backdrop absolute inset-0 hidden md:block" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
@@ -340,7 +354,7 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
             </div>
           )}
           {groups.map((group, g) => (
-            <section key={group.key || 'none'} className="saved-group mt-4 first:mt-1" aria-label={group.label ?? t('savedNoArea')} style={{ '--g': g } as CSSProperties}>
+            <section key={group.key || 'none'} className="saved-group mt-4 first:mt-1" aria-label={group.label ?? t('savedNoArea')} style={{ '--g': Math.min(g, 5) } as CSSProperties}>
               <div className="mb-2 flex items-baseline gap-2">
                 <h3 className="text-base font-bold">{group.label ?? t('savedNoArea')}</h3>
                 <span className="text-xs font-semibold text-slate-500">{t('savedGroupCount', { count: group.places.length })}</span>
