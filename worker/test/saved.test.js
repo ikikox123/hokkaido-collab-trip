@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
 import { signJwt } from '../src/jwt.js';
+import { createSavedStore, presentPlace } from '../src/savedStore.js';
 import { sha256Hex, parseSavedKey } from '../../server/src/savedKey.js';
 
 // tripHub.js imports `cloudflare:workers`, which only exists inside workerd (same stand-in as stopInfo.test.js).
@@ -206,6 +207,46 @@ test('with a confident model answer the place is ready and geocoded', async () =
   assert.match(body.place.mapsUrl, /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/);
   assert.ok(ai.last.req.max_tokens <= 300);
   assert.ok(ai.last.req.messages[1].content.length <= 4100);
+});
+
+test('a rough (area) position is pending even with a confident answer, and precision is returned', async () => {
+  const { call, makeKey } = await makeHub({
+    ai: goodAi(),
+    geocode: async () => ({ lat: 43.06, lng: 141.35, address: '札幌市', precision: 'area' }),
+  });
+  const body = await (await ingest(call, await makeKey(), { text: '空 札幌ラーメン' })).json();
+  assert.equal(body.status, 'pending');
+  assert.equal(body.place.precision, 'area');
+  assert.equal(body.place.lat, 43.06);
+  assert.equal(body.message, '已收藏：空（待確認）');
+});
+
+test('a precise position keeps ready and returns precision "place"', async () => {
+  const { call, makeKey } = await makeHub({
+    ai: goodAi(),
+    geocode: async () => ({ lat: 43.05, lng: 141.35, address: 'a', precision: 'place' }),
+  });
+  const body = await (await ingest(call, await makeKey(), { text: '空 札幌ラーメン' })).json();
+  assert.deepEqual([body.status, body.place.precision], ['ready', 'place']);
+});
+
+test('rows saved before the precision column existed still load', async () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE saved_places (id TEXT PRIMARY KEY, scope TEXT NOT NULL, user_id TEXT NOT NULL, name TEXT NOT NULL, type TEXT,
+    country TEXT NOT NULL DEFAULT '', city TEXT NOT NULL DEFAULT '', district TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '',
+    lat REAL, lng REAL, source_url TEXT NOT NULL DEFAULT '', source_text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0, shared_from TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`);
+  const now = new Date().toISOString();
+  const old = (id, lat) => db.prepare(`INSERT INTO saved_places (id, scope, user_id, name, status, lat, lng, created_at, updated_at) VALUES (?, 'personal', 'u1', 'old', 'ready', ?, ?, ?, ?)`).run(id, lat, lat, now, now);
+  old('sp_old1', 43.1);
+  old('sp_old2', null);
+  const store = createSavedStore(sqlOver(db));
+  createSavedStore(sqlOver(db)); // running the migration twice is harmless
+  assert.equal(presentPlace(store.get('sp_old1')).precision, 'place');
+  assert.equal(presentPlace(store.get('sp_old2')).precision, null);
+  const fresh = store.insert({ scope: 'personal', user_id: 'u1', name: 'new', status: 'pending', lat: 1, lng: 2, precision: 'area' });
+  assert.equal(presentPlace(fresh).precision, 'area');
+  assert.equal(store.list('personal', 'u1').length, 3);
 });
 
 test('no AI binding, an AI error (3036), or low confidence all end as pending, never as an API failure', async () => {

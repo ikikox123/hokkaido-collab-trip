@@ -70,6 +70,7 @@ async function extractColumns(hub, { url, text }) {
       address: geo?.address ?? '',
       lat: geo?.lat ?? null,
       lng: geo?.lng ?? null,
+      precision: geo?.precision ?? null,
       status: result.status,
       confidence: fields.confidence,
     },
@@ -184,6 +185,7 @@ export async function handleSaved(hub, request, url) {
       const geo = await hub.placeGeocoder?.({ ...row, ...patch.set });
       set.lat = geo?.lat ?? null;
       set.lng = geo?.lng ?? null;
+      set.precision = geo?.precision ?? null;
       set.address = geo?.address ?? '';
     }
     return json({ place: present(hub, hub.saved.update(row.id, set)) });

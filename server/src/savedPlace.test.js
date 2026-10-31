@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   AI_INPUT_CHARS, AI_MAX_TOKENS, aiExtract, buildAiRequest, buildExtractionInput, canonicalSourceUrl, cleanPlacePatch,
   decideExtraction, extractHtmlMeta, googleMapsSearchUrl, heuristicExtract, parseAiAnswer, parseIngestBody,
-  readLimitedText, resultMessage,
+  normalizeAreaName, readLimitedText, resultMessage, statusWithGeo,
 } from './savedPlace.js';
 import { runIngest } from './savedIngest.js';
 import { createPlaceGeocoder, MIN_INTERVAL_MS } from './nominatimGeocode.js';
@@ -90,8 +90,9 @@ test('no AI binding or an AI error falls back to pending', async () => {
 });
 
 test('low confidence is pending, high is ready', async () => {
-  const low = await runIngest({ text: '店', ai: goodAi({ confidence: 0.59 }) });
-  const high = await runIngest({ text: '店', ai: goodAi({ confidence: 0.6 }) });
+  const geocode = async () => ({ lat: 1, lng: 2, address: 'x', precision: 'place' });
+  const low = await runIngest({ text: '店', ai: goodAi({ confidence: 0.59 }), geocode });
+  const high = await runIngest({ text: '店', ai: goodAi({ confidence: 0.6 }), geocode });
   assert.equal(low.status, 'pending');
   assert.equal(high.status, 'ready');
   assert.equal(high.via, 'ai');
@@ -106,6 +107,7 @@ test('a failed or login-walled page still extracts from the shared text', async 
     text: '空 札幌',
     ai: { run: async (model, req) => { asked += 1; assert.match(req.messages[1].content, /Shared text: 空 札幌/); return goodAi().run(); } },
     fetchImpl: async () => new Response('login', { status: 403, headers: { 'content-type': 'text/html' } }),
+    geocode: async () => ({ lat: 1, lng: 2, address: 'x', precision: 'place' }),
   });
   assert.equal(out.fetched, 'failed');
   assert.equal(out.status, 'ready');
@@ -178,7 +180,7 @@ test('Nominatim: custom User-Agent, one request per second, no Google', async ()
   const c = clock();
   const geocode = createPlaceGeocoder({ fetchImpl: nominatim([{ lat: '43.05', lon: '141.35', display_name: '札幌市' }]), now: c.now, sleep: c.sleep });
   const out = await Promise.all([geocode({ name: 'A', city: '札幌' }), geocode({ name: 'B', city: '札幌' }), geocode({ name: 'C', city: '札幌' })]);
-  assert.deepEqual(out[0], { lat: 43.05, lng: 141.35, address: '札幌市' });
+  assert.deepEqual(out[0], { lat: 43.05, lng: 141.35, address: '札幌市', precision: 'place' });
   assert.equal(nominatim.calls.length, 3);
   assert.match(nominatim.calls[0].init.headers['User-Agent'], /hokkaido/);
   assert.match(nominatim.calls[0].url, /^https:\/\/nominatim\.openstreetmap\.org\/search\?/);
@@ -215,4 +217,113 @@ test('Nominatim: HTTP errors and junk coordinates leave the place without coordi
   const junk = createPlaceGeocoder({ fetchImpl: async () => Response.json([{ lat: '999', lon: 'x' }]), now: c.now, sleep: c.sleep });
   assert.equal(await junk({ name: 'B' }), null);
   assert.equal(await junk({}), null);
+});
+
+// ---------- Nominatim fallback ladder ----------
+
+/** fetch stub: answers by a function of the q / countrycodes params and records every call. */
+function ladder(answer) {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const q = new URL(url).searchParams;
+    calls.push({ q: q.get('q'), cc: q.get('countrycodes') });
+    const hit = answer(q.get('q'), q.get('countrycodes'));
+    return Response.json(hit ? [{ lat: '43.1', lon: '141.2', display_name: hit }] : []);
+  };
+  return { calls, fetchImpl };
+}
+const SHOP = { name: '空', district: '中央区', city: '札幌', country: '日本' };
+
+test('Nominatim ladder: tries name+district+city+country, name+city, name only (jp), then district+city, then city', async () => {
+  const l = ladder(() => null);
+  const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: clock().now, sleep: clock().sleep });
+  assert.equal(await geocode(SHOP), null);
+  assert.deepEqual(l.calls, [
+    { q: '空 中央区 札幌 日本', cc: null },
+    { q: '空 札幌', cc: null },
+    { q: '空', cc: 'jp' },
+  ], 'stops after 3 requests');
+});
+
+test('Nominatim ladder: the first hit stops the search and is a "place"', async () => {
+  const l = ladder((q) => (q === '空 札幌' ? 'shop' : null));
+  const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: clock().now, sleep: clock().sleep });
+  const out = await geocode(SHOP);
+  assert.equal(out.precision, 'place');
+  assert.equal(out.address, 'shop');
+  assert.equal(l.calls.length, 2);
+});
+
+test('Nominatim ladder: area steps come last and are marked "area"; duplicate steps are skipped', async () => {
+  const l = ladder((q) => (q === '中央区 札幌' ? '中央区' : null));
+  const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: clock().now, sleep: clock().sleep });
+  // no shop name: only the district and city steps exist
+  const out = await geocode({ district: '中央区', city: '札幌', country: '日本' });
+  assert.deepEqual(l.calls, [{ q: '中央区 札幌', cc: 'jp' }]);
+  assert.equal(out.precision, 'area');
+
+  const cityOnly = ladder((q) => (q === '札幌' ? '札幌市' : null));
+  const g2 = createPlaceGeocoder({ fetchImpl: cityOnly.fetchImpl, now: clock().now, sleep: clock().sleep });
+  const out2 = await g2({ district: '中央区', city: '札幌' });
+  assert.deepEqual(cityOnly.calls.map((c) => c.q), ['中央区 札幌', '札幌']);
+  assert.equal(out2.precision, 'area');
+});
+
+test('Nominatim ladder: no countrycodes unless the country is Japan', async () => {
+  const l = ladder(() => null);
+  const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: clock().now, sleep: clock().sleep });
+  await geocode({ name: 'Cafe', city: 'Paris', country: 'France' });
+  assert.ok(l.calls.every((c) => c.cc === null));
+});
+
+test('Nominatim ladder: every step shares the 1/s throttle and the cache', async () => {
+  const l = ladder(() => null);
+  const c = clock();
+  const geocode = createPlaceGeocoder({ fetchImpl: l.fetchImpl, now: c.now, sleep: c.sleep });
+  await geocode(SHOP);
+  assert.equal(c.sleeps.length, 2, 'requests 2 and 3 waited');
+  assert.ok(c.sleeps.every((ms) => ms > 0 && ms <= MIN_INTERVAL_MS));
+  // cached misses cost no budget, so the second try reaches the two area steps
+  await geocode(SHOP);
+  assert.deepEqual(l.calls.slice(3).map((x) => x.q), ['中央区 札幌', '札幌']);
+  await geocode(SHOP);
+  assert.equal(l.calls.length, 5, 'everything is cached now');
+});
+
+test('Nominatim ladder: a timeout stops the whole lookup and is not cached', async () => {
+  let n = 0;
+  const geocode = createPlaceGeocoder({ fetchImpl: async () => { n += 1; throw new Error('timeout'); }, now: clock().now, sleep: clock().sleep });
+  assert.equal(await geocode(SHOP), null);
+  assert.equal(n, 1);
+  assert.equal(await geocode(SHOP), null);
+  assert.equal(n, 2);
+});
+
+test('rough (area) position or no position makes the place pending, a precise one keeps the status', () => {
+  assert.equal(statusWithGeo('ready', null), 'pending');
+  assert.equal(statusWithGeo('ready', { lat: 1, lng: 2, precision: 'area' }), 'pending');
+  assert.equal(statusWithGeo('ready', { lat: 1, lng: 2, precision: 'place' }), 'ready');
+  assert.equal(statusWithGeo('pending', { lat: 1, lng: 2, precision: 'place' }), 'pending');
+});
+
+test('runIngest: a confident answer with only an area position is pending; a place position is ready', async () => {
+  const ai = { run: async () => ({ response: { name: '空', country: '日本', city: '札幌', district: '中央区', type: 'eat', confidence: 0.95 } }) };
+  const area = await runIngest({ text: '空', ai, geocode: async () => ({ lat: 1, lng: 2, address: 'x', precision: 'area' }) });
+  assert.equal(area.status, 'pending');
+  assert.equal(area.geo.precision, 'area');
+  const none = await runIngest({ text: '空', ai, geocode: async () => null });
+  assert.equal(none.status, 'pending');
+  const place = await runIngest({ text: '空', ai, geocode: async () => ({ lat: 1, lng: 2, address: 'x', precision: 'place' }) });
+  assert.equal(place.status, 'ready');
+});
+
+test('English / romaji city and ward names become Japanese; unknown names stay', () => {
+  for (const [from, to] of [
+    ['Sapporo', '札幌'], ['sapporo city', '札幌'], ['Otaru', '小樽'], ['Asahikawa', '旭川'], ['Hakodate', '函館'],
+    ['Biei', '美瑛'], ['Furano', '富良野'], ['Niseko', 'ニセコ'], ['Chitose', '千歳'], ['Tokyo', '東京'],
+    ['Osaka', '大阪'], ['Kyoto', '京都'], ['Chuo-ku', '中央区'], ['Chūō Ward', '中央区'], ['Kita-ku', '北区'],
+    ['札幌市', '札幌'], ['札幌', '札幌'], ['Japan', '日本'], ['Atlantis', 'Atlantis'], ['ススキノ', 'ススキノ'],
+  ]) assert.equal(normalizeAreaName(from), to, from);
+  const parsed = parseAiAnswer({ response: { name: 'Cafe', country: 'Japan', city: 'Sapporo', district: 'Chuo-ku', type: 'eat', confidence: 0.9 } });
+  assert.deepEqual([parsed.country, parsed.city, parsed.district], ['日本', '札幌', '中央区']);
 });

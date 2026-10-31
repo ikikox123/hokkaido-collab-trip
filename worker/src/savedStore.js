@@ -26,6 +26,7 @@ export function presentPlace(row, { ownerName = null } = {}) {
     address: row.address,
     lat: row.lat ?? null,
     lng: row.lng ?? null,
+    precision: row.precision || (row.lat != null ? 'place' : null),
     status: row.status,
     confidence: row.confidence,
     sourceUrl: row.source_url || null,
@@ -65,6 +66,11 @@ export function createSavedStore(sql) {
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`);
+  try {
+    sql.exec('ALTER TABLE saved_places ADD COLUMN precision TEXT'); // older rows keep NULL
+  } catch {
+    // column already there
+  }
   sql.exec('CREATE INDEX IF NOT EXISTS saved_places_owner ON saved_places (scope, user_id)');
 
   const all = (query, ...args) => sql.exec(query, ...args).toArray();
@@ -125,6 +131,7 @@ export function createSavedStore(sql) {
         address: '',
         lat: null,
         lng: null,
+        precision: null,
         source_url: '',
         source_text: '',
         confidence: 0,
@@ -135,10 +142,10 @@ export function createSavedStore(sql) {
       };
       sql.exec(
         `INSERT INTO saved_places (id, scope, user_id, name, type, country, city, district, address, lat, lng,
-           source_url, source_text, status, confidence, shared_from, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           precision, source_url, source_text, status, confidence, shared_from, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         full.id, full.scope, full.user_id, full.name, full.type, full.country, full.city, full.district, full.address,
-        full.lat, full.lng, full.source_url, full.source_text, full.status, full.confidence, full.shared_from,
+        full.lat, full.lng, full.precision, full.source_url, full.source_text, full.status, full.confidence, full.shared_from,
         full.created_at, full.updated_at,
       );
       return this.get(full.id);
@@ -146,7 +153,7 @@ export function createSavedStore(sql) {
     update(id, set) {
       const columns = Object.keys(set);
       if (!columns.length) return this.get(id);
-      const allowed = new Set(['name', 'type', 'country', 'city', 'district', 'address', 'lat', 'lng', 'source_url', 'source_text', 'status', 'confidence']);
+      const allowed = new Set(['name', 'type', 'country', 'city', 'district', 'address', 'lat', 'lng', 'precision', 'source_url', 'source_text', 'status', 'confidence']);
       const safe = columns.filter((c) => allowed.has(c));
       sql.exec(
         `UPDATE saved_places SET ${safe.map((c) => `${c} = ?`).join(', ')}, updated_at = ? WHERE id = ?`,
