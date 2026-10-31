@@ -146,7 +146,7 @@ export function LanguagePill() {
       <button
         ref={triggerRef}
         type="button"
-        className="lang-pill cute-press inline-flex h-11 shrink-0 items-center gap-1 rounded-full border-2 border-ink bg-white px-2 text-sm font-bold text-ink shadow-sticker-sm"
+        className="lang-pill btn btn-secondary cute-press shrink-0 !gap-1 !px-2.5"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={id}

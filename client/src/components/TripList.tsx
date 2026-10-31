@@ -341,7 +341,7 @@ export function TripList({
               <button
                 type="button"
                 onClick={onPickSaved}
-                className="cute-pop inline-flex min-h-touch items-center gap-1.5 rounded-full border-2 border-ink bg-white px-3 text-sm font-bold text-ink shadow-sticker"
+                className="btn btn-secondary cute-pop !px-3"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M6 3h12v18l-6-4-6 4z" />
@@ -352,7 +352,7 @@ export function TripList({
             <button
               type="button"
               onClick={onAdd}
-              className="cute-pop min-h-touch min-w-touch rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker"
+              className="btn btn-primary cute-pop"
             >
               {t('addStopButton')}
             </button>

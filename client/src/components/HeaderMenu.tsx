@@ -155,7 +155,7 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
               </h2>
               <button
                 type="button"
-                className="cute-press flex h-11 w-11 items-center justify-center rounded-full border-2 border-ink bg-white text-ink"
+                className="btn btn-icon cute-press shrink-0"
                 aria-label={t('headerMenuClose')}
                 onClick={close}
               >
@@ -217,7 +217,7 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
                       </p>
                       <button
                         type="button"
-                        className="cute-pop min-h-touch shrink-0 rounded-full border-2 border-ink bg-butter-100 px-4 text-sm font-bold text-ink shadow-sticker-sm"
+                        className="btn btn-secondary cute-pop shrink-0"
                         onClick={() => {
                           close();
                           account.onLogout();
@@ -246,7 +246,7 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
                   ) : (
                     <button
                       type="button"
-                      className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker-sm"
+                      className="btn btn-primary cute-pop w-full"
                       onClick={() => {
                         close();
                         onLogin?.();
@@ -269,7 +269,7 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
       <button
         ref={triggerRef}
         type="button"
-        className="header-menu-trigger cute-press relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-white text-ink shadow-sticker-sm"
+        className="header-menu-trigger btn btn-icon cute-press relative shrink-0"
         aria-expanded={open}
         aria-controls={id}
         aria-haspopup="dialog"

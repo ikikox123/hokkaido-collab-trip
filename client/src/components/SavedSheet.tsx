@@ -49,7 +49,7 @@ export function SavedSheet({
           </h2>
           <button
             type="button"
-            className="cute-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-white text-ink"
+            className="btn btn-icon cute-press shrink-0"
             aria-label={closeLabel}
             onClick={onClose}
           >

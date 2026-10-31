@@ -46,7 +46,7 @@ function IconButton({ label, onClick, children, tone = '' }: { label: string; on
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`cute-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-white text-ink ${tone}`}
+      className={`btn btn-icon cute-press shrink-0 ${tone}`}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {children}
@@ -77,7 +77,7 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
   const located = place.lat != null && place.lng != null;
   return (
     <li
-      className="saved-card flex w-[17.5rem] shrink-0 snap-start flex-col rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm"
+      className="saved-card flex w-[85%] max-w-[20rem] shrink-0 sm:w-[17.5rem] snap-start flex-col rounded-2xl border-2 border-ink bg-white p-3 shadow-sticker-sm"
       style={{ '--i': Math.min(index, 8) } as CSSProperties}
       data-pending={place.status === 'pending' || undefined}
       onClick={mode === 'pick' ? (event) => { if (!(event.target as HTMLElement).closest('a,button')) onPick(place); } : undefined}
@@ -120,7 +120,7 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
           <button
             type="button"
             onClick={() => onPick(place)}
-            className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 px-3 text-sm font-bold text-ink shadow-sticker-sm"
+            className="btn btn-primary cute-pop w-full"
           >
             {t('savedPickAdd', { day })}
           </button>
@@ -136,7 +136,7 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
               type="button"
               disabled={busy}
               onClick={() => onShare(place)}
-              className="cute-pop min-h-touch min-w-0 flex-1 truncate rounded-full border-2 border-ink bg-lavender-300 px-2 text-sm font-bold text-ink shadow-sticker-sm disabled:opacity-50"
+              className="btn btn-primary cute-pop min-w-0 flex-1 truncate !px-2 disabled:opacity-50"
             >
               {t('savedShare')}
             </button>
@@ -286,7 +286,7 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
           </div>
           <button
             type="button"
-            className="cute-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-white text-ink"
+            className="btn btn-icon cute-press shrink-0"
             aria-label={t('close')}
             onClick={onClose}
           >
@@ -433,7 +433,7 @@ function RerunSheet({ token, place, onClose, onDone }: { token: string; place: S
         <button
           type="submit"
           disabled={busy}
-          className="cute-pop mt-3 min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker-sm disabled:opacity-50"
+          className="btn btn-primary cute-pop mt-3 w-full disabled:opacity-50"
         >
           {busy ? t('savedRerunWorking') : t('savedRerunGo')}
         </button>
@@ -494,7 +494,7 @@ function EditSheet({ token, place, onClose, onDone }: { token: string; place: Sa
         <button
           type="submit"
           disabled={busy}
-          className="cute-pop min-h-touch w-full rounded-full border-2 border-ink bg-lavender-300 px-4 text-sm font-bold text-ink shadow-sticker-sm disabled:opacity-50"
+          className="btn btn-primary cute-pop w-full disabled:opacity-50"
         >
           {t('savedSaveConfirm')}
         </button>
