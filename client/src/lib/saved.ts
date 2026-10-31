@@ -3,6 +3,8 @@
  * (the Express server answers with the app shell, not JSON), so the UI can quietly hide itself.
  */
 
+import { cleanDistrict, normalizeCityName } from '../../../server/src/areaName.js';
+
 export type PlaceType = 'eat' | 'sight' | 'stay' | 'shop';
 export type SavedScope = 'mine' | 'shared';
 
@@ -26,6 +28,8 @@ export type SavedPlace = {
   hasText: boolean;
   addedBy?: string | null;
   mine?: boolean;
+  /** Personal places only: a copy of this place is already in the trip's shared list. Absent on older servers. */
+  sharedToTrip?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -85,20 +89,37 @@ export const patchSaved = (
 export type PlaceGroup = { key: string; label: string | null; places: SavedPlace[] };
 
 /**
- * Group by district (falling back to city, then "no area"). Groups keep the order of their
- * newest place; the no-area group is last. Places inside a group keep the server's order.
+ * City and district as shown: the city with its 市 (札幌 -> 札幌市) and only a real administrative district
+ * (区 / 町 / 村). Older rows may hold a street address ("中央区北1条西3丁目") or a street name (狸小路) there.
  */
-export function groupByDistrict(places: SavedPlace[]): PlaceGroup[] {
-  const groups = new Map<string, PlaceGroup>();
+export function areaOf(place: Pick<SavedPlace, 'city' | 'district'>): { city: string; district: string } {
+  const city = normalizeCityName(place.city);
+  return { city, district: cleanDistrict(place.district, city) };
+}
+
+/**
+ * Two levels: city, then district ("札幌市 › 中央区"). A city without districts (小樽市) is one group.
+ * Groups of a city sit together, in the order of their newest place; places without a city come last,
+ * then places without any area. Places inside a group keep the server's order.
+ */
+export function groupByArea(places: SavedPlace[]): PlaceGroup[] {
+  const cities = new Map<string, Map<string, PlaceGroup>>();
   for (const place of places) {
-    const label = place.district.trim() || place.city.trim() || null;
-    const key = label ?? '';
-    const group = groups.get(key) ?? { key, label, places: [] };
+    const { city, district } = areaOf(place);
+    const districts = cities.get(city) ?? new Map<string, PlaceGroup>();
+    const group = districts.get(district) ?? { key: `${city}|${district}`, label: city && district ? `${city} › ${district}` : city || district || null, places: [] };
     group.places.push(place);
-    groups.set(key, group);
+    districts.set(district, group);
+    cities.set(city, districts);
   }
-  const list = [...groups.values()];
-  return [...list.filter((g) => g.label), ...list.filter((g) => !g.label)];
+  const groups: PlaceGroup[] = [];
+  for (const districts of cities.values()) {
+    const list = [...districts.values()];
+    // inside a city the group without a district comes after those with one
+    groups.push(...list.filter((g) => g.key.split('|')[1]), ...list.filter((g) => !g.key.split('|')[1]));
+  }
+  const rank = (g: PlaceGroup) => (g.key.split('|')[0] ? 0 : g.label ? 1 : 2);
+  return groups.map((g, i) => ({ g, i })).sort((a, b) => rank(a.g) - rank(b.g) || a.i - b.i).map(({ g }) => g);
 }
 
 const NOISE_PART = /^(?:\d{3}-?\d{4}|日本|japan|北海道|.+振興局|.+地方)$/i;
@@ -109,9 +130,10 @@ export function shortAddress(address: string): string {
   return parts.slice(0, 2).join('・');
 }
 
-/** "札幌・中央区", skipping empty parts. */
+/** "札幌市・中央区", skipping empty parts. */
 export function areaLine(place: Pick<SavedPlace, 'country' | 'city' | 'district'>): string {
-  return [place.city, place.district].map((v) => v.trim()).filter(Boolean).join('・');
+  const { city, district } = areaOf(place);
+  return [city, district].filter(Boolean).join('・');
 }
 
 export type StopFromSaved = {
@@ -138,8 +160,8 @@ export function nextStopTime(lastTime: string | null | undefined): string {
 
 /**
  * Stop fields for trip:add. Without coordinates the fallback position is used (the card says so).
- * Notes: "(pending) type・where" then the map link on its own line. The link is never cut: if it
- * does not fit it is left out and only the text is trimmed.
+ * Notes: "(pending) type・where" only. The map link is not put in the note: the stop has its own
+ * coordinates, and a long percent-encoded URL would show up on the share page and in the PDF.
  */
 export function stopFromSaved(
   place: SavedPlace,
@@ -154,20 +176,11 @@ export function stopFromSaved(
   const where = !located || place.precision === 'area' ? area : area || shortAddress(place.address);
   const body = [typeLabel, where].filter(Boolean).join('・').replace(/\s+/g, ' ').trim();
   const head = [exact ? '' : pendingLabel, body].filter(Boolean).join('');
-  const link = place.mapsUrl || '';
-  let notes: string;
-  if (link && chars(link).length + 1 < NOTE_MAX) {
-    const room = NOTE_MAX - chars(link).length - 1;
-    const text = chars(head).length > room ? chars(head).slice(0, room).join('') : head;
-    notes = text ? `${text}\n${link}` : link;
-  } else {
-    notes = chars(head).slice(0, NOTE_MAX).join('');
-  }
   return {
     title: place.name,
     lat: located ? (place.lat as number) : fallback.lat,
     lng: located ? (place.lng as number) : fallback.lng,
-    notes,
+    notes: chars(head).slice(0, NOTE_MAX).join(''),
     located,
   };
 }

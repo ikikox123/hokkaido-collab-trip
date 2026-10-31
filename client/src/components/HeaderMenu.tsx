@@ -165,13 +165,6 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
               </button>
             </div>
             <div className="menu-body min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,var(--safe-bottom))] pt-1">
-              <section className="menu-section">
-                <h3 className="menu-heading">{t('menuShareSection')}</h3>
-                <div className="grid gap-1">
-                  <ShareActionList scope={shareScope} lang={lang} itemClassName={menuItemClass} onBeforeExport={close} />
-                </div>
-              </section>
-              {children}
               {saved && (
                 <section className="menu-section">
                   <h3 className="menu-heading">{t('savedTitle')}</h3>
@@ -193,6 +186,13 @@ export function HeaderMenu({ open, onOpenChange, shareScope, lang, account, onLo
                   </button>
                 </section>
               )}
+              <section className="menu-section">
+                <h3 className="menu-heading">{t('menuShareSection')}</h3>
+                <div className="grid gap-1">
+                  <ShareActionList scope={shareScope} lang={lang} itemClassName={menuItemClass} onBeforeExport={close} />
+                </div>
+              </section>
+              {children}
               <section className="menu-section">
                 <h3 className="menu-heading">{t('menuDisplaySection')}</h3>
                 <div className="space-y-3">

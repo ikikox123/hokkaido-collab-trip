@@ -5,7 +5,7 @@ import type { MessageKey } from '../i18n/messages.ts';
 import {
   areaLine,
   deleteSaved,
-  groupByDistrict,
+  groupByArea,
   listSaved,
   patchSaved,
   reextractSaved,
@@ -102,11 +102,11 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] font-semibold">
         {place.sourceUrl && (
-          <a href={place.sourceUrl} target="_blank" rel="noopener noreferrer" className="saved-link inline-flex min-h-[32px] items-center text-ice-600 underline decoration-2 underline-offset-2">
+          <a href={place.sourceUrl} target="_blank" rel="noopener noreferrer" className="saved-link inline-flex min-h-touch items-center text-ice-600 underline decoration-2 underline-offset-2">
             {t('savedSource')}
           </a>
         )}
-        <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer" className="saved-link inline-flex min-h-[32px] items-center text-ice-600 underline decoration-2 underline-offset-2">
+        <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer" className="saved-link inline-flex min-h-touch items-center text-ice-600 underline decoration-2 underline-offset-2">
           {t('savedGoogleMap')}
         </a>
       </div>
@@ -124,7 +124,11 @@ function PlaceCard({ place, index, mode, canShare, busyId, day, onShare, onDelet
         </div>
       ) : (
         <div className="mt-auto flex items-center gap-1.5 pt-3">
-          {!shared && canShare ? (
+          {!shared && canShare && place.sharedToTrip ? (
+            <span className="saved-shared-mark flex min-h-touch min-w-0 flex-1 items-center justify-center truncate rounded-full border-2 border-dashed border-ink/50 bg-mint-100 px-2 text-sm font-bold text-ink/70">
+              {t('savedSharedMark')}
+            </span>
+          ) : !shared && canShare ? (
             <button
               type="button"
               disabled={busy}
@@ -171,7 +175,7 @@ type Props = {
   onPick?: (place: SavedPlace) => void;
 };
 
-/** Full-screen list of saved places, grouped by district; each group scrolls sideways with snap. */
+/** Full-screen list of saved places, grouped by city and district; each group scrolls sideways with snap. */
 export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onPick }: Props) {
   const { t } = useI18n();
   const [scope, setScope] = useState<SavedScope>('mine');
@@ -224,7 +228,7 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
   if (!open) return null;
 
   const places = lists[scope];
-  const groups = places ? groupByDistrict(places) : [];
+  const groups = places ? groupByArea(places) : [];
   const sharedAvailable = canShare;
 
   function replace(updated: SavedPlace) {
@@ -239,7 +243,8 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
     const result = await shareSaved(token, place.id);
     setBusyId(null);
     if (result?.ok) {
-      flash(result.data.already ? t('savedShareAlready') : t('savedShareDone'));
+      flash(t('savedShareDone'));
+      setLists((current) => ({ ...current, mine: (current.mine ?? []).map((p) => (p.id === place.id ? { ...p, sharedToTrip: true } : p)) }));
       void load('shared');
     } else flash(localizeError(result && !result.ok ? result.error : t('savedLoadFailed'), t));
   }
@@ -304,7 +309,7 @@ export function SavedPlaces({ open, onClose, token, mode, canShare, day = 1, onP
                   type="button"
                   aria-pressed={scope === id}
                   onClick={() => setScope(id)}
-                  className="cute-press relative min-h-[40px] rounded-full px-2 text-[15px] font-bold text-ink"
+                  className="cute-press relative min-h-touch rounded-full px-2 text-[15px] font-bold text-ink"
                 >
                   {label}
                   {lists[id] && lists[id]!.length > 0 && <span className="ml-1.5 text-xs font-semibold text-slate-500">{lists[id]!.length}</span>}
