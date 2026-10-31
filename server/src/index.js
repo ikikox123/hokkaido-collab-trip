@@ -313,8 +313,16 @@ function tripForClient() {
   return { ...tripState, members: presentMembers(tripState.members), fx: presentFx(tripState.fx) };
 }
 
+/** A Shortcut key (hks_...) on a socket message: say so; never `session:required` (the client would log the user out). */
+function refuseSavedKey(socket, ack) {
+  socket.emit('error:auth', { error: KEY_ONLY_FOR_SAVING });
+  ackResult(ack, { ok: false, error: KEY_ONLY_FOR_SAVING });
+  return null;
+}
+
 function requireTripMember(socket, token, ack) {
   const parsed = parseToken(token);
+  if (parsed.status === 'saved-key') return refuseSavedKey(socket, ack);
   if (parsed.status === 'missing-account') {
     socket.emit('session:required');
     const error = '登入已過期';
@@ -477,6 +485,10 @@ io.on('connection', (socket) => {
       joinedRoom = null;
     }
     const parsed = parseToken(token);
+    if (parsed.status === 'saved-key') {
+      refuseSavedKey(socket, ack);
+      return;
+    }
     if (parsed.status !== 'ok') {
       if (token) socket.emit('session:required');
       const error = parsed.status === 'missing' ? '請先登入' : '登入已過期';
@@ -682,6 +694,7 @@ io.on('connection', (socket) => {
 
   function beginAccountAdd(token, username, ack) {
     const parsed = parseToken(token);
+    if (parsed.status === 'saved-key') return refuseSavedKey(socket, ack);
     if (parsed.status === 'missing-account') {
       socket.emit('session:required');
       const error = '登入已過期';
@@ -838,6 +851,7 @@ io.on('connection', (socket) => {
 
 function parseToken(token) {
   if (!token || typeof token !== 'string') return { status: 'missing' };
+  if (isSavedKeyToken(token)) return { status: 'saved-key' };
   let user;
   try {
     user = jwt.verify(token, JWT_SECRET);

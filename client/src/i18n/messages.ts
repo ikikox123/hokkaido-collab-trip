@@ -532,6 +532,7 @@ export const catalog = {
   passwordTooLong: { 'zh-Hant': '密碼請勿超過 72 個字元', ja: 'パスワードは 72 バイト以内にしてください', en: 'Use at most 72 bytes for the password' },
   notLoggedIn: { 'zh-Hant': '未登入', ja: 'ログインしていません', en: 'Not logged in' },
   sessionExpired: { 'zh-Hant': '登入已過期', ja: 'ログインの期限が切れました', en: 'Login expired' },
+  keyOnlyForSaving: { 'zh-Hant': '這把金鑰只能用來收藏', ja: 'このキーは保存専用です', en: 'This key can only be used to save places' },
   queryTooLong: { 'zh-Hant': '查詢過長', ja: '検索文字が長すぎます', en: 'That search is too long' },
   noGoogleKey: { 'zh-Hant': '伺服器未設定 Google 金鑰', ja: 'サーバーに Google のキーが設定されていません', en: 'The server has no Google key configured' },
   coordsIncomplete: { 'zh-Hant': '座標不完整', ja: '座標が不完全です', en: 'Coordinates are incomplete' },

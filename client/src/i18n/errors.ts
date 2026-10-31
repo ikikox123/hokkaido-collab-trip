@@ -22,6 +22,7 @@ export const KNOWN_ERRORS: Record<string, MessageKey> = {
   '密碼請勿超過 72 個字元': 'passwordTooLong',
   未登入: 'notLoggedIn',
   登入已過期: 'sessionExpired',
+  這把金鑰只能用來收藏: 'keyOnlyForSaving',
   請輸入地點: 'enterPlace',
   '請從建議清單選一個地點，或按「伺服器搜尋」': 'pickSuggestion',
   請填站點名稱: 'enterStopName',

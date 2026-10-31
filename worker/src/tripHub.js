@@ -123,6 +123,7 @@ export class TripHub extends DurableObject {
 
   async parseToken(token) {
     if (!token || typeof token !== 'string') return { status: 'missing' };
+    if (isSavedKeyToken(token)) return { status: 'saved-key' };
     const user = await verifyJwt(token, this.jwtSecret);
     if (!user || typeof user.id !== 'string' || !user.id) return { status: 'invalid' };
     if (!this.users.publicById(user.id)) return { status: 'missing-account' };
@@ -530,8 +531,16 @@ export class TripHub extends DurableObject {
     if (room) this.emitPresence(room, ws);
   }
 
+  /** A Shortcut key (hks_...) on a WebSocket message: say so; never `session:required` (the client would log the user out). */
+  refuseSavedKey(ws, ack) {
+    this.send(ws, 'error:auth', { error: KEY_ONLY_FOR_SAVING });
+    ack({ ok: false, error: KEY_ONLY_FOR_SAVING });
+    return null;
+  }
+
   async requireTripMember(ws, token, ack) {
     const parsed = await this.parseToken(token);
+    if (parsed.status === 'saved-key') return this.refuseSavedKey(ws, ack);
     if (parsed.status === 'missing-account') {
       this.send(ws, 'session:required');
       const error = '登入已過期';
@@ -565,6 +574,7 @@ export class TripHub extends DurableObject {
 
   async beginAccountAdd(ws, token, username, ack) {
     const parsed = await this.parseToken(token);
+    if (parsed.status === 'saved-key') return this.refuseSavedKey(ws, ack);
     if (parsed.status === 'missing-account') {
       this.send(ws, 'session:required');
       const error = '登入已過期';
@@ -620,6 +630,10 @@ export class TripHub extends DurableObject {
         this.emitPresence(prev);
       }
       const parsed = await this.parseToken(token);
+      if (parsed.status === 'saved-key') {
+        this.refuseSavedKey(ws, ack);
+        return;
+      }
       if (parsed.status !== 'ok') {
         if (token) this.send(ws, 'session:required');
         ack({ ok: false, error: parsed.status === 'missing' ? '請先登入' : '登入已過期' });
