@@ -684,3 +684,54 @@ test('ingest stores the shop position (precision poi) when the real geocoder fin
   assert.equal(out.place.lat, 43.0605);
   assert.equal(out.status, 'ready');
 });
+
+test('two ingests of the same link at once save one place; the slower one answers duplicate', async () => {
+  let n = 0;
+  const fetchImpl = async () => {
+    n += 1;
+    if (n === 1) await new Promise((r) => setTimeout(r, 40));
+    return new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  };
+  const { call, tokens, makeKey } = await makeHub({ ai: goodAi(), fetchImpl });
+  const key = await makeKey();
+  const body = { url: 'https://www.threads.net/@a/post/Race1', text: '空' };
+  const [a, b] = await Promise.all([ingest(call, key, body), ingest(call, key, body)]);
+  const [ja, jb] = [await a.json(), await b.json()];
+  assert.equal([ja, jb].filter((j) => j.created === true).length, 1);
+  assert.equal([ja, jb].filter((j) => j.duplicate === true).length, 1);
+  const list = await mineOf(call, tokens.alice);
+  assert.equal(list.length, 1);
+});
+
+test('an edit or re-run whose place was deleted while it waited answers 404, not 500', async () => {
+  let ctl;
+  const gate = { hold: false };
+  const geocode = async () => {
+    if (gate.hold) await ctl.remove();
+    return null;
+  };
+  const ai = goodAi();
+  const run = ai.run.bind(ai);
+  ai.run = async (...args) => {
+    if (gate.hold && gate.inAi) await ctl.remove();
+    return run(...args);
+  };
+  const { call, tokens, makeKey } = await makeHub({ ai, geocode });
+  ctl = {};
+  const key = await makeKey();
+  const made = await (await ingest(call, key, { text: '空 札幌' })).json();
+  const id = made.place.id;
+  ctl.remove = () => call('DELETE', `/api/saved/${gate.target}`, { token: tokens.alice });
+  gate.hold = true;
+  gate.target = id;
+  const patched = await call('PATCH', `/api/saved/${id}`, { token: tokens.alice, body: { name: '別的店' } });
+  assert.equal(patched.status, 404);
+
+  gate.hold = false;
+  const again = await (await ingest(call, key, { text: '空 札幌 another' })).json();
+  gate.hold = true;
+  gate.target = again.place.id;
+  gate.inAi = true; // the re-run waits in the model call
+  const rerun = await call('POST', `/api/saved/${again.place.id}/reextract`, { token: tokens.alice, body: { text: '新的描述' } });
+  assert.equal(rerun.status, 404);
+});

@@ -113,6 +113,19 @@ function findEditConflict(hub, row, next) {
   return findDuplicate(candidate, hub.saved.list('shared').filter((r) => r.id !== copy.id))?.row ?? null;
 }
 
+/**
+ * After an await: the row as it is now, or a Response when it is gone (404) or this user may no longer change it.
+ */
+function reloadForWrite(hub, id, user) {
+  const now = hub.saved.get(id);
+  if (!now || (now.scope === 'personal' && now.user_id !== user.id)) return { error: json({ error: '找不到這筆收藏' }, 404) };
+  if (now.scope === 'shared') {
+    if (!isMember(hub, user.id)) return { error: json({ error: NOT_MEMBER }, 403) };
+    if (now.user_id !== user.id) return { error: json({ error: SHARER_ONLY }, 403) };
+  }
+  return { row: now };
+}
+
 function conflictReply(other) {
   return json({ error: SAME_SHOP, duplicate: true, id: other.id }, 409);
 }
@@ -154,9 +167,11 @@ async function ingest(hub, request) {
   if (!result.sourceUrl && !body.text) return json({ error: '不支援這個網址，請一併分享文字內容' }, 400);
 
   // Short links are now expanded, and the position is known: same post or same shop as an earlier one.
-  const dupe = findDuplicate({ ...columns, source_url: result.sourceUrl }, mine);
+  // Another request may have saved while we awaited, so check against a fresh list, with no await before the insert.
+  const fresh = hub.saved.list('personal', userId);
+  const dupe = findDuplicate({ ...columns, source_url: result.sourceUrl }, fresh);
   if (dupe) return duplicateReply(hub, dupe.row);
-  if (mine.length >= MAX_PLACES_PER_LIST) return json({ error: FULL }, 409);
+  if (fresh.length >= MAX_PLACES_PER_LIST) return json({ error: FULL }, 409);
   const stored = hub.saved.insert({
     scope: 'personal',
     user_id: userId,
@@ -212,7 +227,7 @@ export async function handleSaved(hub, request, url) {
   }
 
   const id = parts[2];
-  const row = id ? hub.saved.get(id) : null;
+  let row = id ? hub.saved.get(id) : null;
   if (!row) return json({ error: '找不到這筆收藏' }, 404);
   // Someone else's private place looks the same as a missing one.
   if (row.scope === 'personal' && row.user_id !== user.id) return json({ error: '找不到這筆收藏' }, 404);
@@ -257,6 +272,9 @@ export async function handleSaved(hub, request, url) {
       set.precision = geo?.precision ?? null;
       set.address = geo?.address ?? '';
     }
+    const reloaded = reloadForWrite(hub, row.id, user);
+    if (reloaded.error) return reloaded.error;
+    row = reloaded.row;
     const touched = moved || ['name', 'lat', 'lng', 'address', 'source_url'].some((k) => k in patch.set);
     const conflict = touched ? findEditConflict(hub, row, set) : null;
     if (conflict) return conflictReply(conflict);
@@ -279,6 +297,10 @@ export async function handleSaved(hub, request, url) {
     }
     if (!text && !row.source_url) return json({ error: '請貼上描述文字' }, 400);
     const { columns } = await extractColumns(hub, { url: row.source_url, text });
+    const reloaded = reloadForWrite(hub, row.id, user);
+    if (reloaded.error) return reloaded.error;
+    row = reloaded.row;
+    if (row.scope !== 'personal') return json({ error: '找不到這筆收藏' }, 404);
     const conflict = findEditConflict(hub, row, columns);
     if (conflict) return conflictReply(conflict);
     const updated = hub.saved.update(row.id, { ...columns, source_text: text });

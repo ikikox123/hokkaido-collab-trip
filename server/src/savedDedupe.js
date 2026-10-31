@@ -1,6 +1,6 @@
 /**
  * Saved-place duplicates, pure. Two levels:
- *   link  - the same post (tracking parameters, www., threads.net/threads.com, trailing slash do not matter);
+ *   link  - the same post (tracking parameters, www., threads.net/threads.com, trailing slash do not matter; host is case-folded, the path is not: post codes are case-sensitive);
  *   shop  - same normalized name (category word stripped, case / width / spaces ignored) and either
  *           within SAME_SHOP_METERS of each other or the same stored address.
  * Rows only need { name, lat, lng, address, source_url }.
@@ -16,7 +16,7 @@ export function sourceKey(input) {
   try {
     const url = new URL(canonical);
     const host = url.hostname.toLowerCase().replace(/^www\./, '').replace(/^threads\.com$/, 'threads.net');
-    return `${host}${url.pathname}`.replace(/\/+$/, '').toLowerCase();
+    return `${host}${url.pathname}`.replace(/\/+$/, '');
   } catch {
     return '';
   }

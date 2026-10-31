@@ -18,6 +18,12 @@ test('link level: tracking parameters, www, threads.com / threads.net and traili
   assert.equal(findDuplicate({ source_url: 'https://instagram.com/p/abc?igsh=1' }, [{ source_url: 'https://www.instagram.com/p/abc/' }]).by, 'link');
 });
 
+test('link level: post codes that differ only in case are different posts', () => {
+  assert.notEqual(sourceKey('https://www.instagram.com/p/AbC'), sourceKey('https://www.instagram.com/p/abc'));
+  assert.notEqual(sourceKey('https://www.threads.net/@u/post/Xy'), sourceKey('https://www.threads.net/@u/post/xY'));
+  assert.equal(sourceKey('https://WWW.Instagram.com/p/AbC/'), sourceKey('https://instagram.com/p/AbC'));
+});
+
 test('link level: a short link is expanded with the safe fetcher; a failure keeps the original', async () => {
   const hops = [];
   const fetchImpl = async (url) => {
