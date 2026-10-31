@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { connectRealtime, type RealtimeSocket } from './lib/realtime';
 import type { FxView } from '../../server/src/fx.js';
 import { LoginModal } from './components/LoginModal';
@@ -116,74 +116,96 @@ function shortRange(part: string) {
   return `${Number(m1)}/${Number(d1)}–${Number(m2 ?? m1)}/${Number(d2)}`;
 }
 
-/**
- * Fits the title without an ugly cut: one line at full size, then one line a little smaller,
- * then two balanced lines, then two smaller lines. Watches size and text (also edits made outside React).
- */
-function useFitTitle() {
-  const ref = useRef<HTMLHeadingElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      for (const step of ['1', '2', '3', '4']) {
-        el.setAttribute('data-fit', step);
-        const over = step <= '2' ? el.scrollWidth > el.clientWidth + 1 : el.scrollHeight > el.clientHeight + 1;
-        if (!over) return;
-      }
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el.parentElement ?? el);
-    const mo = new MutationObserver(fit);
-    mo.observe(el, { childList: true, characterData: true, subtree: true });
-    return () => {
-      ro.disconnect();
-      mo.disconnect();
-    };
-  }, []);
-  return ref;
+const BookmarkIcon = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M6 3h12v18l-6-4-6 4z" />
+  </svg>
+);
+
+function MetaIcon({ kind }: { kind: 'people' | 'date' | 'other' }) {
+  const common = { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2.2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
+  if (kind === 'people')
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="8" r="3.2" />
+        <path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M16 5a3 3 0 0 1 0 6M18 14.8c1.8.7 3 2.4 3 5.2" />
+      </svg>
+    );
+  if (kind === 'date')
+    return (
+      <svg {...common}>
+        <rect x="3.5" y="5" width="17" height="15" rx="3" />
+        <path d="M8 3v4M16 3v4M3.5 10h17" />
+      </svg>
+    );
+  return null;
 }
 
 /**
- * Brand badge, the trip title as the hero (up to two lines), one quiet meta line,
- * then the language pill and the menu button.
+ * Brand badge, the trip title as the hero (up to two balanced lines), then the headcount and dates
+ * as two readable chips. Badge, language pill and menu button share one 44px centre line.
  */
-function AppHeader({ subtitle, menu, className = '' }: { subtitle?: string; menu: ReactNode; className?: string }) {
+function AppHeader({
+  subtitle,
+  menu,
+  saved,
+  className = '',
+}: {
+  subtitle?: string;
+  menu: ReactNode;
+  /** Saved places shortcut, shown from md up (the phone has it in the bottom bar). */
+  saved?: { label: string; onOpen: () => void };
+  className?: string;
+}) {
   const { locale } = useI18n();
   const heading = pageHeading(locale);
-  const titleRef = useFitTitle();
-  const meta = (subtitle ?? '')
+  const chips = (subtitle ?? '')
     .split('｜')
     .map((part) => shortRange(part.trim()))
     .filter(Boolean)
-    .join(' · ');
+    .map((text) => ({
+      text,
+      kind: /^\d+\s*(人|名|people|persons?|guests?)/i.test(text) || /\d+\s*(人|名)$/.test(text)
+        ? ('people' as const)
+        : /\d+\/\d+/.test(text)
+          ? ('date' as const)
+          : ('other' as const),
+    }));
   return (
     <header
       className={`app-header th-glass relative z-20 shrink-0 overflow-hidden border-b-2 border-ink bg-gradient-to-r from-lavender-100 via-snow-50 to-bluebell-100 text-ink ${className}`}
     >
       <HeaderSky />
-      <div className="relative flex min-h-[3.75rem] items-center gap-2.5 px-3 py-2 sm:px-4">
+      <div className="app-header-grid relative px-3 py-2 sm:px-4">
         <span className="brand-badge" aria-hidden>
           <span className="brand-mascot mascot-bob">
             <Mascot size={30} />
           </span>
           <span className="brand-mark">雪</span>
         </span>
-        <div className="min-w-0 flex-1">
-          <h1 ref={titleRef} className="header-title" title={heading}>
-            <span className="header-title-text">{heading}</span>
-          </h1>
-          {meta && (
-            <p className="header-meta" title={subtitle}>
-              {meta}
-            </p>
+        <h1 className="header-title" title={heading}>
+          <span className="header-title-text">{heading}</span>
+        </h1>
+        <div className="header-actions">
+          {saved && (
+            <button type="button" className="btn btn-primary cute-press header-saved" onClick={saved.onOpen}>
+              <BookmarkIcon size={18} />
+              {saved.label}
+            </button>
           )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
           <LanguagePill />
           {menu}
         </div>
+        {chips.length > 0 && (
+          <ul className="header-meta" title={subtitle}>
+            {chips.map((chip) => (
+              <li key={chip.text} className="header-chip">
+                <MetaIcon kind={chip.kind} />
+                <span>{chip.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </header>
   );
@@ -445,7 +467,7 @@ export default function App() {
           <p className="text-sm leading-relaxed text-slate-600" data-reveal>{t('collabNeedsLogin')}</p>
           <a
             href={shareLocation({ kind: 'all' }, locale)}
-            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-mint-200 px-3 text-base font-bold text-ink shadow-sticker"
+            className="btn btn-secondary cute-pop w-full"
           >
             {t('shareOpen')}
           </a>
@@ -485,14 +507,14 @@ export default function App() {
           <p className="text-sm leading-relaxed text-slate-600" data-reveal>{t('notCompanionYet')}</p>
           <a
             href={shareLocation({ kind: 'all' }, locale)}
-            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-mint-200 px-3 text-base font-bold text-ink shadow-sticker"
+            className="btn btn-secondary cute-pop w-full"
           >
             {t('shareOpen')}
           </a>
           <p className="text-sm leading-relaxed text-slate-600">{t('shareCanExport')}</p>
           <button
             type="button"
-            className="cute-pop flex min-h-touch items-center justify-center rounded-full border-2 border-ink bg-lavender-300 px-3 text-base font-bold text-ink shadow-sticker"
+            className="btn btn-primary cute-pop w-full"
             onClick={handleLogout}
           >
             {t('logOut')}
@@ -536,6 +558,7 @@ export default function App() {
       }`}>
       {/* Top bar: brand and title on the left, everything else behind one menu button */}
       <AppHeader
+        saved={savedAvailable ? { label: t('savedShort'), onOpen: () => setSavedView('browse') } : undefined}
         subtitle={trip.tripName.includes('｜') ? trip.tripName.split('｜').slice(1).join('｜') : t('collabFallback')}
         menu={
           <HeaderMenu
@@ -560,7 +583,7 @@ export default function App() {
                   />
                   <button
                     type="button"
-                    className="cute-pop min-h-touch rounded-full border-2 border-ink bg-lavender-300 px-4 font-bold text-ink shadow-sticker-sm"
+                    className="btn btn-primary cute-pop"
                     onClick={joinRoom}
                   >
                     {t('join')}
@@ -582,7 +605,7 @@ export default function App() {
                   {canEdit && isTripCompanion && (
                     <button
                       type="button"
-                      className="cute-press min-h-touch shrink-0 rounded-full border-2 border-ink bg-mint-200 px-3 text-sm font-bold text-ink"
+                      className="btn btn-secondary cute-press shrink-0 !px-3"
                       onClick={() => {
                         setHeaderOpen(false);
                         setLodgingOpen(true);
@@ -756,11 +779,12 @@ export default function App() {
 
       <nav
         aria-label={t('tabNav')}
-        className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-ink bg-snow-50 px-3 pt-2 md:hidden"
+        className="app-tabbar fixed inset-x-0 bottom-0 z-30 border-t-2 border-ink bg-snow-50 px-3 pt-2 md:hidden"
         style={{ paddingBottom: 'max(0.5rem, var(--safe-bottom))' }}
       >
+        <div className="flex items-stretch gap-2">
         <div
-          className="relative grid grid-cols-3 gap-1 rounded-full border-2 border-ink bg-white p-1 shadow-sticker-sm"
+          className="relative grid min-w-0 flex-1 grid-cols-3 gap-1 rounded-full border-2 border-ink bg-white p-1 shadow-sticker-sm"
           style={
             {
               '--tab-count': 3,
@@ -789,6 +813,17 @@ export default function App() {
               {label}
             </button>
           ))}
+        </div>
+        {savedAvailable && (
+          <button
+            type="button"
+            className="btn btn-primary cute-pop saved-dock shrink-0"
+            onClick={() => setSavedView('browse')}
+          >
+            <BookmarkIcon size={20} />
+            <span>{t('savedShort')}</span>
+          </button>
+        )}
         </div>
       </nav>
 

@@ -693,6 +693,7 @@ export const catalog = {
   stopNoteBad: { 'zh-Hant': '備註格式不正確', ja: 'メモの形式が正しくありません', en: 'That note is not valid' },
   savedTitle: { 'zh-Hant': '收藏地點', ja: '保存したスポット', en: 'Saved places' },
   savedMenuHint: { 'zh-Hant': '從 Threads、Instagram 存下來的店與景點', ja: 'Threads や Instagram から保存したお店とスポット', en: 'Spots saved from Threads and Instagram' },
+  savedShort: { 'zh-Hant': '收藏', ja: '保存', en: 'Saved' },
   savedOpen: { 'zh-Hant': '打開收藏地點', ja: '保存したスポットを開く', en: 'Open saved places' },
   savedTabMine: { 'zh-Hant': '我的收藏', ja: 'マイ保存', en: 'Mine' },
   savedTabShared: { 'zh-Hant': '行程共用', ja: '行程の共有', en: 'Shared' },
