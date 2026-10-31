@@ -14,7 +14,7 @@
  * A Shortcut key is accepted by ingest and by nothing else; a login token is not accepted by ingest.
  */
 import { bearerToken, parseSavedKey, savedKeyMatches } from '../../server/src/savedKey.js';
-import { cleanPlacePatch, parseIngestBody, readLimitedText, resultMessage, MAX_BODY_BYTES } from '../../server/src/savedPlace.js';
+import { cleanPlacePatch, parseIngestBody, readLimitedText, resolveDistrict, resultMessage, MAX_BODY_BYTES } from '../../server/src/savedPlace.js';
 import { runIngest } from '../../server/src/savedIngest.js';
 import { isTripMember } from '../../server/src/split.js';
 import { createSavedRateLimiter } from '../../server/src/savedRateLimit.js';
@@ -198,6 +198,9 @@ export async function handleSaved(hub, request, url) {
     const moved = ['name', 'city', 'district', 'country'].some((k) => k in patch.set && patch.set[k] !== row[k]);
     if (moved) {
       const geo = await hub.placeGeocoder?.({ ...row, ...patch.set });
+      const area = resolveDistrict({ district: 'district' in patch.set ? patch.set.district : row.district }, geo, 'ready');
+      set.district = area.district;
+      set.status = area.status;
       set.lat = geo?.lat ?? null;
       set.lng = geo?.lng ?? null;
       set.precision = geo?.precision ?? null;

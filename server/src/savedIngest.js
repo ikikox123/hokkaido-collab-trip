@@ -2,7 +2,7 @@
  * The ingest pipeline, shared by the Worker and the tests: page fetch (allow-list only), extraction
  * (AI with heuristic fallback), then a free Nominatim lookup. Everything outside is injected.
  */
-import { canonicalSourceUrl, extractHtmlMeta, buildExtractionInput, heuristicExtract, aiExtract, decideExtraction, statusWithGeo } from './savedPlace.js';
+import { canonicalSourceUrl, extractHtmlMeta, buildExtractionInput, heuristicExtract, aiExtract, decideExtraction, statusWithGeo, resolveDistrict } from './savedPlace.js';
 import { checkFetchUrl, fetchPage } from './safeFetch.js';
 
 /**
@@ -53,5 +53,6 @@ export async function runIngest({ url, text, ai, model, fetchImpl, geocode }) {
       geo = null;
     }
   }
-  return { sourceUrl: allowed ? cleanUrl : '', fetched, fields, status: statusWithGeo(status, geo), via, ai: aiState, geo, rejectedUrl: Boolean(url) && !allowed };
+  const area = resolveDistrict(fields, geo, statusWithGeo(status, geo));
+  return { sourceUrl: allowed ? cleanUrl : '', fetched, fields: { ...fields, district: area.district }, status: area.status, via, ai: aiState, geo, rejectedUrl: Boolean(url) && !allowed };
 }

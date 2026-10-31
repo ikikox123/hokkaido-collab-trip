@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {
   AI_INPUT_CHARS, AI_MAX_TOKENS, aiExtract, buildAiRequest, buildExtractionInput, canonicalSourceUrl, cleanLine, cleanPlacePatch,
   decideExtraction, extractHtmlMeta, looksLikePlaceName, googleMapsSearchUrl, heuristicExtract, parseAiAnswer, parseIngestBody,
-  normalizeAreaName, readLimitedText, resultMessage, statusWithGeo,
+  normalizeAreaName, readLimitedText, resultMessage, statusWithGeo, resolveDistrict,
 } from './savedPlace.js';
 import { runIngest } from './savedIngest.js';
-import { createPlaceGeocoder, MIN_INTERVAL_MS } from './nominatimGeocode.js';
+import { createPlaceGeocoder, MIN_INTERVAL_MS, MAX_REVERSE_PER_PLACE } from './nominatimGeocode.js';
 
 const PAGE = `<html><head><title>Post</title>
 <meta property="og:title" content="Aki on Threads">
@@ -174,6 +174,7 @@ const nominatim = (list) => async (url, init) => {
   return Response.json(list);
 };
 nominatim.calls = [];
+const searches = () => nominatim.calls.filter((x) => !x.url.includes('/reverse'));
 
 test('Nominatim: custom User-Agent, one request per second, no Google', async () => {
   nominatim.calls.length = 0;
@@ -181,11 +182,11 @@ test('Nominatim: custom User-Agent, one request per second, no Google', async ()
   const geocode = createPlaceGeocoder({ fetchImpl: nominatim([{ lat: '43.05', lon: '141.35', display_name: '札幌市' }]), now: c.now, sleep: c.sleep });
   const out = await Promise.all([geocode({ name: 'A', city: '札幌' }), geocode({ name: 'B', city: '札幌' }), geocode({ name: 'C', city: '札幌' })]);
   assert.deepEqual(out[0], { lat: 43.05, lng: 141.35, address: '札幌市', precision: 'place' });
-  assert.equal(nominatim.calls.length, 3);
+  assert.equal(searches().length, 3);
   assert.match(nominatim.calls[0].init.headers['User-Agent'], /hokkaido/);
   assert.match(nominatim.calls[0].url, /^https:\/\/nominatim\.openstreetmap\.org\/search\?/);
   assert.doesNotMatch(nominatim.calls.map((x) => x.url).join(), /google/);
-  assert.equal(c.sleeps.length, 2, 'second and third waited');
+  assert.ok(c.sleeps.length >= 2, 'every later request waited');
   assert.ok(c.sleeps.every((ms) => ms > 0 && ms <= MIN_INTERVAL_MS));
 });
 
@@ -195,7 +196,7 @@ test('Nominatim: hits and misses are cached, failures are not', async () => {
   const geocode = createPlaceGeocoder({ fetchImpl: nominatim([{ lat: '1', lon: '2', display_name: 'x' }]), now: c.now, sleep: c.sleep });
   await geocode({ name: 'A' });
   await geocode({ name: 'a' });
-  assert.equal(nominatim.calls.length, 1);
+  assert.equal(searches().length, 1);
 
   nominatim.calls.length = 0;
   const miss = createPlaceGeocoder({ fetchImpl: nominatim([]), now: c.now, sleep: c.sleep });
@@ -225,6 +226,7 @@ test('Nominatim: HTTP errors and junk coordinates leave the place without coordi
 function ladder(answer) {
   const calls = [];
   const fetchImpl = async (url) => {
+    if (String(url).includes('/reverse')) return Response.json({ address: {} });
     const q = new URL(url).searchParams;
     calls.push({ q: q.get('q'), cc: q.get('countrycodes') });
     const hit = answer(q.get('q'), q.get('countrycodes'));
@@ -407,4 +409,103 @@ test('runIngest reports the AI state: unbound, error, answered', async () => {
   assert.equal(answered.ai, 'answered');
   assert.equal(answered.via, 'heuristic');
   assert.equal((await runIngest({ text: '店', ai: goodAi() })).ai, 'answered');
+});
+
+// ---------- Nominatim reverse district ----------
+
+const revFetch = (reverse, search = [{ lat: '43.0123456', lon: '141.4', display_name: '麵屋 彩未' }]) => {
+  const calls = [];
+  const impl = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    if (u.includes('/reverse')) return reverse instanceof Error ? Promise.reject(reverse) : Response.json(reverse);
+    return Response.json(search);
+  };
+  impl.calls = calls;
+  return impl;
+};
+const reverseCalls = (f) => f.calls.filter((u) => u.includes('/reverse'));
+
+test('reverse: OSM district overrides the AI district and keeps ready', async () => {
+  const c = clock();
+  const f = revFetch({ address: { suburb: '平岸', city_district: '豊平区' } });
+  const geocode = createPlaceGeocoder({ fetchImpl: f, now: c.now, sleep: c.sleep });
+  const out = await runIngest({ text: '麵屋 彩未', ai: goodAi({ name: '麵屋 彩未', district: '東南邊' }), geocode });
+  assert.equal(out.fields.district, '豊平区');
+  assert.equal(out.status, 'ready');
+  const [rev] = reverseCalls(f);
+  assert.match(rev, /format=jsonv2/);
+  assert.match(rev, /zoom=18/);
+  assert.match(rev, /addressdetails=1/);
+  assert.match(rev, /lat=43\.0123456/);
+});
+
+test('reverse: falls back to suburb / quarter / neighbourhood when city_district is missing', async () => {
+  const c = clock();
+  const f = revFetch({ address: { neighbourhood: '薄野' } });
+  const geocode = createPlaceGeocoder({ fetchImpl: f, now: c.now, sleep: c.sleep });
+  assert.equal((await geocode({ name: 'A', city: '札幌' })).district, '薄野');
+});
+
+test('reverse failure keeps the AI district; a non-administrative one becomes pending', async () => {
+  const c = clock();
+  const down = createPlaceGeocoder({ fetchImpl: revFetch(new Error('down')), now: c.now, sleep: c.sleep });
+  const ok = await runIngest({ text: '空', ai: goodAi({ district: '中央区' }), geocode: down });
+  assert.equal(ok.fields.district, '中央区');
+  assert.equal(ok.status, 'ready');
+  const nofield = createPlaceGeocoder({ fetchImpl: revFetch({ address: {} }), now: c.now, sleep: c.sleep });
+  const vague = await runIngest({ text: '空', ai: goodAi({ district: '東南邊' }), geocode: nofield });
+  assert.equal(vague.fields.district, '東南邊');
+  assert.equal(vague.status, 'pending');
+  const empty = await runIngest({ text: '空', ai: goodAi({ district: '' }), geocode: nofield });
+  assert.equal(empty.status, 'ready');
+  assert.equal(resolveDistrict({ district: '南3条西5丁目' }, null, 'ready').status, 'ready');
+  assert.equal(resolveDistrict({ district: '東南邊' }, null, 'ready').status, 'pending');
+});
+
+test('reverse: only for precision place, at most once, beyond the 3 search requests, shared queue and cache', async () => {
+  assert.equal(MAX_REVERSE_PER_PLACE, 1);
+  const c = clock();
+  const area = revFetch({ address: { city_district: '豊平区' } }, [{ lat: '1', lon: '2', display_name: 'x' }]);
+  const areaGeo = createPlaceGeocoder({ fetchImpl: area, now: c.now, sleep: c.sleep });
+  const hit = await areaGeo({ name: '', district: '中央区', city: '札幌' });
+  assert.equal(hit.precision, 'area');
+  assert.equal(hit.district, undefined);
+  assert.equal(reverseCalls(area).length, 0);
+
+  // 2 empty searches then a hit on the 3rd: 3 searches + 1 reverse = 4 requests.
+  let n = 0;
+  const calls = [];
+  const f = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes('/reverse')) return Response.json({ address: { city_district: '豊平区' } });
+    n += 1;
+    return Response.json(n < 3 ? [] : [{ lat: '43.05', lon: '141.35', display_name: 'y' }]);
+  };
+  const geocode = createPlaceGeocoder({ fetchImpl: f, now: c.now, sleep: c.sleep });
+  const out = await geocode({ name: 'A', city: '札幌', country: '日本' });
+  assert.equal(out.precision, 'place');
+  assert.equal(out.district, '豊平区');
+  assert.equal(calls.length, 4);
+  assert.equal(calls.filter((u) => u.includes('/reverse')).length, 1);
+
+  // Same rounded coordinates (4 decimals) come from the cache, and misses are cached too.
+  const f2 = revFetch({ address: { city_district: '豊平区' } }, [{ lat: '43.01231', lon: '141.40001', display_name: 'z' }]);
+  const g2 = createPlaceGeocoder({ fetchImpl: f2, now: c.now, sleep: c.sleep });
+  await g2({ name: 'B' });
+  await g2({ name: 'C' });
+  assert.equal(reverseCalls(f2).length, 1);
+
+  // Shared 1 req/s queue and headers.
+  const c3 = clock();
+  const f3 = async (url, init) => {
+    f3.inits.push(init);
+    return Response.json(String(url).includes('/reverse') ? { address: { suburb: '平岸' } } : [{ lat: '1', lon: '2', display_name: 'q' }]);
+  };
+  f3.inits = [];
+  const g3 = createPlaceGeocoder({ fetchImpl: f3, now: c3.now, sleep: c3.sleep });
+  await g3({ name: 'D' });
+  assert.equal(f3.inits.length, 2);
+  assert.equal(c3.sleeps.length, 1, 'reverse waited behind the search');
+  assert.ok(f3.inits.every((i) => /hokkaido/.test(i.headers['User-Agent']) && i.headers['Accept-Language'] === 'ja'));
 });

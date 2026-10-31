@@ -63,6 +63,18 @@ export function statusWithGeo(status, geo) {
   return !geo || geo.precision === 'area' ? 'pending' : status;
 }
 
+const ADMIN_DISTRICT_RE = /[区區町村市郡]$|丁目$/;
+
+/**
+ * Final district + status. An OSM district from the position lookup (geo.district) replaces the AI's;
+ * otherwise a non-empty district that does not end like an administrative area (区/區/町/村/市/郡/丁目) needs a human look.
+ */
+export function resolveDistrict(fields, geo, status) {
+  if (geo?.district) return { district: geo.district, status };
+  const district = fields?.district ?? '';
+  return { district, status: district && !ADMIN_DISTRICT_RE.test(district) ? 'pending' : status };
+}
+
 /** Read a request body as text, stopping above `max` bytes. Resolves { ok, text } or { ok: false, tooLarge }. */
 export async function readLimitedText(request, max = MAX_BODY_BYTES) {
   const declared = Number(request.headers.get('content-length'));
