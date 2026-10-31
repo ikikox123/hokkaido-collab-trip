@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { areaLine, groupByDistrict, nextStopTime, stopFromSaved, type SavedPlace } from './saved.ts';
+import { areaLine, groupByDistrict, nextStopTime, stopFromSaved, shortAddress, type SavedPlace } from './saved.ts';
 
 const place = (over: Partial<SavedPlace>): SavedPlace => ({
   id: 'a', scope: 'personal', name: 'N', type: 'eat', country: '日本', city: '札幌', district: '中央区', address: '',
@@ -31,15 +31,23 @@ test('area line skips empty parts', () => {
 test('stop fields use the place coordinates, or the fallback when it has none', () => {
   const fallback = { lat: 1, lng: 2 };
   const located = stopFromSaved(place({ address: '北海道札幌市' }), fallback, '吃');
-  assert.deepEqual([located.lat, located.lng, located.located, located.notes], [43.05, 141.35, true, '吃・北海道札幌市']);
+  assert.deepEqual([located.lat, located.lng, located.located, located.notes], [43.05, 141.35, true, '吃・札幌・中央区']);
   const missing = stopFromSaved(place({ lat: null, lng: null }), fallback, null);
   assert.deepEqual([missing.lat, missing.lng, missing.located, missing.notes], [1, 2, false, '（待確認位置）札幌・中央区']);
   assert.ok(stopFromSaved(place({ address: 'x'.repeat(500) }), fallback, null).notes.length <= 300);
 });
 
+test('short address: city・district, never the full OSM name', () => {
+  const full = '色内, 小樽市, 後志総合振興局, 北海道, 047-0031, 日本';
+  assert.equal(stopFromSaved(place({ city: '小樽', district: '色内', address: full, precision: 'place' }), { lat: 1, lng: 2 }, null).notes, '小樽・色内');
+  assert.equal(stopFromSaved(place({ city: '', district: '', address: full, precision: 'place' }), { lat: 1, lng: 2 }, null).notes, '色内・小樽市');
+  assert.equal(stopFromSaved(place({ address: full, precision: 'area' }), { lat: 1, lng: 2 }, null).notes.includes('日本'), false);
+  assert.equal(shortAddress('札幌市, 北海道地方, 日本'), '札幌市');
+});
+
 test('exact place: no pending prefix, map link on its own last line', () => {
   const f = stopFromSaved(place({ precision: 'place', address: '札幌市', mapsUrl: 'https://maps.example/?q=a' }), { lat: 1, lng: 2 }, '吃');
-  assert.equal(f.notes, '吃・札幌市\nhttps://maps.example/?q=a');
+  assert.equal(f.notes, '吃・札幌・中央区\nhttps://maps.example/?q=a');
   assert.equal(f.notes.split('\n').length, 2);
 });
 

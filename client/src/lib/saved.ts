@@ -100,6 +100,14 @@ export function groupByDistrict(places: SavedPlace[]): PlaceGroup[] {
   return [...list.filter((g) => g.label), ...list.filter((g) => !g.label)];
 }
 
+const NOISE_PART = /^(?:\d{3}-?\d{4}|日本|japan|北海道|.+振興局|.+地方)$/i;
+
+/** Short place from an OSM display_name: drops postcode, subprefecture, region and country; at most two parts. */
+export function shortAddress(address: string): string {
+  const parts = address.split(/[,、，]/).map((v) => v.trim()).filter((v) => v && !NOISE_PART.test(v));
+  return parts.slice(0, 2).join('・');
+}
+
 /** "札幌・中央区", skipping empty parts. */
 export function areaLine(place: Pick<SavedPlace, 'country' | 'city' | 'district'>): string {
   return [place.city, place.district].map((v) => v.trim()).filter(Boolean).join('・');
@@ -140,7 +148,9 @@ export function stopFromSaved(
 ): StopFromSaved {
   const located = place.lat != null && place.lng != null;
   const exact = located && place.precision !== 'area' && place.status !== 'pending';
-  const where = place.address || areaLine(place);
+  const area = areaLine(place);
+  // 'area' precision or no coordinates: only the district centre is known, so never show a full address.
+  const where = !located || place.precision === 'area' ? area : area || shortAddress(place.address);
   const body = [typeLabel, where].filter(Boolean).join('・').replace(/\s+/g, ' ').trim();
   const head = [exact ? '' : pendingLabel, body].filter(Boolean).join('');
   const link = place.mapsUrl || '';
